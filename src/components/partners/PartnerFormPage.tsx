@@ -7,7 +7,6 @@ import { useToast } from '../ui/Toast';
 import { Button } from '../ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { partnerService } from '../../services/partner-service';
-import { TYPE_LABELS } from '../../lib/partner-labels';
 import type { PartnerContact } from '../../types';
 
 const emptyContact: PartnerContact = {
@@ -33,7 +32,7 @@ export const PartnerFormPage = () => {
   const [saving, setSaving] = useState(false);
   const [logoPreview, setLogoPreview] = useState('');
 
-  const typeOptions = (config?.partnerTypes || ['Reseller', 'ISV', 'SI', 'Service', 'VAD', 'VAR', 'OEM']).map((v) => ({ value: v, label: TYPE_LABELS[v] || v }));
+  const typeOptions = (config?.partnerTypes || ['Reseller', 'ISV', 'SI', 'Service', 'VAD', 'VAR', 'OEM']).map((v) => ({ value: v, label: v }));
 
   const [form, setForm] = useState({
     name: '', englishName: '', logo: '', website: '', unifiedSocialCreditCode: '',
@@ -71,7 +70,7 @@ export const PartnerFormPage = () => {
         status: 'Prospective',
         type: form.type,
         manager: '',
-        location: form.location || form.city,
+        location: form.location,
         region: form.regionCustom || form.regions?.[0] || '华北',
         startDate: new Date().toISOString().split('T')[0],
         years: 0,
@@ -86,6 +85,13 @@ export const PartnerFormPage = () => {
         province: form.province,
         city: form.city,
         district: form.district,
+        registeredAddress: form.location,
+        customerPortfolio: targetCustomers.filter(c => c.name).map(c => ({
+          id: crypto.randomUUID(), name: c.name, industry: c.industry || '',
+          relationship: '潜在客户', annualRevenue: 0, majorProjects: [],
+          salesLead: '', products: [], status: '跟进中', since: new Date().toISOString().split('T')[0],
+          contactPerson: '', contactPhone: '', notes: c.potential || '',
+        })),
       });
       toast('success', '提交成功，等待批复');
       navigate('/partners');
@@ -154,12 +160,20 @@ export const PartnerFormPage = () => {
             <input className={inputClass} value={form.unifiedSocialCreditCode} onChange={(e) => updateField('unifiedSocialCreditCode', e.target.value)} placeholder="18位信用代码" />
           </div>
           <div>
+            <label className={labelClass}>省份</label>
+            <input className={inputClass} value={form.province} onChange={(e) => updateField('province', e.target.value)} placeholder="如：北京" />
+          </div>
+          <div>
             <label className={labelClass}>所在城市</label>
             <input className={inputClass} value={form.city} onChange={(e) => updateField('city', e.target.value)} placeholder="如：北京市" />
           </div>
+          <div>
+            <label className={labelClass}>区/县</label>
+            <input className={inputClass} value={form.district} onChange={(e) => updateField('district', e.target.value)} placeholder="如：海淀区" />
+          </div>
           <div className="md:col-span-2">
             <label className={labelClass}>详细地址</label>
-            <input className={inputClass} value={form.location} onChange={(e) => updateField('location', e.target.value)} placeholder="如：海淀区中关村科技园" />
+            <input className={inputClass} value={form.location} onChange={(e) => updateField('location', e.target.value)} placeholder="如：中关村科技园A座" />
           </div>
         </div>
       </InfoBlock>

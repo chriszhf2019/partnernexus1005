@@ -50,7 +50,7 @@ const barColorsBrand = ['#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '
 export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemDashboardProps) => {
   const { config } = useConfig();
   const { t } = useLanguage();
-  const cockpitData = useCockpitData();
+  const { data: cockpitData, loading: cockpitLoading } = useCockpitData();
   const [detailDim, setDetailDim] = useState<string>('region');
 
   const { revenue, activePartners, pipeline, leadsConversion, marketing, insights } = cockpitData;

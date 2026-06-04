@@ -9,6 +9,7 @@ import { NetworkStatus } from './components/ui/NetworkStatus';
 import { ToastProvider } from './components/ui/Toast';
 import { usePartners, useDeals, useActivities } from './hooks/useData';
 import { partnerService } from './services/partner-service';
+import { dealService } from './services/deal-service';
 import { buildPartnerDetails } from './lib/partnerDataBuilder';
 import { supabase } from './lib/supabase';
 import { Shield, HelpCircle } from 'lucide-react';
@@ -37,6 +38,11 @@ const ChannelDashboard = retryableLazy(() => import('./components/marketing/Chan
 const MarketingPlanPage = retryableLazy(() => import('./components/marketing/MarketingPlanPage').then(m => ({ default: m.MarketingPlanPage })));
 const InvitationPage = retryableLazy(() => import('./components/marketing/InvitationPage').then(m => ({ default: m.InvitationPage })));
 const PartnerStaffPage = retryableLazy(() => import('./components/partners/PartnerStaffPage').then(m => ({ default: m.PartnerStaffPage })));
+const CampaignManagementPage = retryableLazy(() => import('./components/marketing/CampaignManagementPage').then(m => ({ default: m.CampaignManagementPage })));
+const CampaignDetailPage = retryableLazy(() => import('./components/marketing/CampaignDetailPage').then(m => ({ default: m.CampaignDetailPage })));
+const BudgetManagementPage = retryableLazy(() => import('./components/marketing/BudgetManagementPage').then(m => ({ default: m.BudgetManagementPage })));
+const ChannelCampaignPage = retryableLazy(() => import('./components/marketing/ChannelCampaignPage').then(m => ({ default: m.ChannelCampaignPage })));
+const IncentivePolicyPage = retryableLazy(() => import('./components/marketing/IncentivePolicyPage').then(m => ({ default: m.IncentivePolicyPage })));
 
 function EcosystemRoute() {
   const navigate = useNavigate();
@@ -181,12 +187,7 @@ function DealsRoute() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const partnerFilter = searchParams.get('partner') || '';
-  const { deals: initialDeals, stats } = useDeals();
-  const [deals, setDeals] = useState(initialDeals);
-
-  const handleDealUpdate = (updatedDeal: typeof initialDeals[number]) => {
-    setDeals(prev => prev.map(d => d.id === updatedDeal.id ? updatedDeal : d));
-  };
+  const { deals, stats } = useDeals();
 
   const filtered = partnerFilter
     ? deals.filter(d => d.partnerId === partnerFilter)
@@ -205,7 +206,15 @@ function DealsRoute() {
           stats={stats}
           deals={filtered}
           onNewDeal={() => navigate('/deals/new')}
-          onDealUpdate={handleDealUpdate}
+          onDealUpdate={async (updatedDeal) => {
+            try {
+              await dealService.update(updatedDeal.id, {
+                stage: updatedDeal.stage,
+                status: updatedDeal.status || (updatedDeal.stage === 'ClosedWon' ? 'Closed Won' : updatedDeal.stage === 'ClosedLost' ? 'Closed Lost' : 'Approved'),
+              });
+              window.location.reload();
+            } catch (e: any) { alert('更新失败: ' + e.message); }
+          }}
         />
       </Suspense>
     </ErrorBoundary>
@@ -313,6 +322,12 @@ function AppLayout() {
               <Route path="/deals/:id/edit" element={<Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense>} />
               <Route path="/marketing" element={<MarketingRoute />} />
               <Route path="/marketing/plan" element={<Suspense fallback={<PageLoader />}><MarketingPlanPage /></Suspense>} />
+              <Route path="/marketing/campaigns" element={<Suspense fallback={<PageLoader />}><CampaignManagementPage /></Suspense>} />
+              <Route path="/marketing/campaigns/:id" element={<Suspense fallback={<PageLoader />}><CampaignDetailPage /></Suspense>} />
+              <Route path="/marketing/budget" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
+              <Route path="/marketing/budget/:year" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
+              <Route path="/marketing/channel-campaigns" element={<Suspense fallback={<PageLoader />}><ChannelCampaignPage /></Suspense>} />
+              <Route path="/marketing/incentive-policy" element={<Suspense fallback={<PageLoader />}><IncentivePolicyPage /></Suspense>} />
               <Route path="/incentives" element={<IncentivesRoute />} />
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />

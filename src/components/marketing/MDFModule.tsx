@@ -124,7 +124,7 @@ export const MDFModule: React.FC<MDFModuleProps> = ({ stats, activities }) => {
           <h3 className="text-2xl font-black text-slate-900">{formatCurrency(stats.annualQuota)}</h3>
           <div className="mt-4 flex items-center justify-between text-[10px] font-bold">
             <span className="text-slate-400">季度配额: {formatCurrency(stats.quarterlyQuota)}</span>
-            <span className="text-emerald-600 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> +12%</span>
+            <span className="text-emerald-600 flex items-center gap-1"><ArrowUpRight className="w-3 h-3" /> {stats.annualQuota > 0 ? Math.round((stats.usedAmount / stats.annualQuota) * 100) : 0}% 已用</span>
           </div>
         </div>
         
@@ -140,7 +140,7 @@ export const MDFModule: React.FC<MDFModuleProps> = ({ stats, activities }) => {
         <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-2xl border border-black/5 dark:border-white/5 shadow-sm">
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">剩余可用基金</p>
           <h3 className="text-2xl font-black text-emerald-600">{formatCurrency(stats.remainingAmount)}</h3>
-          <p className="mt-4 text-[10px] font-bold text-slate-400">待核销商机: 12 个</p>
+          <p className="mt-4 text-[10px] font-bold text-slate-400">已执行 {activities.filter(a => a.status === 'Completed').length} 个活动</p>
         </div>
 
         <div className="bg-white dark:bg-[#1c1c1e] p-6 rounded-2xl border border-black/5 dark:border-white/5 shadow-sm">
@@ -148,10 +148,12 @@ export const MDFModule: React.FC<MDFModuleProps> = ({ stats, activities }) => {
           <h3 className="text-2xl font-black text-slate-900">{stats.conversionRate}%</h3>
           <div className="mt-4 flex items-center gap-1">
             {[1, 2, 3, 4, 5].map(i => (
-              <div key={i} className={cn("h-1.5 flex-1 rounded-full", i <= 4 ? "bg-black dark:bg-white" : "bg-[#f5f5f7]")} />
+              <div key={i} className={cn("h-1.5 flex-1 rounded-full", i <= Math.ceil(stats.conversionRate / 20) ? "bg-black dark:bg-white" : "bg-[#f5f5f7]")} />
             ))}
           </div>
-          <p className="mt-2 text-[10px] font-bold text-slate-400">高于行业平均 5.2%</p>
+          <p className="mt-2 text-[10px] font-bold text-slate-400">
+            {activities.reduce((s, a) => s + (a.leadsGenerated || 0), 0)} 条线索
+          </p>
         </div>
       </div>
 
@@ -161,34 +163,40 @@ export const MDFModule: React.FC<MDFModuleProps> = ({ stats, activities }) => {
           <h4 className="text-sm font-black text-black dark:text-white uppercase tracking-widest mb-8 flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-black dark:text-white" /> {t('marketing.funnel')}
           </h4>
-          
+
           <div className="flex-1 flex flex-col justify-center space-y-4">
-            {[
-              { label: t('marketing.awareness'), value: '1.2M', percentage: 100, color: 'bg-slate-900' },
-              { label: t('marketing.consideration'), value: '450K', percentage: 70, color: 'bg-slate-700' },
-              { label: t('marketing.conversion'), value: '120K', percentage: 40, color: 'bg-black dark:bg-white' },
-              { label: t('marketing.roi'), value: '¥2.4M', percentage: 25, color: 'bg-black' },
-            ].map((step, idx) => (
-              <div key={idx} className="relative group">
-                <div className="flex items-center justify-between mb-1.5 px-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{step.label}</span>
-                  <span className="text-[10px] font-black text-slate-900">{step.value}</span>
-                </div>
-                <div className="w-full bg-[#f5f5f7] dark:bg-[#2c2c2e] h-8 rounded-xl overflow-hidden border border-black/5 dark:border-white/5 relative">
-                  <motion.div 
-                    initial={{ width: 0 }}
-                    animate={{ width: `${step.percentage}%` }}
-                    transition={{ duration: 1, delay: idx * 0.1 }}
-                    className={cn("h-full rounded-xl transition-all", step.color)} 
-                  />
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <span className="text-[8px] font-black text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                      CONVERSION RATE: {idx === 0 ? '100%' : `${(step.percentage / 100 * 100).toFixed(0)}%`}
-                    </span>
+            {(() => {
+              const totalActivities = activities.length;
+              const completedActivities = activities.filter(a => a.status === 'Completed').length;
+              const inProgressActivities = activities.filter(a => a.status === 'In Progress').length;
+              const totalLeadsFromActivities = activities.reduce((s, a) => s + (a.leadsGenerated || 0), 0);
+              const totalSpendAll = activities.reduce((s, a) => s + (a.actualSpend || a.budget || 0), 0);
+              // Estimated pipeline from leads (conservative: 20% lead to opportunity, avg 500K/opp)
+              const estimatedPipeline = Math.round(totalLeadsFromActivities * 0.2 * 500000);
+              // Funnel stages based on actual data
+              const funnelStages = [
+                { label: t('marketing.awareness'), value: `${totalActivities} 活动`, percentage: 100, color: 'bg-slate-900' },
+                { label: t('marketing.consideration'), value: `${inProgressActivities + completedActivities} 执行`, percentage: totalActivities > 0 ? Math.round(((inProgressActivities + completedActivities) / totalActivities) * 100) : 0, color: 'bg-slate-700' },
+                { label: t('marketing.conversion'), value: `${totalLeadsFromActivities} 线索`, percentage: totalActivities > 0 ? Math.max(Math.round((totalLeadsFromActivities / Math.max(1, totalActivities * 30)) * 100), 5) : 0, color: 'bg-black dark:bg-white' },
+                { label: t('marketing.roi'), value: formatCurrency(estimatedPipeline), percentage: totalSpendAll > 0 ? Math.round((estimatedPipeline / totalSpendAll) * 20) : 0, color: 'bg-black' },
+              ];
+              return funnelStages.map((step, idx) => (
+                <div key={idx} className="relative group">
+                  <div className="flex items-center justify-between mb-1.5 px-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{step.label}</span>
+                    <span className="text-[10px] font-black text-slate-900">{step.value}</span>
+                  </div>
+                  <div className="w-full bg-[#f5f5f7] dark:bg-[#2c2c2e] h-8 rounded-xl overflow-hidden border border-black/5 dark:border-white/5 relative">
+                    <motion.div
+                      initial={{ width: 0 }}
+                      animate={{ width: `${step.percentage}%` }}
+                      transition={{ duration: 1, delay: idx * 0.1 }}
+                      className={cn("h-full rounded-xl transition-all", step.color)}
+                    />
                   </div>
                 </div>
-              </div>
-            ))}
+              ));
+            })()}
           </div>
 
           <div className="mt-8 p-4 bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-2xl border border-slate-100">
@@ -197,7 +205,9 @@ export const MDFModule: React.FC<MDFModuleProps> = ({ stats, activities }) => {
               <span className="text-[10px] font-black uppercase tracking-widest">ROI Insight</span>
             </div>
             <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-              当前营销活动的整体 ROI 为 1:4.2，其中“行业深耕”类活动表现最为突出，建议持续加大投入。
+              {activities.length > 0
+                ? `当前 ${activities.length} 个活动中，${activities.filter(a => a.leadsGenerated > 0).length} 个已产生线索。线索转化率 ${stats.conversionRate}%，建议优化高意向活动投放。`
+                : '暂无营销活动数据，创建活动后将在此显示 ROI 分析。'}
             </p>
           </div>
         </div>

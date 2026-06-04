@@ -1,8 +1,8 @@
 import type { PartnerStatus, PartnerType, PartnerTier } from '../types';
 
 export const TIER_LABELS: Record<PartnerTier, string> = {
-  Platinum: '白金', Gold: '金牌', Silver: '银牌', Registered: '注册',
-  Diamond: '钻石', Premier: '特约', Standard: '标准',
+  Platinum: 'Platinum', Gold: 'Gold', Silver: 'Silver', Registered: 'Registered',
+  Diamond: 'Diamond', Premier: 'Premier', Standard: 'Standard',
 };
 
 export const TIER_STYLES: Record<PartnerTier, string> = {
@@ -16,15 +16,15 @@ export const TIER_STYLES: Record<PartnerTier, string> = {
 };
 
 export const TYPE_LABELS: Record<PartnerType, string> = {
-  Reseller: '转售商', ISV: '方案商', OEM: 'OEM', Service: '服务商',
-  VAD: '总分销', VAR: '增值分销', SI: '系统集成商',
+  Reseller: 'Reseller', ISV: 'ISV', OEM: 'OEM', Service: 'Service',
+  VAD: 'VAD', VAR: 'VAR', SI: 'SI',
 };
 
 export const STATUS_CONFIG: Record<PartnerStatus, { label: string; variant: 'success' | 'warning' | 'info' | 'danger' }> = {
-  Cooperating: { label: '合作中', variant: 'success' },
-  Inactive: { label: '已过期', variant: 'warning' },
-  Prospective: { label: '潜在', variant: 'info' },
-  Rejected: { label: '已驳回', variant: 'danger' },
+  Cooperating: { label: 'Cooperating', variant: 'success' },
+  Inactive: { label: 'Inactive', variant: 'warning' },
+  Prospective: { label: 'Prospective', variant: 'info' },
+  Rejected: { label: 'Rejected', variant: 'danger' },
 };
 
 export const INDUSTRY_OPTIONS = [

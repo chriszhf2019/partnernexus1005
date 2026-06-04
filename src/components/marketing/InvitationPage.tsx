@@ -4,7 +4,8 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { supabase } from '../../lib/supabase';
-import { Calendar, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckCircle, QrCode, Share2, Clock, Trophy, Star, ChevronDown, ChevronUp } from 'lucide-react';
+import { campaignService } from '../../services/campaign-service';
+import { Calendar, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckCircle, QrCode, Share2, Clock, Trophy, Star, ChevronDown, ChevronUp, ThumbsUp, Award, MessageSquare } from 'lucide-react';
 
 export const InvitationPage = () => {
   const { code } = useParams();
@@ -12,11 +13,14 @@ export const InvitationPage = () => {
   const [activity, setActivity] = useState<any>(null);
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [feedbacks, setFeedbacks] = useState<any[]>([]);
   const [isRegistered, setIsRegistered] = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
   const [showQuestions, setShowQuestions] = useState(false);
   const [showLottery, setShowLottery] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
+  const [showShare, setShowShare] = useState(false);
   const [newQuestion, setNewQuestion] = useState('');
   const [registerForm, setRegisterForm] = useState({ name: '', phone: '', company: '' });
   const [checkinCode, setCheckinCode] = useState('');
@@ -25,6 +29,13 @@ export const InvitationPage = () => {
   const [lotteryWinners, setLotteryWinners] = useState<string[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState(false);
+  const [myPoints, setMyPoints] = useState<number>(0);
+  const [pointsHistory, setPointsHistory] = useState<any[]>([]);
+  // 反馈表单状态
+  const [feedbackRating, setFeedbackRating] = useState<number>(5);
+  const [feedbackContent, setFeedbackContent] = useState<string>('');
+  const [feedbackSubmitted, setFeedbackSubmitted] = useState<boolean>(false);
+  const [isSubmittingFeedback, setIsSubmittingFeedback] = useState(false);
 
   useEffect(() => {
     if (code) {
@@ -33,14 +44,96 @@ export const InvitationPage = () => {
           setActivity(data);
           supabase.from('activity_registrations').select('*').eq('activity_id', data.id).then(({ data: regs }) => {
             if (regs) setRegistrations(regs);
+            // 检查是否已注册，并加载积分
+            if (registerForm.phone && regs) {
+              const myReg = regs.find((r: any) => r.phone === registerForm.phone);
+              if (myReg) {
+                setIsRegistered(true);
+                loadMyPoints(myReg.phone);
+              }
+            }
           });
           supabase.from('activity_questions').select('*').eq('activity_id', data.id).order('created_at', { ascending: false }).then(({ data: qs }) => {
             if (qs) setQuestions(qs);
+          });
+          // 加载活动反馈
+          campaignService.getFeedback(data.id).then((fbList) => {
+            if (fbList) setFeedbacks(fbList);
           });
         }
       });
     }
   }, [code]);
+  
+  // 加载我的积分
+  const loadMyPoints = async (phone: string) => {
+    try {
+      const { data: points } = await supabase
+        .from('partner_points')
+        .select('*')
+        .eq('phone', phone)
+        .order('created_at', { ascending: false });
+      if (points) {
+        setPointsHistory(points);
+        const total = points.reduce((sum: number, p: any) => sum + p.points, 0);
+        setMyPoints(total);
+      }
+    } catch (err) {
+      console.warn('Failed to load points:', err);
+    }
+  };
+  
+  // 提交反馈
+  const handleSubmitFeedback = async () => {
+    if (!activity || !registerForm.name) return;
+    setIsSubmittingFeedback(true);
+    try {
+      await campaignService.submitFeedback({
+        campaignId: activity.id,
+        attendeeName: registerForm.name,
+        attendeeCompany: registerForm.company,
+        rating: feedbackRating,
+        content: feedbackContent,
+        isAnonymity: false,
+        submittedAt: new Date().toISOString(),
+      });
+      setFeedbackSubmitted(true);
+      // 发放反馈积分
+      await addPoints(registerForm.phone, activity.feedback_points || 30, '活动反馈');
+      // 重新加载积分
+      await loadMyPoints(registerForm.phone);
+      setTimeout(() => setFeedbackSubmitted(false), 3000);
+    } catch (err) {
+      console.warn('Failed to submit feedback:', err);
+    } finally {
+      setIsSubmittingFeedback(false);
+    }
+  };
+  
+  // 分享到微信
+  const shareToWeChat = () => {
+    const link = `${window.location.origin}/invitation/${code}`;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+      alert('链接已复制，可粘贴到微信分享');
+    }
+    setShowShare(false);
+  };
+  
+  // 分享到微博
+  const shareToWeibo = () => {
+    const link = `${window.location.origin}/invitation/${code}`;
+    const text = `我报名参加了${activity?.name}，快来一起吧！`;
+    window.open(`https://service.weibo.com/share/share.php?url=${encodeURIComponent(link)}&title=${encodeURIComponent(text)}`, '_blank');
+  };
+  
+  // 分享到邮件
+  const shareByEmail = () => {
+    const link = `${window.location.origin}/invitation/${code}`;
+    const subject = `邀请您参加 ${activity?.name}`;
+    const body = `您好，我邀请您参加本次活动。\n\n活动：${activity?.name}\n时间：${activity?.event_date}\n地点：${activity?.location || '待定'}\n\n报名链接：${link}`;
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
 
   const handleRegister = async () => {
     if (!registerForm.name || !registerForm.phone) return;
@@ -59,6 +152,8 @@ export const InvitationPage = () => {
       
       // 发放报名积分
       await addPoints(registerForm.phone, activity.signup_points || 10, '活动报名');
+      // 加载我的积分
+      await loadMyPoints(registerForm.phone);
       
       setTimeout(() => setRegistrationSuccess(false), 3000);
     } catch (err) {
@@ -260,9 +355,15 @@ export const InvitationPage = () => {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="text-base">邀请码</CardTitle>
-            <button onClick={() => setShowQR(!showQR)} className="text-sm text-blue-600 hover:text-blue-700">
-              {showQR ? '隐藏二维码' : '显示二维码'}
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={() => setShowShare(!showShare)} className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1">
+                <Share2 className="w-4 h-4" />
+                {showShare ? '收起' : '分享'}
+              </button>
+              <button onClick={() => setShowQR(!showQR)} className="text-sm text-blue-600 hover:text-blue-700">
+                {showQR ? '隐藏二维码' : '显示二维码'}
+              </button>
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
@@ -283,6 +384,23 @@ export const InvitationPage = () => {
                 </div>
               )}
             </div>
+            {/* 分享选项 */}
+            {showShare && (
+              <div className="mt-4 p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-3">选择分享方式：</p>
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="secondary" size="sm" onClick={shareToWeChat}>
+                    <Share2 className="w-4 h-4 mr-1" />复制链接
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={shareToWeibo}>
+                    <MessageSquare className="w-4 h-4 mr-1" />分享到微博
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={shareByEmail}>
+                    <MessageCircle className="w-4 h-4 mr-1" />邮件邀请
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -411,6 +529,37 @@ export const InvitationPage = () => {
           </Card>
         )}
 
+        {/* 我的积分 */}
+        {isRegistered && (
+          <Card className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/30 border-amber-200 dark:border-amber-800">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Award className="w-4 h-4 text-amber-600" />
+                我的积分
+              </CardTitle>
+              <Badge variant="warning" className="text-lg font-bold">{myPoints}</Badge>
+            </CardHeader>
+            <CardContent>
+              {pointsHistory.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-neutral-500 mb-2">积分明细：</p>
+                  {pointsHistory.slice(0, 5).map((record: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between text-sm">
+                      <span className="text-neutral-600 dark:text-neutral-400">{record.reason}</span>
+                      <span className="text-amber-600 font-medium">+{record.points}</span>
+                    </div>
+                  ))}
+                  {pointsHistory.length > 5 && (
+                    <p className="text-xs text-neutral-400 text-center">还有 {pointsHistory.length - 5} 条记录...</p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-neutral-400 text-center py-2">暂无积分记录</p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Questions Section */}
         {activity.enable_questions && (
           <Card>
@@ -516,6 +665,102 @@ export const InvitationPage = () => {
                 )}
               </div>
             </CardContent>
+          </Card>
+        )}
+
+        {/* 会后反馈 - 活动结束后显示 */}
+        {isPast && isRegistered && (
+          <Card className="bg-gradient-to-br from-indigo-50 to-purple-50 dark:from-indigo-900/30 dark:to-purple-900/30 border-indigo-200 dark:border-indigo-800">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ThumbsUp className="w-4 h-4 text-indigo-600" />
+                活动反馈
+              </CardTitle>
+              <button onClick={() => setShowFeedback(!showFeedback)} className="text-sm text-blue-600">
+                {showFeedback ? '收起' : '填写反馈'}
+              </button>
+            </CardHeader>
+            {showFeedback && (
+              <CardContent>
+                <div className="space-y-4">
+                  {!feedbackSubmitted ? (
+                    <>
+                      <div>
+                        <label className="text-xs font-semibold text-neutral-500 block mb-2">整体评分</label>
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              onClick={() => setFeedbackRating(star)}
+                              className="p-1 hover:scale-110 transition-transform"
+                            >
+                              <Star
+                                className={`w-8 h-8 ${
+                                  star <= feedbackRating
+                                    ? 'text-yellow-500 fill-yellow-500'
+                                    : 'text-gray-300'
+                                }`}
+                              />
+                            </button>
+                          ))}
+                          <span className="ml-2 text-lg font-medium text-indigo-600">{feedbackRating} 分</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-neutral-500 block mb-2">反馈意见</label>
+                        <textarea
+                          className="w-full h-24 px-3 py-2 bg-white dark:bg-neutral-800 border rounded-lg text-sm resize-none"
+                          value={feedbackContent}
+                          onChange={(e) => setFeedbackContent(e.target.value)}
+                          placeholder="请分享您的活动体验、建议等...（选填）"
+                        />
+                      </div>
+                      <Button
+                        variant="brand"
+                        className="w-full"
+                        onClick={handleSubmitFeedback}
+                        disabled={isSubmittingFeedback}
+                      >
+                        {isSubmittingFeedback ? '提交中...' : `提交反馈 · 获得 ${activity.feedback_points || 30} 积分`}
+                      </Button>
+                    </>
+                  ) : (
+                    <div className="text-center py-4">
+                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                        <CheckCircle className="w-8 h-8 text-emerald-600" />
+                      </div>
+                      <p className="text-emerald-700 dark:text-emerald-300 font-medium">感谢您的反馈！</p>
+                      <p className="text-sm text-emerald-600/70 dark:text-emerald-400 mt-1">您已获得 {activity.feedback_points || 30} 积分</p>
+                    </div>
+                  )}
+                  
+                  {/* 其他反馈列表 */}
+                  {feedbacks.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-indigo-200 dark:border-indigo-800">
+                      <p className="text-xs text-neutral-500 mb-2">其他参会者反馈：</p>
+                      <div className="space-y-2 max-h-40 overflow-y-auto">
+                        {feedbacks.slice(0, 5).map((fb: any) => (
+                          <div key={fb.id} className="p-2 bg-white/50 dark:bg-neutral-800/50 rounded text-sm">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-neutral-700 dark:text-neutral-300">
+                                {fb.isAnonymity ? '匿名用户' : fb.attendeeName}
+                              </span>
+                              <div className="flex items-center gap-1">
+                                <Star className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                <span className="text-xs">{fb.rating}</span>
+                              </div>
+                            </div>
+                            {fb.content && (
+                              <p className="text-xs text-neutral-500">{fb.content}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            )}
           </Card>
         )}
 

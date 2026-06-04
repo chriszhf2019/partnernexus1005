@@ -1,16 +1,10 @@
 import { db, supabase } from '../lib/supabase';
 import type { Partner } from '../types';
-import { IMPORTED_PARTNERS } from '../data/importedPartners';
 import type { PaginatedResponse, PartnerFilters } from './types';
 
 // ── Helpers ──────────────────────────────────────────
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isUUID = (id: string) => UUID_RE.test(id);
-
-const isLocalId = (id: string) => id.startsWith('local-') || (!isUUID(id) && !id.startsWith('PRA-') && !id.startsWith('PRC-'));
-
-// PRA-/PRC- IDs are now valid in Supabase (migrated to TEXT column)
-const isImportedId = (id: string) => id.startsWith('PRA-') || id.startsWith('PRC-');
 
 const SNAKE_KEYS: Record<string, string> = {
   englishName: 'english_name', unifiedSocialCreditCode: 'unified_social_credit_code',
@@ -103,7 +97,7 @@ const normalizePartner = (p: any): Partner => {
 
 // ── Audit Logger ─────────────────────────────────────
 async function logOp(partnerId: string, action: string, operator: string, details: Record<string, any> = {}) {
-  if (isLocalId(partnerId)) {
+  if (false) {
     const logs = JSON.parse(localStorage.getItem('operationLogs') || '[]');
     logs.push({ partner_id: partnerId, action, operator, details, created_at: new Date().toISOString() });
     localStorage.setItem('operationLogs', JSON.stringify(logs.slice(-50))); // keep last 50
@@ -124,49 +118,28 @@ export const partnerService = {
       const { data } = await query;
       let partners = ((data || []) as Partner[]).map(normalizePartner);
 
-      try {
-        const local = JSON.parse(localStorage.getItem('localPartners') || '[]');
-        partners = [...local, ...partners];
-      } catch { /* ignore */ }
-
       if (filters.search) {
         const s = filters.search.toLowerCase();
         partners = partners.filter((p) => p.name.toLowerCase().includes(s) || (p.tags || []).some((t) => t.toLowerCase().includes(s)) || (p.manager || '').toLowerCase().includes(s));
       }
       return { items: partners, total: partners.length, page: 1, pageSize: partners.length };
     } catch {
-      const local = JSON.parse(localStorage.getItem('localPartners') || '[]');
-      const all = [...local, ...IMPORTED_PARTNERS];
-      return { items: all, total: all.length, page: 1, pageSize: all.length };
+      return { items: [], total: 0, page: 1, pageSize: 0 };
     }
   },
 
   getById: async (id: string): Promise<Partner | null> => {
-    // Try localStorage first for locally-created partners
-    if (id.startsWith('local-')) {
-      const stored = JSON.parse(localStorage.getItem('localPartners') || '[]');
-      return stored.find((p: any) => p.id === id) || null;
-    }
-    // Try Supabase for PRA-/PRC- and UUID IDs
     try {
       const { data } = await db.partners().select('*').eq('id', id).single();
-      if (data) {
-        const partner = normalizePartner(data);
-        // Enrich with contacts from imported data
-        const imported = IMPORTED_PARTNERS.find(p => p.id === id);
-        if (imported && imported.contacts?.length > 0 && (!partner.contacts || partner.contacts.length === 0)) {
-          partner.contacts = imported.contacts;
-        }
-        return partner;
-      }
+      if (data) return normalizePartner(data);
     } catch { /* fall through */ }
-    // Fallback to imported data
-    return IMPORTED_PARTNERS.find((p) => p.id === id) || null;
+    return null;
   },
 
   // ── Create ───────────────────────────────────────────
   create: async (input: Record<string, any>): Promise<Partner> => {
     const dbFields: Record<string, any> = {
+      id: crypto.randomUUID(),
       name: input.name,
       logo: input.logo || '',
       tier: input.tier || 'Registered',
@@ -214,72 +187,26 @@ export const partnerService = {
       await logOp((data as any).id, 'create', input._operator || 'system', { name: dbFields.name, status: dbFields.status });
       return normalizePartner(data);
     } catch (err: any) {
-      console.warn('Supabase insert failed, local fallback:', err.message);
-      const partner: Partner = {
-        id: 'local-' + Date.now(), name: dbFields.name, logo: dbFields.logo || '',
-        tier: dbFields.tier, status: 'Prospective', type: dbFields.type, manager: '',
-        location: dbFields.location || '', region: dbFields.region || '华北',
-        province: dbFields.province || '', city: dbFields.city || '', district: dbFields.district || '',
-        startDate: dbFields.start_date, applicationDate: dbFields.application_date || dbFields.start_date,
-        years: 0, prevTier: dbFields.prev_tier || 'Registered', tags: [], winRate: 0,
-        contacts: (input.contacts || []).map((c: any) => ({
-          salutation: c.salutation || '', firstName: c.firstName || c.first_name || '',
-          lastName: c.lastName || c.last_name || '', title: c.title || '',
-          department: c.department || '', phone: c.phone || '', mobile: c.mobile || '',
-          email: c.email || '', isPrimary: c.isPrimary ?? c.is_primary ?? false,
-        })),
-        unifiedSocialCreditCode: dbFields.unified_social_credit_code || '',
-        industry: dbFields.industry || '', cooperationScope: dbFields.cooperation_scope || '',
-        isCorePartner: false, englishName: dbFields.english_name || '', website: dbFields.website || '',
-      };
-      const stored = JSON.parse(localStorage.getItem('localPartners') || '[]');
-      stored.push(partner);
-      localStorage.setItem('localPartners', JSON.stringify(stored));
-      return partner;
-    }
-  },
-
-  // ── Local write helper ──────────────────────────────
-  _localWrite: (id: string, data: Record<string, any>) => {
-    try {
-      const raw = localStorage.getItem('localPartners') || '[]';
-      const stored = JSON.parse(raw);
-      if (!Array.isArray(stored)) { localStorage.setItem('localPartners', '[]'); return; }
-      const idx = stored.findIndex((p: any) => p.id === id);
-      if (idx >= 0) {
-        stored[idx] = { ...stored[idx], ...data };
-      } else {
-        const existing = IMPORTED_PARTNERS.find(p => p.id === id);
-        const base = existing ? { ...existing } : { id };
-        stored.push({ ...base, ...data });
-      }
-      localStorage.setItem('localPartners', JSON.stringify(stored));
-    } catch (e) {
-      console.error('localStorage write failed', e);
+      throw new Error('创建合作伙伴失败: ' + (err.message || '未知错误'));
     }
   },
 
   // ── Update ──────────────────────────────────────────
   update: async (id: string, data: Partial<Partner> & { _operator?: string }, operator?: string): Promise<void> => {
-    // local- IDs go to localStorage only
-    if (isLocalId(id)) { partnerService._localWrite(id, data as Record<string, any>); return; }
-
     const dbData = toSnake(data as Record<string, any>);
     delete dbData._operator;
     delete dbData.contacts;
     try {
-      const { error } = await db.partners().upsert({ id, ...dbData, updated_at: new Date().toISOString() }, { onConflict: 'id' });
+      const { error } = await db.partners().update({ ...dbData, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw new Error(error.message);
       await logOp(id, 'edit', data._operator || operator || 'system', { changes: dbData });
     } catch (err: any) {
-      partnerService._localWrite(id, data as Record<string, any>);
       if (!err.message?.includes('not configured')) throw err;
     }
   },
 
   // ── Delete ──────────────────────────────────────────
   delete: async (id: string, operator?: string): Promise<void> => {
-    if (isLocalId(id)) { /* handle locally */ return; }
     try {
       const { error } = await db.partners().delete().eq('id', id);
       if (error) throw new Error(error.message);
@@ -292,24 +219,21 @@ export const partnerService = {
 
   // ── Approve ──────────────────────────────────────────
   approve: async (id: string, data: { tier: string; status: string; manager: string; tags: string[] }, operator?: string): Promise<void> => {
-    if (isLocalId(id)) { partnerService._localWrite(id, { ...data, startDate: new Date().toISOString().split('T')[0] }); return; }
     try {
       await db.partners().update({ tier: data.tier, status: data.status, manager: data.manager, tags: data.tags, start_date: new Date().toISOString().split('T')[0] }).eq('id', id);
       await logOp(id, 'approve', operator || 'system', data);
-    } catch { partnerService._localWrite(id, { ...data, startDate: new Date().toISOString().split('T')[0] }); }
+    } catch { /* ok */ }
   },
 
   // ── Reject ───────────────────────────────────────────
   reject: async (id: string, operator?: string): Promise<void> => {
-    if (isLocalId(id)) { partnerService._localWrite(id, { status: 'Prospective' }); return; }
     try { await db.partners().update({ status: 'Prospective' }).eq('id', id); await logOp(id, 'reject', operator || 'system', {}); } catch {}
   },
 
   // ── Batch approve ────────────────────────────────────
   batchApprove: async (ids: string[], data: { tier: string; status: string; manager: string; tags: string[] }, operator?: string): Promise<void> => {
-    for (const id of ids) partnerService._localWrite(id, { ...data, startDate: new Date().toISOString().split('T')[0] });
     try {
-      const dbIds = ids.filter(id => !isLocalId(id));
+      const dbIds = ids.filter(id => !false);
       if (dbIds.length > 0) {
         await db.partners().update({ tier: data.tier, status: data.status, manager: data.manager, tags: data.tags, start_date: new Date().toISOString().split('T')[0] }).in('id', dbIds);
         for (const id of dbIds) await logOp(id, 'approve', operator || 'system', { batch: true, ...data });
@@ -319,23 +243,22 @@ export const partnerService = {
 
   // ── Batch reject ─────────────────────────────────────
   batchReject: async (ids: string[], operator?: string): Promise<void> => {
-    for (const id of ids) partnerService._localWrite(id, { status: 'Prospective' });
     try {
-      const dbIds = ids.filter(id => !isLocalId(id));
+      const dbIds = ids.filter(id => !false);
       if (dbIds.length > 0) { await db.partners().update({ status: 'Prospective' }).in('id', dbIds); for (const id of dbIds) await logOp(id, 'reject', operator || 'system', { batch: true }); }
     } catch { /* ok */ }
   },
 
   // ── JBP Meetings ─────────────────────────────────────
   getJBPs: async (partnerId: string): Promise<any[]> => {
-    if (isLocalId(partnerId)) {
+    if (false) {
       const stored = JSON.parse(localStorage.getItem('jbpMeetings') || '[]');
       return stored.filter((m: any) => m.partner_id === partnerId);
     }
     try { const { data } = await supabase.from('jbp_meetings').select('*').eq('partner_id', partnerId).order('meeting_date', { ascending: false }); return (data || []) as any[]; } catch { return []; }
   },
   createJBP: async (partnerId: string, jbp: Record<string, any>): Promise<void> => {
-    if (isLocalId(partnerId)) {
+    if (false) {
       const stored = JSON.parse(localStorage.getItem('jbpMeetings') || '[]');
       stored.push({ ...jbp, partner_id: partnerId, id: 'jbp-' + Date.now(), created_at: new Date().toISOString() });
       localStorage.setItem('jbpMeetings', JSON.stringify(stored));
@@ -346,7 +269,7 @@ export const partnerService = {
 
   // ── Operation logs ───────────────────────────────────
   getOperationLogs: async (partnerId: string): Promise<any[]> => {
-    if (isLocalId(partnerId)) {
+    if (false) {
       const logs = JSON.parse(localStorage.getItem('operationLogs') || '[]');
       return logs.filter((l: any) => l.partner_id === partnerId);
     }

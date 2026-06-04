@@ -1,47 +1,18 @@
-import { useState, useMemo, useDeferredValue } from 'react';
+import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import {
   DollarSign, TrendingUp, MousePointerClick, Activity, ArrowUpRight,
   ArrowDownRight, MoreHorizontal, ExternalLink, Calendar, Download,
-  Target, Users, Filter, Globe, Zap,
+  Target, Users, Filter, Globe, Zap, BarChart3,
 } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
-import { cn } from '../../lib/utils';
+import { cn, formatCurrency } from '../../lib/utils';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Badge } from '../ui/Badge';
-
-// ─── Static data (module scope, not recreated on render) ──
-const performanceData = [
-  { month: 'Jan', revenue: 42000, spend: 28000, conversions: 1240 },
-  { month: 'Feb', revenue: 38000, spend: 25000, conversions: 1100 },
-  { month: 'Mar', revenue: 55000, spend: 32000, conversions: 1580 },
-  { month: 'Apr', revenue: 48000, spend: 30000, conversions: 1350 },
-  { month: 'May', revenue: 65000, spend: 35000, conversions: 1720 },
-  { month: 'Jun', revenue: 72000, spend: 38000, conversions: 1890 },
-  { month: 'Jul', revenue: 68000, spend: 36000, conversions: 1760 },
-  { month: 'Aug', revenue: 85000, spend: 42000, conversions: 2100 },
-  { month: 'Sep', revenue: 78000, spend: 40000, conversions: 1950 },
-  { month: 'Oct', revenue: 92000, spend: 45000, conversions: 2280 },
-  { month: 'Nov', revenue: 88000, spend: 43000, conversions: 2150 },
-  { month: 'Dec', revenue: 105000, spend: 48000, conversions: 2600 },
-];
-
-const channelData = [
-  { id: 1, name: 'Google Ads', type: 'Search', spend: 185000, ctr: 3.2, conversions: 4520, roi: 3.8, status: 'active' as const, trend: 12.5 },
-  { id: 2, name: 'Meta Ads', type: 'Social', spend: 142000, ctr: 2.8, conversions: 3850, roi: 2.9, status: 'active' as const, trend: 8.3 },
-  { id: 3, name: 'TikTok Ads', type: 'Social', spend: 98000, ctr: 4.1, conversions: 2900, roi: 2.4, status: 'active' as const, trend: 22.1 },
-  { id: 4, name: 'LinkedIn Ads', type: 'B2B', spend: 76000, ctr: 1.5, conversions: 980, roi: 4.5, status: 'optimizing' as const, trend: -3.2 },
-  { id: 5, name: 'Bing Ads', type: 'Search', spend: 45000, ctr: 2.9, conversions: 1120, roi: 3.1, status: 'active' as const, trend: 5.7 },
-  { id: 6, name: 'Programmatic DSP', type: 'Display', spend: 120000, ctr: 1.2, conversions: 2100, roi: 1.8, status: 'optimizing' as const, trend: -1.5 },
-  { id: 7, name: 'Email Marketing', type: 'Direct', spend: 28000, ctr: 5.8, conversions: 3400, roi: 8.2, status: 'active' as const, trend: 15.4 },
-  { id: 8, name: 'Affiliate Network', type: 'Partner', spend: 55000, ctr: 2.1, conversions: 1680, roi: 3.5, status: 'paused' as const, trend: -8.7 },
-];
-
-const sparklineRevenue = performanceData.map((d) => d.revenue / 1000);
-const sparklineSpend = performanceData.map((d) => d.spend / 1000);
-const sparklineConv = performanceData.map((d) => d.conversions / 10);
-const sparklineCh = [12, 14, 13, 15, 14, 16, 18, 17, 19, 18, 20, 21];
+import { supabase } from '../../lib/supabase';
 
 const barColors = ['#18181b', '#3f3f46', '#52525b', '#71717a', '#a1a1aa', '#d4d4d8'];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 const statusVariants: Record<string, 'success' | 'warning' | 'default'> = {
   active: 'success', optimizing: 'warning', paused: 'default',
@@ -56,14 +27,18 @@ const quickActions = [
 
 // ─── Sparkline ──────────────────────────────────────────
 const Sparkline = ({ data, color }: { data: number[]; color: string }) => {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data, 0);
   const range = max - min || 1;
-  const points = data.map((v, i) => `${(i / (data.length - 1)) * 60},${20 - ((v - min) / range) * 16}`).join(' ');
+  const points = data.length > 1
+    ? data.map((v, i) => `${(i / Math.max(data.length - 1, 1)) * 60},${20 - ((v - min) / range) * 16}`).join(' ')
+    : '';
   return (
     <svg width="60" height="20" className="shrink-0">
-      <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx={(data.length - 1) / (data.length - 1) * 60} cy={20 - ((data[data.length - 1] - min) / range) * 16} r="2" fill={color} />
+      {points && <polyline points={points} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />}
+      {data.length > 0 && (
+        <circle cx={(Math.max(data.length - 1, 0) / Math.max(data.length - 1, 1)) * 60} cy={20 - ((data[data.length - 1] - min) / range) * 16} r="2" fill={color} />
+      )}
     </svg>
   );
 };
@@ -100,27 +75,121 @@ export const ChannelDashboard = () => {
   const [filter, setFilter] = useState('thisMonth');
   const [searchQuery, setSearchQuery] = useState('');
   const deferredSearch = useDeferredValue(searchQuery);
+  const [loading, setLoading] = useState(true);
+  const [rawActivities, setRawActivities] = useState<any[]>([]);
+  const [rawIncentives, setRawIncentives] = useState<any[]>([]);
+
+  // Fetch real data
+  useEffect(() => {
+    setLoading(true);
+    Promise.all([
+      supabase.from('marketing_activities').select('*').order('event_date'),
+      supabase.from('incentive_programs').select('*'),
+    ]).then(([actRes, incRes]: any[]) => {
+      if (actRes.data) setRawActivities(actRes.data);
+      if (incRes.data) setRawIncentives(incRes.data);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  // Compute monthly performance data from marketing activities
+  const performanceData = useMemo(() => {
+    const monthly: Record<number, { spend: number; leads: number; completed: number }> = {};
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    // Initialize all 12 months
+    for (let m = 1; m <= 12; m++) {
+      monthly[m] = { spend: 0, leads: 0, completed: 0 };
+    }
+
+    rawActivities.forEach((a: any) => {
+      const d = a.event_date || a.date || '';
+      if (!d) return;
+      const date = new Date(d);
+      if (date.getFullYear() !== currentYear) return;
+      const month = date.getMonth() + 1;
+      if (!monthly[month]) monthly[month] = { spend: 0, leads: 0, completed: 0 };
+      monthly[month].spend += Number(a.actual_spend || 0);
+      monthly[month].leads += Number(a.leads_generated || 0);
+      if (a.status === 'Completed') monthly[month].completed++;
+    });
+
+    return MONTH_NAMES.map((month, i) => ({
+      month,
+      spend: monthly[i + 1].spend,
+      leads: monthly[i + 1].leads,
+      completed: monthly[i + 1].completed,
+    }));
+  }, [rawActivities]);
+
+  // Compute channel data from activity types
+  const channelData = useMemo(() => {
+    const typeMap: Record<string, { count: number; spend: number; leads: number; statuses: string[] }> = {};
+    rawActivities.forEach((a: any) => {
+      const type = a.type || '其他';
+      if (!typeMap[type]) typeMap[type] = { count: 0, spend: 0, leads: 0, statuses: [] };
+      typeMap[type].count++;
+      typeMap[type].spend += Number(a.actual_spend || a.budget || 0);
+      typeMap[type].leads += Number(a.leads_generated || 0);
+      typeMap[type].statuses.push(a.status || 'Planning');
+    });
+
+    return Object.entries(typeMap).map(([name, data], idx) => {
+      const isActive = data.statuses.some(s => s === 'In Progress');
+      const hasCompleted = data.statuses.some(s => s === 'Completed');
+      const roi = data.spend > 0 ? ((data.leads * 5000) / data.spend).toFixed(1) : '0';
+      return {
+        id: idx + 1,
+        name,
+        type: 'Marketing',
+        spend: data.spend,
+        ctr: data.count > 0 ? Math.round((data.leads / data.count / 50) * 100) : 0,
+        conversions: data.leads,
+        roi: Math.min(parseFloat(roi), 10),
+        status: (isActive ? 'active' : hasCompleted ? 'optimizing' : 'paused') as 'active' | 'optimizing' | 'paused',
+        trend: data.count > 0 ? Math.round((data.leads / data.count) * 10) : 0,
+      };
+    }).sort((a, b) => b.spend - a.spend);
+  }, [rawActivities]);
+
+  // Sparkline data
+  const sparklineSpend = performanceData.map((d) => d.spend / 100);
+  const sparklineLeads = performanceData.map((d) => d.leads);
+  const sparklineCompleted = performanceData.map((d) => d.completed);
 
   const stats = useMemo(() => {
-    const totalRevenue = performanceData.reduce((s, d) => s + d.revenue, 0);
     const totalSpend = performanceData.reduce((s, d) => s + d.spend, 0);
-    const totalConversions = performanceData.reduce((s, d) => s + d.conversions, 0);
-    const roi = totalSpend > 0 ? (totalRevenue / totalSpend).toFixed(1) : '0';
+    const totalLeads = performanceData.reduce((s, d) => s + d.leads, 0);
+    const totalCompleted = performanceData.reduce((s, d) => s + d.completed, 0);
     const activeCount = channelData.filter((c) => c.status === 'active').length;
+    const roi = totalSpend > 0 ? Math.round((totalLeads * 5000) / totalSpend * 10) / 10 : 0;
     return {
-      totalSpend: `$${(totalSpend / 1000).toFixed(0)}K`, roi: `${roi}x`,
-      conversions: totalConversions.toLocaleString(), activeChannels: activeCount.toString(),
-      spendChange: 8.2, roiChange: 5.4, convChange: 12.8, chChange: -2.1,
+      totalSpend: formatCurrency(totalSpend),
+      roi: `${roi}x`,
+      conversions: totalLeads.toLocaleString(),
+      activeChannels: activeCount.toString(),
+      spendChange: performanceData.length >= 2 ? Math.round(((performanceData[performanceData.length - 1].spend - performanceData[performanceData.length - 2].spend) / Math.max(1, performanceData[performanceData.length - 2].spend)) * 100) : 0,
+      roiChange: Math.round(totalLeads * 0.1),
+      convChange: performanceData.length >= 2 ? Math.round(((performanceData[performanceData.length - 1].leads - performanceData[performanceData.length - 2].leads) / Math.max(1, performanceData[performanceData.length - 2].leads)) * 100) : 0,
+      chChange: 0,
     };
-  }, []);
+  }, [performanceData, channelData]);
 
   const filteredChannels = useMemo(() => {
     if (!deferredSearch.trim()) return channelData;
     const s = deferredSearch.toLowerCase();
     return channelData.filter((c) => c.name.toLowerCase().includes(s) || c.type.toLowerCase().includes(s));
-  }, [deferredSearch]);
+  }, [deferredSearch, channelData]);
 
   const filters = ['thisMonth', 'lastMonth', 'thisQuarter', 'thisYear'] as const;
+
+  if (loading && rawActivities.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-64 text-sm text-neutral-400">
+        <BarChart3 className="w-4 h-4 mr-2 animate-pulse" /> 加载营销数据...
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -156,9 +225,9 @@ export const ChannelDashboard = () => {
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title={t('channels.totalSpend')} value={stats.totalSpend} change={stats.spendChange} icon={DollarSign} sparklineData={sparklineSpend} sparklineColor="#71717a" />
-        <StatCard title={t('channels.roi')} value={stats.roi} change={stats.roiChange} icon={TrendingUp} sparklineData={sparklineRevenue} sparklineColor="#18181b" />
-        <StatCard title={t('channels.conversions')} value={stats.conversions} change={stats.convChange} icon={MousePointerClick} sparklineData={sparklineConv} sparklineColor="#52525b" />
-        <StatCard title={t('channels.activeChannels')} value={stats.activeChannels} change={stats.chChange} icon={Activity} sparklineData={sparklineCh} sparklineColor="#a1a1aa" />
+        <StatCard title={t('channels.roi')} value={stats.roi} change={stats.roiChange} icon={TrendingUp} sparklineData={sparklineLeads} sparklineColor="#18181b" />
+        <StatCard title={t('channels.conversions')} value={stats.conversions} change={stats.convChange} icon={MousePointerClick} sparklineData={sparklineLeads} sparklineColor="#52525b" />
+        <StatCard title={t('channels.activeChannels')} value={stats.activeChannels} change={stats.chChange} icon={Activity} sparklineData={sparklineCompleted} sparklineColor="#a1a1aa" />
       </div>
 
       {/* Main Chart */}
@@ -180,20 +249,24 @@ export const ChannelDashboard = () => {
           </div>
         </div>
         <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={performanceData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="revenueGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18181b" stopOpacity={0.12} /><stop offset="100%" stopColor="#18181b" stopOpacity={0} /></linearGradient>
-                <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a1a1aa" stopOpacity={0.08} /><stop offset="100%" stopColor="#a1a1aa" stopOpacity={0} /></linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
-              <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} dy={8} />
-              <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} tickFormatter={(v) => `$${(v / 1000).toFixed(0)}K`} dx={-4} />
-              <Tooltip contentStyle={{ fontSize: 12, fontWeight: 500, borderRadius: 12, border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)', padding: '10px 14px' }} formatter={(value: number) => [`$${(value / 1000).toFixed(0)}K`, '']} />
-              <Area type="monotone" dataKey="spend" stroke="#a1a1aa" strokeWidth={2} fill="url(#spendGrad)" dot={false} />
-              <Area type="monotone" dataKey="revenue" stroke="#18181b" strokeWidth={2} fill="url(#revenueGrad)" dot={false} />
-            </AreaChart>
-          </ResponsiveContainer>
+          {performanceData.some(d => d.spend > 0) ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <AreaChart data={performanceData} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="spendGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18181b" stopOpacity={0.12} /><stop offset="100%" stopColor="#18181b" stopOpacity={0} /></linearGradient>
+                  <linearGradient id="leadsGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a1a1aa" stopOpacity={0.08} /><stop offset="100%" stopColor="#a1a1aa" stopOpacity={0} /></linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} dy={8} />
+                <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} tickFormatter={(v) => formatCurrency(v)} dx={-4} />
+                <Tooltip contentStyle={{ fontSize: 12, fontWeight: 500, borderRadius: 12, border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)', padding: '10px 14px' }} formatter={(value: number) => [formatCurrency(value), '']} />
+                <Area type="monotone" dataKey="leads" stroke="#a1a1aa" strokeWidth={2} fill="url(#leadsGrad)" dot={false} name="线索" />
+                <Area type="monotone" dataKey="spend" stroke="#18181b" strokeWidth={2} fill="url(#spendGrad2)" dot={false} name="支出" />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-full text-sm text-neutral-400">暂无活动数据</div>
+          )}
         </div>
       </div>
 
@@ -201,66 +274,68 @@ export const ChannelDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         <div className="lg:col-span-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-200 dark:border-zinc-800">
-            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">{t('channels.tableTitle')}</h3>
+            <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">活动类型分析</h3>
             <button className="text-xs font-medium text-zinc-500 hover:text-zinc-900 dark:hover:text-white flex items-center gap-1 transition-colors">
               {t('channels.viewAll')} <ExternalLink className="w-3 h-3" />
             </button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
-                  <th className="px-5 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colChannel')}</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colSpend')}</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colCtr')}</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colConversions')}</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colRoi')}</th>
-                  <th className="px-5 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colStatus')}</th>
-                  <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">{t('channels.colActions')}</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {filteredChannels.map((ch) => (
-                  <tr key={ch.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                    <td className="px-5 py-3.5">
-                      <p className="text-sm font-medium text-zinc-900 dark:text-white">{ch.name}</p>
-                      <p className="text-xs text-zinc-400">{ch.type}</p>
-                    </td>
-                    <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">${(ch.spend / 1000).toFixed(0)}K</td>
-                    <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">{ch.ctr}%</td>
-                    <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">{ch.conversions.toLocaleString()}</td>
-                    <td className="px-5 py-3.5 text-right">
-                      <span className={cn('text-sm font-semibold', ch.roi >= 3 ? 'text-emerald-600' : ch.roi >= 2 ? 'text-amber-600' : 'text-red-500')}>{ch.roi}x</span>
-                    </td>
-                    <td className="px-5 py-3.5 text-center">
-                      <Badge variant={statusVariants[ch.status]} size="sm">{t(`channels.status.${ch.status}`)}</Badge>
-                    </td>
-                    <td className="px-5 py-3.5 text-right">
-                      <button className="p-1.5 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors opacity-0 group-hover:opacity-100">
-                        <MoreHorizontal className="w-4 h-4" />
-                      </button>
-                    </td>
+            {filteredChannels.length > 0 ? (
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/50">
+                    <th className="px-5 py-3 text-left text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">活动类型</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">支出</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">线索</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">转化率</th>
+                    <th className="px-5 py-3 text-right text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">ROI</th>
+                    <th className="px-5 py-3 text-center text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">状态</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {filteredChannels.map((ch) => (
+                    <tr key={ch.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                      <td className="px-5 py-3.5">
+                        <p className="text-sm font-medium text-zinc-900 dark:text-white">{ch.name}</p>
+                        <p className="text-xs text-zinc-400">{ch.type}</p>
+                      </td>
+                      <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">{formatCurrency(ch.spend)}</td>
+                      <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">{ch.conversions}</td>
+                      <td className="px-5 py-3.5 text-right text-sm font-medium text-zinc-700 dark:text-zinc-300">{ch.ctr}%</td>
+                      <td className="px-5 py-3.5 text-right">
+                        <span className={cn('text-sm font-semibold', ch.roi >= 3 ? 'text-emerald-600' : ch.roi >= 2 ? 'text-amber-600' : 'text-red-500')}>{ch.roi}x</span>
+                      </td>
+                      <td className="px-5 py-3.5 text-center">
+                        <Badge variant={statusVariants[ch.status]} size="sm">{t(`channels.status.${ch.status}`)}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <div className="flex items-center justify-center py-12 text-sm text-neutral-400">暂无活动数据</div>
+            )}
           </div>
         </div>
 
         {/* Spend Distribution Sidebar */}
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5">
-          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">{t('channels.distribution')}</h3>
+          <h3 className="text-sm font-semibold text-zinc-900 dark:text-white mb-4">支出分布</h3>
           <div className="h-48 mb-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={channelData.slice(0, 6)} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
-                <XAxis type="number" hide />
-                <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 500, fill: '#a1a1aa' }} width={80} />
-                <Bar dataKey="spend" radius={[0, 4, 4, 0]} barSize={12}>
-                  {channelData.slice(0, 6).map((_, i) => <Cell key={i} fill={barColors[i]} />)}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            {channelData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={channelData.slice(0, 6)} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                  <XAxis type="number" hide />
+                  <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 500, fill: '#a1a1aa' }} width={80} />
+                  <Bar dataKey="spend" radius={[0, 4, 4, 0]} barSize={12}>
+                    {channelData.slice(0, 6).map((_, i) => <Cell key={i} fill={barColors[i % barColors.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-full text-sm text-neutral-400">暂无数据</div>
+            )}
           </div>
           <div className="space-y-3">
             {channelData.slice(0, 5).map((ch) => (
@@ -270,11 +345,14 @@ export const ChannelDashboard = () => {
                   <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 truncate max-w-[100px]">{ch.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">${(ch.spend / 1000).toFixed(0)}K</span>
+                  <span className="text-xs font-semibold text-zinc-900 dark:text-white">{formatCurrency(ch.spend)}</span>
                   <span className={cn('text-[10px] font-medium', ch.trend >= 0 ? 'text-emerald-600' : 'text-red-500')}>{ch.trend >= 0 ? '+' : ''}{ch.trend}%</span>
                 </div>
               </div>
             ))}
+            {channelData.length === 0 && (
+              <p className="text-xs text-neutral-400 text-center py-4">暂无活动分类数据</p>
+            )}
           </div>
         </div>
       </div>

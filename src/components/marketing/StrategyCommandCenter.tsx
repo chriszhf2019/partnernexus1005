@@ -1,5 +1,4 @@
-// @ts-nocheck
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   Target, 
   AlertTriangle, 
@@ -44,71 +43,71 @@ import { motion, AnimatePresence } from 'motion/react';
 import { AttendeeMiniApp } from './AttendeeMiniApp';
 import { GapAnalysisHeader } from './GapAnalysisHeader';
 import { BudgetOverview } from './BudgetOverview';
-// Legacy Firebase replaced by Supabase
-// @ts-nocheck - legacy component, migrated to Supabase
+import { supabase } from '../../lib/supabase';
 
-// Error Handling Spec for Firestore Operations
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+// Types
+interface Activity {
+  id: string;
+  name: string;
+  type: string;
+  budget: number;
+  channel: string;
+  desc: string;
+  status: string;
+  createdAt: string;
+  createdBy: string;
+  wechatEnabled: boolean;
+  time?: string;
+  location?: string;
+  host?: string;
+  expectedROI?: string;
+  leads?: number;
+  color?: string;
+  loc?: string;
 }
 
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
+interface BudgetData {
+  marketingTotal: number;
+  marketingAllocated: number;
+  pmdfTotal: number;
+  pmdfAllocated: number;
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+interface Attendee {
+  id?: string;
+  name: string;
+  company: string;
+  score: number;
+  followUpStatus: string;
+  status?: string;
+  engagement?: string;
+}
+
+interface NewActivityData {
+  name: string;
+  type: string;
+  budget: string;
+  channel: string;
+  desc: string;
+}
+
+interface UserData {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL: string;
 }
 
 export const StrategyCommandCenter: React.FC = () => {
-  const [user, setUser] = React.useState<any>({
+  const [user, setUser] = useState<UserData>({
     uid: 'guest-user',
     displayName: '访客用户',
     email: 'guest@strategy.com',
     photoURL: 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest'
   });
-  const [isAuthReady, setIsAuthReady] = React.useState(true);
-  const [activities, setActivities] = React.useState<any[]>([]);
-  const [budgetData, setBudgetData] = React.useState<any>({
+  const [isAuthReady, setIsAuthReady] = useState(true);
+  const [activities, setActivities] = useState<Activity[]>([]);
+  const [budgetData, setBudgetData] = useState<BudgetData>({
     marketingTotal: 9000000,
     marketingAllocated: 6000000,
     pmdfTotal: 6000000,
@@ -116,18 +115,18 @@ export const StrategyCommandCenter: React.FC = () => {
   });
 
   const [winRate, setWinRate] = useState(25.0);
-  const [salesTarget, setSalesTarget] = useState(100); // in Millions
-  const [actualPipeline, setActualPipeline] = useState(355); // in Millions
+  const [salesTarget, setSalesTarget] = useState(100);
+  const [actualPipeline, setActualPipeline] = useState(355);
   const [convRate, setConvRate] = useState(12.5);
   const [showInsights, setShowInsights] = useState(false);
   const [showExecutionBoard, setShowExecutionBoard] = useState(false);
-  const [selectedActivity, setSelectedActivity] = useState<any>(null);
+  const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
   const [modalMode, setModalMode] = useState<'details' | 'edit' | 'leads' | 'attendees'>('details');
-  const [editData, setEditData] = useState<any>(null);
+  const [editData, setEditData] = useState<Activity | null>(null);
   const [showNewActivityModal, setShowNewActivityModal] = useState(false);
   const [showMiniAppPreview, setShowMiniAppPreview] = useState(false);
-  const [attendees, setAttendees] = useState<any[]>([]);
-  const [newActivityData, setNewActivityData] = useState({
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [newActivityData, setNewActivityData] = useState<NewActivityData>({
     name: '',
     type: 'Marketing',
     budget: '',
@@ -135,124 +134,212 @@ export const StrategyCommandCenter: React.FC = () => {
     desc: ''
   });
 
-  // Data Listeners
-  React.useEffect(() => {
-    // Auth is mocked, so we proceed
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [activitiesRes, budgetRes] = await Promise.all([
+          supabase.from('marketing_activities').select('*').order('created_at', { ascending: false }),
+          supabase.from('marketing_budgets').select('*').single()
+        ]);
 
-    const activitiesQuery = query(collection(db, 'activities'), orderBy('createdAt', 'desc'));
-    const unsubscribeActivities = onSnapshot(activitiesQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setActivities(data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'activities');
-    });
+        if (activitiesRes.data) {
+          setActivities(activitiesRes.data.map((row: any) => ({
+            id: row.id,
+            name: row.name || '',
+            type: row.type || 'Marketing',
+            budget: row.budget || 0,
+            channel: row.channel || '',
+            desc: row.description || row.desc || '',
+            status: row.status || 'Planning',
+            createdAt: row.created_at || new Date().toISOString(),
+            createdBy: row.created_by || user.uid,
+            wechatEnabled: row.wechat_enabled || false,
+            time: row.time || row.date || '',
+            location: row.location || '',
+            host: row.host || '',
+            expectedROI: row.expected_roi || '',
+            leads: row.leads_generated || 0,
+            color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 
+                   row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+                   'bg-amber-50 text-amber-600',
+            loc: row.location || ''
+          })));
+        }
 
-    const budgetDoc = doc(db, 'budgets', 'Q3_2024');
-    const unsubscribeBudget = onSnapshot(budgetDoc, (snapshot) => {
-      if (snapshot.exists()) {
-        setBudgetData(snapshot.data());
-      } else {
-        // Initialize default budget if not exists
-        setDoc(budgetDoc, {
-          quarter: 'Q3 2024',
-          marketingTotal: 9000000,
-          marketingAllocated: 6000000,
-          pmdfTotal: 6000000,
-          pmdfAllocated: 3750000
-        }).catch(e => handleFirestoreError(e, OperationType.WRITE, 'budgets/Q3_2024'));
+        if (budgetRes.data) {
+          setBudgetData({
+            marketingTotal: budgetRes.data.marketing_total || 9000000,
+            marketingAllocated: budgetRes.data.marketing_allocated || 6000000,
+            pmdfTotal: budgetRes.data.pmdf_total || 6000000,
+            pmdfAllocated: budgetRes.data.pmdf_allocated || 3750000
+          });
+        }
+      } catch (error) {
+        console.warn('Failed to fetch data, using mock data:', error);
       }
-    }, (error) => {
-      handleFirestoreError(error, OperationType.GET, 'budgets/Q3_2024');
-    });
-
-    return () => {
-      unsubscribeActivities();
-      unsubscribeBudget();
     };
+
+    fetchData();
   }, [isAuthReady, user]);
 
-  // Attendee Listener for Selected Activity
-  React.useEffect(() => {
+  useEffect(() => {
     if (!selectedActivity?.id) {
       setAttendees([]);
       return;
     }
 
-    const attendeesQuery = query(collection(db, `activities/${selectedActivity.id}/attendees`), orderBy('createdAt', 'desc'));
-    const unsubscribeAttendees = onSnapshot(attendeesQuery, (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAttendees(data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, `activities/${selectedActivity.id}/attendees`);
-    });
+    const fetchAttendees = async () => {
+      try {
+        const res = await supabase.from('activity_attendees')
+          .select('*')
+          .eq('activity_id', selectedActivity.id);
+        
+        if (res.data) {
+          setAttendees(res.data.map((row: any) => ({
+            id: row.id,
+            name: row.name || '',
+            company: row.company || '',
+            score: row.score || 50,
+            followUpStatus: row.follow_up_status || 'New',
+            status: row.status || '',
+            engagement: row.engagement || ''
+          })));
+        }
+      } catch (error) {
+        console.warn('Failed to fetch attendees:', error);
+      }
+    };
 
-    return () => unsubscribeAttendees();
+    fetchAttendees();
   }, [selectedActivity?.id]);
-
-  const handleLogin = async () => {
-    const provider = new GoogleAuthProvider();
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      console.error("Login failed:", error);
-    }
-  };
 
   const handleCreateActivity = async () => {
     if (!newActivityData.name || !newActivityData.budget) return;
 
-    const path = 'activities';
     try {
-      await addDoc(collection(db, path), {
+      const { data, error } = await supabase.from('marketing_activities').insert({
         ...newActivityData,
         budget: Number(newActivityData.budget),
         status: 'Planning',
-        createdAt: serverTimestamp(),
-        createdBy: user.uid,
-        wechatEnabled: true
+        created_at: new Date().toISOString(),
+        created_by: user.uid,
+        wechat_enabled: true
       });
-      setShowNewActivityModal(false);
-      setNewActivityData({ name: '', type: 'Marketing', budget: '', channel: '', desc: '' });
-    } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, path);
-    }
-  };
 
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth);
+      if (!error) {
+        setShowNewActivityModal(false);
+        setNewActivityData({ name: '', type: 'Marketing', budget: '', channel: '', desc: '' });
+        // Refresh activities
+        const res = await supabase.from('marketing_activities').select('*').order('created_at', { ascending: false });
+        if (res.data) {
+          setActivities(res.data.map((row: any) => ({
+            id: row.id,
+            name: row.name || '',
+            type: row.type || 'Marketing',
+            budget: row.budget || 0,
+            channel: row.channel || '',
+            desc: row.description || row.desc || '',
+            status: row.status || 'Planning',
+            createdAt: row.created_at || new Date().toISOString(),
+            createdBy: row.created_by || user.uid,
+            wechatEnabled: row.wechat_enabled || false,
+            time: row.time || row.date || '',
+            location: row.location || '',
+            host: row.host || '',
+            expectedROI: row.expected_roi || '',
+            leads: row.leads_generated || 0,
+            color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 
+                   row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+                   'bg-amber-50 text-amber-600',
+            loc: row.location || ''
+          })));
+        }
+      }
     } catch (error) {
-      console.error("Sign out failed:", error);
+      console.error('Failed to create activity:', error);
     }
   };
 
   const handleDeleteActivity = async (id: string) => {
     if (!window.confirm('确定要删除该活动及其所有参会数据吗？')) return;
     try {
-      await deleteDoc(doc(db, 'activities', id));
+      await supabase.from('marketing_activities').delete().eq('id', id);
       setSelectedActivity(null);
+      // Refresh activities
+      const res = await supabase.from('marketing_activities').select('*').order('created_at', { ascending: false });
+      if (res.data) {
+        setActivities(res.data.map((row: any) => ({
+          id: row.id,
+          name: row.name || '',
+          type: row.type || 'Marketing',
+          budget: row.budget || 0,
+          channel: row.channel || '',
+          desc: row.description || row.desc || '',
+          status: row.status || 'Planning',
+          createdAt: row.created_at || new Date().toISOString(),
+          createdBy: row.created_by || user.uid,
+          wechatEnabled: row.wechat_enabled || false,
+          time: row.time || row.date || '',
+          location: row.location || '',
+          host: row.host || '',
+          expectedROI: row.expected_roi || '',
+          leads: row.leads_generated || 0,
+          color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 
+                 row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+                 'bg-amber-50 text-amber-600',
+          loc: row.location || ''
+        })));
+      }
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `activities/${id}`);
+      console.error('Failed to delete activity:', error);
     }
   };
 
   const handleSaveEdit = async () => {
     if (!editData?.id) return;
     try {
-      await updateDoc(doc(db, 'activities', editData.id), {
+      await supabase.from('marketing_activities').update({
         ...editData,
         budget: Number(editData.budget),
-        updatedAt: serverTimestamp()
-      });
+        updated_at: new Date().toISOString()
+      }).eq('id', editData.id);
+
       setSelectedActivity(editData);
       setModalMode('details');
+      // Refresh activities
+      const res = await supabase.from('marketing_activities').select('*').order('created_at', { ascending: false });
+      if (res.data) {
+        setActivities(res.data.map((row: any) => ({
+          id: row.id,
+          name: row.name || '',
+          type: row.type || 'Marketing',
+          budget: row.budget || 0,
+          channel: row.channel || '',
+          desc: row.description || row.desc || '',
+          status: row.status || 'Planning',
+          createdAt: row.created_at || new Date().toISOString(),
+          createdBy: row.created_by || user.uid,
+          wechatEnabled: row.wechat_enabled || false,
+          time: row.time || row.date || '',
+          location: row.location || '',
+          host: row.host || '',
+          expectedROI: row.expected_roi || '',
+          leads: row.leads_generated || 0,
+          color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 
+                 row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+                 'bg-amber-50 text-amber-600',
+          loc: row.location || ''
+        })));
+      }
     } catch (error) {
-      handleFirestoreError(error, OperationType.UPDATE, `activities/${editData.id}`);
+      console.error('Failed to update activity:', error);
     }
   };
 
   const handleEditClick = () => {
-    setEditData({ ...selectedActivity });
+    if (selectedActivity) {
+      setEditData({ ...selectedActivity });
+    }
     setModalMode('edit');
   };
 
@@ -266,8 +353,6 @@ export const StrategyCommandCenter: React.FC = () => {
 
   const isAtRisk = gap > 0;
 
-  // Calculate percentages for the chart
-  // We'll use a max scale that accommodates both actual and required, plus some padding
   const maxScale = Math.max(actualPipeline, requiredPipeline) * 1.2;
   const actualWidth = (actualPipeline / maxScale) * 100;
   const requiredPos = (requiredPipeline / maxScale) * 100;
@@ -291,13 +376,6 @@ export const StrategyCommandCenter: React.FC = () => {
             </div>
             <img src={user.photoURL} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-200" />
           </div>
-          <button 
-            onClick={handleSignOut}
-            className="p-2 hover:bg-red-50 text-slate-400 hover:text-red-500 rounded-xl transition-all"
-            title="退出登录"
-          >
-            <ArrowRight className="w-4 h-4" />
-          </button>
         </div>
       </div>
 
@@ -411,9 +489,9 @@ export const StrategyCommandCenter: React.FC = () => {
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">暂无活跃活动，请点击“新增活动”开始规划</p>
                     </td>
                   </tr>
-                ) : activities.map((act, i) => (
+                ) : activities.map((act) => (
                   <tr 
-                    key={act.id || i} 
+                    key={act.id} 
                     className="hover:bg-slate-50/80 transition-colors cursor-pointer group"
                     onClick={() => setSelectedActivity(act)}
                   >
@@ -507,7 +585,7 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div className="px-3 py-1 bg-[#f5f5f7] text-blue-600 text-[10px] font-black rounded-full uppercase tracking-widest border border-blue-100">
                         预算规划建议
                       </div>
-                      <div className="w-2 h-2 rounded-full bg-[#f5f5f7]0 animate-pulse" />
+                      <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
                     </div>
 
                     <div className="space-y-4 mb-8">
@@ -733,7 +811,7 @@ export const StrategyCommandCenter: React.FC = () => {
       <div className="flex items-center justify-center py-8">
         <div className="flex items-center gap-2 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
           <ShieldCheck className="w-4 h-4" />
-          系统已根据实时销售数据自动更新策略建议 • 最后更新: 2024-09-07 11:42
+          系统已根据实时销售数据自动更新策略建议 • 最后更新: {new Date().toLocaleDateString('zh-CN')} {new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
         </div>
       </div>
 
@@ -797,7 +875,7 @@ export const StrategyCommandCenter: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">活动地点</p>
-                            <p className="text-sm font-black text-slate-900">{selectedActivity.loc}</p>
+                            <p className="text-sm font-black text-slate-900">{selectedActivity.location}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -818,7 +896,7 @@ export const StrategyCommandCenter: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">预算投入</p>
-                            <p className="text-sm font-black text-blue-600">{selectedActivity.budget}</p>
+                            <p className="text-sm font-black text-blue-600">¥{selectedActivity.budget.toLocaleString()}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -827,7 +905,7 @@ export const StrategyCommandCenter: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">预期 ROI</p>
-                            <p className="text-sm font-black text-emerald-600">{selectedActivity.expectedROI}</p>
+                            <p className="text-sm font-black text-emerald-600">{selectedActivity.expectedROI || '-'}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -836,7 +914,7 @@ export const StrategyCommandCenter: React.FC = () => {
                           </div>
                           <div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">预期线索数</p>
-                            <p className="text-sm font-black text-purple-600">{selectedActivity.leads} MQLs</p>
+                            <p className="text-sm font-black text-purple-600">{selectedActivity.leads || 0} MQLs</p>
                           </div>
                         </div>
                       </div>
@@ -845,7 +923,7 @@ export const StrategyCommandCenter: React.FC = () => {
                     <div className="p-6 bg-[#f5f5f7] dark:bg-[#2c2c2e] rounded-3xl border border-black/5 dark:border-white/5 mb-8">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">活动简介 (Description)</p>
                       <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                        {selectedActivity.desc}
+                        {selectedActivity.desc || '暂无简介'}
                       </p>
                     </div>
 
@@ -922,7 +1000,7 @@ export const StrategyCommandCenter: React.FC = () => {
                   </motion.div>
                 )}
 
-                {modalMode === 'edit' && (
+                {modalMode === 'edit' && editData && (
                   <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-1">
@@ -947,8 +1025,8 @@ export const StrategyCommandCenter: React.FC = () => {
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">活动地点</label>
                         <input 
                           type="text" 
-                          value={editData.loc}
-                          onChange={(e) => setEditData({ ...editData, loc: e.target.value })}
+                          value={editData.location}
+                          onChange={(e) => setEditData({ ...editData, location: e.target.value })}
                           className="w-full px-4 py-2 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                         />
                       </div>
@@ -956,8 +1034,8 @@ export const StrategyCommandCenter: React.FC = () => {
                         <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">预算投入</label>
                         <input 
                           type="text" 
-                          value={editData.budget}
-                          onChange={(e) => setEditData({ ...editData, budget: e.target.value })}
+                          value={editData.budget.toString()}
+                          onChange={(e) => setEditData({ ...editData, budget: Number(e.target.value) })}
                           className="w-full px-4 py-2 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
                         />
                       </div>
@@ -990,12 +1068,12 @@ export const StrategyCommandCenter: React.FC = () => {
                   </motion.div>
                 )}
 
-                {modalMode === 'leads' && (
+                {modalMode === 'leads' && selectedActivity && (
                   <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="space-y-6">
                     <div className="grid grid-cols-3 gap-4">
                       <div className="p-4 bg-[#f5f5f7] rounded-2xl border border-blue-100">
                         <p className="text-[8px] font-black text-blue-400 uppercase tracking-widest mb-1">总线索 (MQL)</p>
-                        <p className="text-xl font-black text-blue-600">{selectedActivity.leads}</p>
+                        <p className="text-xl font-black text-blue-600">{selectedActivity.leads || 0}</p>
                       </div>
                       <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                         <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">商机转化 (SQL)</p>
@@ -1014,7 +1092,7 @@ export const StrategyCommandCenter: React.FC = () => {
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">转化漏斗 (Funnel)</p>
                       <div className="space-y-2">
                         {[
-                          { label: '线索获取 (MQL)', value: 100, color: 'bg-[#f5f5f7]0' },
+                          { label: '线索获取 (MQL)', value: 100, color: 'bg-slate-900' },
                           { label: '初步沟通 (SAL)', value: 65, color: 'bg-blue-400' },
                           { label: '商机确认 (SQL)', value: 28, color: 'bg-emerald-500' },
                           { label: '方案报价 (Proposal)', value: 12, color: 'bg-emerald-400' },
@@ -1083,7 +1161,7 @@ export const StrategyCommandCenter: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
-                          {attendees.map((person: { id?: string; name: string; company: string; score: number; followUpStatus: string }, idx: number) => (
+                          {attendees.map((person, idx) => (
                             <tr key={person.id || idx} className="hover:bg-slate-50/50 transition-colors group">
                               <td className="px-4 py-3">
                                 <div className="flex flex-col">
@@ -1097,207 +1175,23 @@ export const StrategyCommandCenter: React.FC = () => {
                                     <div 
                                       className={cn(
                                         "h-full rounded-full",
-                                        person.score > 80 ? "bg-orange-500" : person.score > 60 ? "bg-[#f5f5f7]0" : "bg-slate-300"
+                                        person.score > 80 ? "bg-orange-500" : person.score > 60 ? "bg-blue-400" : "bg-slate-300"
                                       )}
                                       style={{ width: `${person.score}%` }}
                                     />
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-3">
-                                <span className={cn(
-                                  "px-2 py-0.5 text-[8px] font-black rounded-full uppercase",
-                                  person.followUpStatus === 'Opportunity' ? "bg-blue-100 text-blue-700" :
-                                  person.followUpStatus === 'Qualified' ? "bg-emerald-100 text-emerald-700" :
-                                  person.followUpStatus === 'Contacted' ? "bg-amber-100 text-amber-700" :
-                                  "bg-[#f5f5f7] text-slate-500"
-                                )}>
-                                  {person.followUpStatus === 'Opportunity' ? '已转商机' :
-                                   person.followUpStatus === 'Qualified' ? '高潜力' :
-                                   person.followUpStatus === 'Contacted' ? '已联系' : '新线索'}
-                                </span>
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                  <button className="p-1.5 hover:bg-[#f5f5f7] text-blue-600 rounded-lg transition-colors title='转商机'">
-                                    <TrendingUp className="w-3.5 h-3.5" />
-                                  </button>
-                                  <button className="p-1.5 hover:bg-[#f5f5f7] text-slate-600 rounded-lg transition-colors title='添加备注'">
-                                    <MessageSquare className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="p-4 bg-[#f5f5f7]/50 rounded-2xl border border-blue-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <MessageSquare className="w-3 h-3 text-blue-600" />
-                          <span className="text-[9px] font-black text-blue-700 uppercase">热门提问</span>
-                        </div>
-                        <p className="text-[10px] text-slate-600 italic">“如何申请专项 MDF 额度？”</p>
-                      </div>
-                      <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Gift className="w-3 h-3 text-purple-600" />
-                          <span className="text-[9px] font-black text-purple-700 uppercase">中奖名单</span>
-                        </div>
-                        <p className="text-[10px] text-slate-600">张伟、王强 等 5 人</p>
-                      </div>
-                    </div>
-
-                    <div className="pt-4">
-                      <button 
-                        onClick={() => setModalMode('details')}
-                        className="w-full py-4 bg-slate-900 text-white text-xs font-black rounded-2xl hover:bg-slate-800 transition-all flex items-center justify-center gap-2"
-                      >
-                        <ArrowRight className="w-4 h-4 rotate-180" />
-                        返回活动详情
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </motion.div>
+              )}
               </div>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* New Activity Modal */}
-      <AnimatePresence>
-        {showNewActivityModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-            <motion.div 
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowNewActivityModal(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
-            />
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative w-full max-w-lg bg-white rounded-[2.5rem] shadow-2xl border border-black/5 dark:border-white/5 overflow-hidden"
-            >
-              <div className="p-8">
-                <div className="flex items-start justify-between mb-8">
-                  <div className="space-y-1">
-                    <p className="text-[10px] font-black text-black dark:text-white uppercase tracking-widest">规划新活动 (Plan New Activity)</p>
-                    <h3 className="text-2xl font-black text-black dark:text-white tracking-tight">新增市场活动</h3>
-                  </div>
-                  <button 
-                    onClick={() => setShowNewActivityModal(false)}
-                    className="p-2 hover:bg-[#f5f5f7] rounded-full transition-colors"
-                  >
-                    <X className="w-6 h-6 text-slate-400" />
-                  </button>
-                </div>
-
-                <div className="space-y-6">
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">活动名称</label>
-                    <input 
-                      type="text" 
-                      placeholder="例如：Q3 行业合作伙伴峰会"
-                      value={newActivityData.name}
-                      onChange={(e) => setNewActivityData({ ...newActivityData, name: e.target.value })}
-                      className="w-full px-4 py-3 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">活动类型</label>
-                      <select 
-                        value={newActivityData.type}
-                        onChange={(e) => setNewActivityData({ ...newActivityData, type: e.target.value })}
-                        className="w-full px-4 py-3 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 appearance-none"
-                      >
-                        <option value="Marketing">Marketing (直营)</option>
-                        <option value="PMDF">PMDF (渠道联合)</option>
-                      </select>
-                    </div>
-                    <div className="space-y-1">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">预估预算</label>
-                      <div className="relative">
-                        <input 
-                          type="text" 
-                          placeholder="500,000"
-                          value={newActivityData.budget}
-                          onChange={(e) => setNewActivityData({ ...newActivityData, budget: e.target.value })}
-                          className="w-full px-4 py-3 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                        <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-300">¥</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {newActivityData.type === 'PMDF' && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }}
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="space-y-1"
-                    >
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                        <Building2 className="w-3 h-3 text-purple-500" />
-                        指派对应渠道 (Assign Channel)
-                      </label>
-                      <select 
-                        value={newActivityData.channel}
-                        onChange={(e) => setNewActivityData({ ...newActivityData, channel: e.target.value })}
-                        className="w-full px-4 py-3 bg-purple-50 border border-purple-100 rounded-2xl text-sm font-bold text-purple-900 focus:outline-none focus:ring-2 focus:ring-purple-200 appearance-none"
-                      >
-                        <option value="">选择合作伙伴...</option>
-                        <option value="partner_a">上海华讯网络系统有限公司</option>
-                        <option value="partner_b">北京神州数码有限公司</option>
-                        <option value="partner_c">中软国际有限公司</option>
-                      </select>
-                      <p className="text-[9px] text-purple-400 font-medium mt-1">
-                        * 指派后，系统将自动通知渠道负责人完成详细申请并补充活动内容。
-                      </p>
-                    </motion.div>
-                  )}
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">活动简述</label>
-                    <textarea 
-                      rows={3}
-                      placeholder="简述活动目标与预期产出..."
-                      value={newActivityData.desc}
-                      onChange={(e) => setNewActivityData({ ...newActivityData, desc: e.target.value })}
-                      className="w-full px-4 py-3 bg-[#f5f5f7] dark:bg-[#2c2c2e] border border-black/5 dark:border-white/5 rounded-2xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-
-                  <div className="flex gap-4 pt-4">
-                    <button 
-                      onClick={handleCreateActivity}
-                      className="flex-1 py-4 bg-black dark:bg-white text-white text-xs font-black rounded-2xl hover:bg-black dark:bg-white/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-black/10 dark:shadow-white/10"
-                    >
-                      <PlusCircle className="w-4 h-4" />
-                      确认并发布规划
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* Attendee Mini App Preview */}
-      <AnimatePresence>
-        {showMiniAppPreview && selectedActivity && (
-          <AttendeeMiniApp 
-            activityId={selectedActivity.id}
-            activityName={selectedActivity.name}
-            onClose={() => setShowMiniAppPreview(false)}
-          />
         )}
       </AnimatePresence>
     </div>

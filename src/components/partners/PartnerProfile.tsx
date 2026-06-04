@@ -6,7 +6,7 @@ import {
   Layers, Briefcase, GitBranch, Network, Calendar, Package, ShoppingCart, Star,
   Lightbulb, Info, Link2, Activity, Shield, Search, BarChart3, PieChart, Eye,
   MessageSquare, ThumbsUp, ThumbsDown, RefreshCw, Rocket, Crosshair, Compass,
-  Radar, Flame, Bell, Mail, Gift, X, Check, Tag, ListTodo, Trash2,
+  Radar, Flame, Bell, Mail, Gift, X, Check, Tag, ListTodo, Trash2, Pencil,
 } from 'lucide-react';
 import { PartnerDetails, Activity as ActivityType, JBPFormData, PartnerContact, PartnerTimelineEvent } from '../../types';
 import { cn, formatCurrency } from '../../lib/utils';
@@ -15,8 +15,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { debug } from '../../lib/debug';
+import { partnerService } from '../../services/partner-service';
+import { supabase } from '../../lib/supabase';
+import { StaffManagementTab } from './StaffManagementTab';
 import { JBPMeetingForm } from './JBPMeetingForm';
 import { PartnerTimeline } from './PartnerTimeline';
+import { AIPanel } from '../ui/AIPanel';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
@@ -30,7 +34,7 @@ import { Tabs } from '../ui/Tabs';
 type FormState = ReturnType<typeof createInitialFormState>;
 type FormAction = { type: 'SET'; field: keyof FormState; value: string | boolean };
 const formReducer = (s: FormState, a: FormAction): FormState => a.type === 'SET' ? { ...s, [a.field]: a.value } : s;
-function createInitialFormState(p: PartnerDetails) { return { name: p.name, unifiedSocialCreditCode: p.unifiedSocialCreditCode || '', type: p.type, tier: p.tier, status: p.status, startDate: p.startDate, industry: p.industry || '金融', province: p.province || '', city: p.city || '', district: p.district || '', registeredAddress: p.registeredAddress || '', cooperationScope: p.cooperationScope || '', isCorePartner: p.isCorePartner || false }; }
+function createInitialFormState(p: PartnerDetails) { return { name: p.name, englishName: p.englishName || '', website: p.website || '', unifiedSocialCreditCode: p.unifiedSocialCreditCode || '', type: p.type, tier: p.tier, status: p.status, startDate: p.startDate, industry: p.industry || '', province: p.province || (p.city && !p.province ? p.city : '') || '', city: p.city || '', district: p.district || '', registeredAddress: p.registeredAddress || p.location || '', location: p.location || '', cooperationScope: p.cooperationScope || '', isCorePartner: p.isCorePartner || false }; }
 const DEFAULT_CONTACT: PartnerContact = { salutation: '', firstName: '', lastName: '', title: '', department: '', phone: '', mobile: '', email: '', isPrimary: false };
 
 // ─── Score Gauge ──────────────────────────────────────
@@ -145,7 +149,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
         setRealDeals(deals);
 
         // 获取市场活动数据
-        const activities = marketingService.getMDFActivities();
+        const activities = await marketingService.getMDFActivities();
         const mappedActivities = activities.map(a => ({
           id: a.id,
           name: a.name,
@@ -165,7 +169,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
         setRealActivities(mappedActivities);
 
         // 获取激励计划数据
-        const incentives = marketingService.getIncentivePrograms();
+        const incentives = await marketingService.getIncentivePrograms();
         const mappedIncentives = incentives.map(i => ({
           id: i.id,
           name: i.title,
@@ -233,26 +237,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
   };
 
   // 待办任务列表
-  const [tasks, setTasks] = useState([
-    { id: 1, title: 'QBR会议准备', status: '进行中', progress: 60, assignee: '张三', dueDate: '2025-06-30', priority: '高', description: '准备Q2季度业务评审会议材料，包括业绩回顾、目标达成情况、市场分析和下季度规划。', relatedDeal: '云智联AI中台项目', tags: ['季度会议', '重要'], goal: '完成Q2业务评审材料准备，确保会议顺利召开', subtasks: [
-      { id: 101, title: '收集Q2业绩数据', status: '已完成', progress: 100 },
-      { id: 102, title: '分析市场竞争情况', status: '已完成', progress: 100 },
-      { id: 103, title: '制定Q3目标计划', status: '进行中', progress: 50 },
-      { id: 104, title: '制作PPT演示文稿', status: '待跟进', progress: 0 },
-    ]},
-    { id: 2, title: '方案确认 - 云智联AI中台项目', status: '进行中', progress: 30, assignee: '李四', dueDate: '2025-06-25', priority: '高', description: '与客户确认云智联AI中台项目实施方案细节，包括技术架构、实施计划和交付时间节点。', relatedDeal: '云智联AI中台项目', tags: ['技术方案', '客户对接'], goal: '完成方案确认，签订技术协议', subtasks: [
-      { id: 201, title: '技术方案评审', status: '已完成', progress: 100 },
-      { id: 202, title: '客户需求确认', status: '进行中', progress: 60 },
-      { id: 203, title: '合同条款协商', status: '待跟进', progress: 0 },
-    ]},
-    { id: 3, title: '客户拜访 - 智能制造客户', status: '待跟进', progress: 0, assignee: '王五', dueDate: '2025-07-05', priority: '中', description: '拜访智能制造行业客户，了解其数字化转型需求，介绍公司解决方案。', relatedDeal: '-', tags: ['客户拜访', '新客户'], goal: '建立客户关系，挖掘销售机会', subtasks: [] },
-    { id: 4, title: 'MDF申请审核', status: '已完成', progress: 100, assignee: '赵六', dueDate: '2025-06-20', priority: '中', description: '审核合作伙伴提交的MDF市场发展基金申请材料。', relatedDeal: '-', tags: ['审核', 'MDF'], goal: '完成MDF申请审核流程', subtasks: [
-      { id: 401, title: '材料完整性检查', status: '已完成', progress: 100 },
-      { id: 402, title: '预算合理性评估', status: '已完成', progress: 100 },
-      { id: 403, title: '审批意见反馈', status: '已完成', progress: 100 },
-    ]},
-    { id: 5, title: '认证培训安排', status: '待跟进', progress: 0, assignee: '张三', dueDate: '2025-07-10', priority: '低', description: '安排Q3季度技术认证培训课程，协调讲师和培训场地。', relatedDeal: '-', tags: ['培训', '认证'], goal: '完成Q3认证培训计划安排', subtasks: [] },
-  ]);
+  const [tasks, setTasks] = useState<any[]>([]);
   
   // 切换任务完成状态
   const toggleTaskComplete = (taskId: number) => {
@@ -370,7 +355,25 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
   const addContact = useCallback(() => setContacts((p) => [...p, { ...DEFAULT_CONTACT }]), []);
   const updateContact = useCallback((i: number, f: keyof PartnerContact, v: string | boolean) => setContacts((p) => p.map((c, j) => j === i ? { ...c, [f]: v } : c)), []);
   const removeContact = useCallback((i: number) => setContacts((p) => p.filter((_, j) => j !== i)), []);
-  const handleSave = useCallback(() => { debug.log('Save:', formData, contacts); setIsEditing(false); }, [formData, contacts]);
+  const handleSave = useCallback(async () => {
+    try {
+      await partnerService.update(partner.id, formData as any);
+      // Auto-generate milestone event if tier changed
+      if (formData.tier !== partner.tier) {
+        const now = new Date().toISOString().split('T')[0];
+        const tiers = ['Registered','Silver','Gold','Platinum','Diamond'];
+        const isUpgrade = tiers.indexOf(formData.tier) > tiers.indexOf(partner.tier);
+        const newMilestone = { id: crypto.randomUUID(), stage: isUpgrade ? 'tier_upgrade' : 'tier_downgrade', title: `等级${isUpgrade?'提升':'调整'}：${partner.tier} → ${formData.tier}`, description: `等级从${partner.tier}${isUpgrade?'晋升':'调整'}为${formData.tier}`, date: now, year: now.split('-')[0], operator: '管理员' };
+        const milestones = [...(partner.milestones || []), newMilestone];
+        await supabase.from('partners').update({ milestones }).eq('id', partner.id);
+        updatePartner({ ...partner, ...formData, contacts, milestones } as any);
+      } else {
+        updatePartner({ ...partner, ...formData, contacts });
+      }
+      alert('保存成功');
+      setIsEditing(false);
+    } catch (e: any) { alert('保存失败: ' + e.message); }
+  }, [formData, contacts, partner, updatePartner]);
 
   const primaryContact = (partner.contacts || []).find((c) => c.isPrimary) || (partner.contacts || [])[0];
   const mdfPct = partner.mdf.total > 0 ? Math.round((partner.mdf.used / partner.mdf.total) * 100) : 0;
@@ -571,32 +574,13 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
     return ops.slice(0, 4);
   }, [partner, mdfPct]);
 
-  // Derived data from partner record, fallback to mock data
   const lifecycleStages = useMemo(() => {
-    if (partner.milestones && partner.milestones.length > 0) {
-      const stages = ['起步阶段', '成长阶段', '成熟阶段', '领先阶段', '战略阶段', '引领阶段'];
-      return partner.milestones.map((m, i) => ({
-        year: m.year,
-        stage: stages[Math.min(i, stages.length - 1)],
-        desc: m.description,
-        event: m.stage || '里程碑',
-      }));
+    const m = partner.milestones || [];
+    if (m.length > 0) {
+      return m.map((ev: any) => ({ year: ev.year || ev.date?.split('-')[0] || '', stage: ev.stage || ev.type || 'milestone', desc: ev.description || ev.desc || '', event: ev.title || ev.event || '' }));
     }
-    const years = partner.years || 5;
-    const currentYear = new Date().getFullYear();
-    const baseStages = [
-      { stage: '招募', desc: `通过渠道峰会首次接触`, event: '渠道峰会' },
-      { stage: '成长', desc: '完成首批培训认证，签约首个客户', event: '首单签约' },
-      { stage: '扩张', desc: '晋升等级，扩展业务范围', event: '等级晋升' },
-      { stage: '成熟', desc: '年营收稳步增长，区域排名提升', event: '规模突破' },
-      { stage: '战略', desc: '晋升高级别，参与战略协作', event: '战略升级' },
-      { stage: '引领', desc: '生态枢纽，引领行业创新', event: '当前' },
-    ];
-    return baseStages.slice(0, Math.min(years + 1, 6)).map((s, i) => ({
-      year: String(currentYear - years + i),
-      ...s,
-    }));
-  }, [partner.milestones, partner.years]);
+    return [];
+  }, [partner.milestones]);
 
   const orgStructure = useMemo(() => {
     if (partner.orgStructure && partner.orgStructure.length > 0) {
@@ -630,42 +614,45 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
     ];
   }, [partner.orgStructure, partner.name, partner.contacts]);
 
-  const keyCustomers = useMemo(() => {
-    if (partner.customerPortfolio && partner.customerPortfolio.length > 0) {
-      return partner.customerPortfolio.slice(0, 5).map((c: any) => ({
-        name: c.name || '客户',
-        industry: c.industry || partner.industry || '其他',
-        product: c.product || '解决方案',
-        ourShare: c.ourShare || Math.floor(Math.random() * 100),
-        competitor: c.competitor || '-',
-        value: c.value || Math.floor(Math.random() * 5000000) + 500000,
-        status: c.status || ['在服', 'POC', '商务', '丢标'][Math.floor(Math.random() * 4)],
-      }));
+  const [keyCustomers, setKeyCustomers] = useState<any[]>([]);
+  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [newCustomer, setNewCustomer] = useState<any>({ name: '', industry: '', relationship: '合作中', annualRevenue: 0, majorProjectsStr: '', salesLead: '', productsStr: '', status: '跟进中', since: '', contactPerson: '', contactPhone: '', notes: '', goals: '' });
+
+  useEffect(() => {
+    if (partner.customerPortfolio?.length > 0) {
+      setKeyCustomers(partner.customerPortfolio);
+    } else {
+      setKeyCustomers([]);
     }
-    // 根据合作伙伴行业生成相关客户
-    const industryCustomers: Record<string, { names: string[], products: string[] }> = {
-      '医疗': { names: ['浙江省立医院', '上海瑞金医院', '北京协和医院', '华山医院', '广东省人民医院'], products: ['云原生平台', '大数据平台', 'AI 智算平台', '混合云方案', '数字化平台'] },
-      '政务': { names: ['苏州市卫健委', '杭州市政府', '北京市政务服务中心', '深圳市政务数据局', '广东省人社厅'], products: ['数据平台', '混合云方案', '安全合规', '数字化平台', '政务云'] },
-      '金融': { names: ['某省农信', '招商银行', '平安保险', '中信证券', '浦发银行'], products: ['安全合规', '大数据平台', '混合云方案', '灾备解决方案', '云原生平台'] },
-      '制造': { names: ['华为技术', '比亚迪', '海尔集团', '格力电器', '美的集团'], products: ['工业互联网平台', '边缘计算', '云原生平台', '大数据平台', 'AI 智算平台'] },
-      '教育': { names: ['清华大学', '北京大学', '上海交大', '浙江大学', '复旦大学'], products: ['教育云平台', '混合云方案', '大数据平台', 'AI 智算平台', '数字化平台'] },
-      '零售': { names: ['阿里巴巴', '京东集团', '美团', '拼多多', '唯品会'], products: ['云原生平台', '大数据平台', '混合云方案', 'AI 智算平台', '安全合规'] },
-    };
-    const customerData = industryCustomers[partner.industry || '医疗'] || industryCustomers['医疗'];
-    const statusOptions = ['在服', 'POC', '商务', '丢标'];
-    return [0, 1, 2, 3, 4].map(i => {
-      const status = statusOptions[Math.floor(Math.random() * statusOptions.length)];
-      return ({
-        name: customerData.names[i],
-        industry: partner.industry || '医疗',
-        product: customerData.products[i],
-        ourShare: status === '丢标' ? 0 : Math.floor(Math.random() * 50) + 50,
-        competitor: status === '丢标' ? ['AWS', '华为云', '阿里云'][Math.floor(Math.random() * 3)] : '-',
-        value: Math.floor(Math.random() * 5000000) + 500000,
-        status,
-      });
-    });
-  }, [partner.customerPortfolio, partner.industry]);
+  }, [partner.customerPortfolio]);
+
+  const saveCustomers = async (customers: any[]) => {
+    await supabase.from('partners').update({ customer_portfolio: customers }).eq('id', partner.id);
+    setKeyCustomers(customers);
+    updatePartner({ ...partner, customerPortfolio: customers } as any);
+  };
+
+  const addCustomer = async () => {
+    if (!newCustomer.name) return;
+    const customer = { ...newCustomer, id: crypto.randomUUID(), annualRevenue: Number(newCustomer.annualRevenue) || 0, majorProjects: newCustomer.majorProjectsStr ? newCustomer.majorProjectsStr.split(/[，,]/).map((s:string)=>s.trim()).filter(Boolean) : [], products: newCustomer.productsStr ? newCustomer.productsStr.split(/[，,]/).map((s:string)=>s.trim()).filter(Boolean) : [], progress: [], goals: newCustomer.goals || '' };
+    const updated = [...keyCustomers, customer];
+    await saveCustomers(updated);
+    setShowCustomerForm(false);
+    setNewCustomer({ name: '', industry: '', relationship: '合作中', annualRevenue: 0, majorProjectsStr: '', salesLead: '', productsStr: '', status: '跟进中', since: '', contactPerson: '', contactPhone: '', notes: '', goals: '' });
+  };
+
+  const saveCustomerEdit = async () => {
+    if (!editingCustomer || !editForm.name) return;
+    const updated = keyCustomers.map(c => c.id === editingCustomer ? { ...c, ...editForm, annualRevenue: Number(editForm.annualRevenue) || 0, majorProjects: editForm.majorProjectsStr ? editForm.majorProjectsStr.split(/[，,]/).map((s:string)=>s.trim()).filter(Boolean) : c.majorProjects, products: editForm.productsStr ? editForm.productsStr.split(/[，,]/).map((s:string)=>s.trim()).filter(Boolean) : c.products } : c);
+    await saveCustomers(updated);
+    setEditingCustomer(null);
+  };
+
+  const removeCustomer = async (id: string) => {
+    await saveCustomers(keyCustomers.filter((c: any) => c.id !== id));
+  };
 
   const ecosystemPartners = useMemo(() => {
     if (partner.ecosystemPartners && partner.ecosystemPartners.length > 0) {
@@ -709,58 +696,39 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
     }));
   }, [partner.ecosystemPartners, partner.type]);
 
-  const quarterlyReviews = useMemo(() => {
-    if (partner.qbrRecords && partner.qbrRecords.length > 0) {
-      return partner.qbrRecords.slice(0, 3).map((q: any) => ({
-        q: q.quarter || 'Q1',
-        date: q.date || new Date().toISOString().split('T')[0],
-        goal: q.goal || '业务目标',
-        progress: q.progress || '进行中',
-        key: q.key || '暂无数据',
-        attendees: q.attendees || [partner.manager || '渠道经理'],
-      }));
-    }
-    const now = new Date();
-    const qs = ['Q4', 'Q1', 'Q2'];
-    const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear()];
-    const managerInitial = (partner.manager || '渠道经理').split('')[0];
-    const tierGoals: Record<string, { goals: string[], progresses: string[], keys: string[] }> = {
-      Diamond: { 
-        goals: ['年度战略目标达成', '生态合作深化', '标杆项目交付'], 
-        progresses: ['完成率 112%', '完成率 98%', '进行中'], 
-        keys: ['超额完成年度目标，战略客户续约率100%', '新增5个生态合作伙伴，联合方案发布', '工程师认证全覆盖，AI产品线落地中'] 
-      },
-      Platinum: { 
-        goals: ['营收增长目标', '行业拓展', '能力升级'], 
-        progresses: ['完成率 105%', '完成率 92%', '进行中'], 
-        keys: ['超额完成年度目标，签署3个新客户', `${partner.industry || '新'}行业实现首个标杆客户`, '工程师认证完成，新产品线POC启动'] 
-      },
-      Gold: { 
-        goals: ['业绩目标达成', '客户拓展', '能力建设'], 
-        progresses: ['完成率 98%', '完成率 85%', '进行中'], 
-        keys: ['基本完成年度目标', '新增2个行业客户', '技术认证推进中'] 
-      },
-      Silver: { 
-        goals: ['基础目标达成', '能力建设', '客户维护'], 
-        progresses: ['完成率 88%', '完成率 75%', '进行中'], 
-        keys: ['接近目标，需加大投入', '技术能力建设中', '客户满意度提升'] 
-      },
-      Registered: { 
-        goals: ['起步拓展', '能力入门', '首单突破'], 
-        progresses: ['完成率 70%', '完成率 65%', '进行中'], 
-        keys: ['正在起步阶段', '认证培训进行中', '首单努力突破中'] 
-      },
-    };
-    const tierData = tierGoals[partner.tier] || tierGoals['Gold'];
-    return qs.map((q, i) => ({
-      q: `${years[i]} ${q}`,
-      date: ['2024-12-15', '2025-03-20', '2025-06-18'][i],
-      goal: tierData.goals[i],
-      progress: tierData.progresses[i],
-      key: tierData.keys[i],
-      attendees: [`${managerInitial}经理`, `${managerInitial}经理`, `${managerInitial}经理`],
-    }));
-  }, [partner.qbrRecords, partner.manager, partner.tier, partner.industry]);
+  const [followUps, setFollowUps] = useState<any[]>([]);
+  const [showFollowUpForm, setShowFollowUpForm] = useState(false);
+  const [editingFollowUp, setEditingFollowUp] = useState<string | null>(null);
+  const [newFollowUp, setNewFollowUp] = useState({ title: '', desc: '', status: '进行中', date: new Date().toISOString().split('T')[0], nextStep: '' });
+
+  useEffect(() => {
+    if (partner.qbrRecords?.length > 0) setFollowUps(partner.qbrRecords);
+  }, [partner.qbrRecords]);
+
+  const saveFollowUps = async (items: any[]) => {
+    await supabase.from('partners').update({ qbr_records: items }).eq('id', partner.id);
+    setFollowUps(items);
+    updatePartner({ ...partner, qbrRecords: items } as any);
+  };
+
+  const addFollowUp = async () => {
+    if (!newFollowUp.title) return;
+    const item = { ...newFollowUp, id: crypto.randomUUID() };
+    await saveFollowUps([...followUps, item]);
+    setShowFollowUpForm(false);
+    setNewFollowUp({ title: '', desc: '', status: '进行中', date: new Date().toISOString().split('T')[0], nextStep: '' });
+  };
+
+  const saveFollowUpEdit = async () => {
+    if (!editingFollowUp) return;
+    await saveFollowUps(followUps.map(f => f.id === editingFollowUp ? { ...f, ...newFollowUp } : f));
+    setEditingFollowUp(null);
+    setNewFollowUp({ title: '', desc: '', status: '进行中', date: new Date().toISOString().split('T')[0], nextStep: '' });
+  };
+
+  const removeFollowUp = async (id: string) => {
+    await saveFollowUps(followUps.filter(f => f.id !== id));
+  };
 
   // Recent activity data (last 30 days)
   const recentActivity = useMemo(() => {
@@ -788,8 +756,61 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
     { id: 'businessFit', label: t('profile.businessFit') }, { id: 'compliance', label: t('profile.compliance') },
     { id: 'opportunity', label: t('profile.opportunity') }, { id: 'network', label: t('profile.network') },
     { id: 'profile', label: t('profile.profile') }, { id: 'performance', label: t('profile.performance') },
-    { id: 'timeline', label: t('profile.timeline') }, { id: 'staff', label: t('profile.staff') },
+    { id: 'staff', label: t('profile.staff') },
   ];
+
+  // Customer card with progress timeline
+  const CustomerCard = ({ customer, onEdit, onDelete, onAddProgress, cur }: any) => {
+    const [showProgress, setShowProgress] = useState(false);
+    const [newProgress, setNewProgress] = useState({ date: new Date().toISOString().split('T')[0], desc: '', nextStep: '' });
+    return (
+      <div className="p-4 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 transition-colors">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-semibold text-neutral-900 dark:text-white">{customer.name}</span>
+              <Badge variant="default" size="sm">{customer.industry || '-'}</Badge>
+              <Badge variant={customer.status==='在服'?'success':customer.status==='POC'?'info':customer.status==='商务'?'warning':customer.status==='丢标'?'danger':'default'} size="sm">{customer.status}</Badge>
+              <Badge variant="info" size="sm">{customer.relationship || '-'}</Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-1 mt-2 text-xs text-neutral-500">
+              {customer.annualRevenue>0&&<span>年合作额: <b className="text-neutral-700 dark:text-neutral-300">{cur(customer.annualRevenue)}</b></span>}
+              {customer.salesLead&&<span>销售: <b className="text-neutral-700 dark:text-neutral-300">{customer.salesLead}</b></span>}
+              {customer.contactPerson&&<span>联系人: <b className="text-neutral-700 dark:text-neutral-300">{customer.contactPerson}</b></span>}
+              {customer.since&&<span>起始: <b className="text-neutral-700 dark:text-neutral-300">{customer.since}</b></span>}
+            </div>
+            {customer.goals && <div className="mt-2 p-2 bg-blue-50 dark:bg-blue-900/10 rounded text-xs"><span className="font-medium text-blue-600">目标:</span> {customer.goals}</div>}
+            {customer.products?.length>0&&<div className="flex flex-wrap gap-1 mt-2">{customer.products.map((p:string,i:number)=><Badge key={i} variant="default" size="sm">{p}</Badge>)}</div>}
+            {customer.majorProjects?.length>0&&<div className="mt-1 text-xs text-neutral-500">项目: {customer.majorProjects.join('、')}</div>}
+            {/* Progress Timeline */}
+            <button onClick={()=>setShowProgress(!showProgress)} className="text-xs text-purple-600 hover:underline mt-2 flex items-center gap-1"><ChevronRight className={`w-3 h-3 transition-transform ${showProgress?'rotate-90':''}`} />进展 ({(customer.progress||[]).length})</button>
+            {showProgress && (
+              <div className="mt-2 ml-2 pl-4 border-l-2 border-purple-200 dark:border-purple-800 space-y-2">
+                {(customer.progress||[]).map((p:any,i:number)=>(
+                  <div key={i} className="relative pl-4 text-xs">
+                    <div className="absolute left-[-5px] top-1.5 w-2 h-2 rounded-full bg-purple-500" />
+                    <span className="text-neutral-400">{p.date}</span>
+                    <p className="text-neutral-700 dark:text-neutral-300">{p.desc}</p>
+                    {p.nextStep&&<p className="text-purple-600">→ {p.nextStep}</p>}
+                  </div>
+                ))}
+                <div className="flex gap-2 pt-1">
+                  <input className="flex-1 h-7 px-2 text-xs border rounded bg-white dark:bg-neutral-800" value={newProgress.desc} onChange={e=>setNewProgress({...newProgress,desc:e.target.value})} placeholder="进展描述" />
+                  <input className="w-20 h-7 px-2 text-xs border rounded bg-white dark:bg-neutral-800" value={newProgress.nextStep} onChange={e=>setNewProgress({...newProgress,nextStep:e.target.value})} placeholder="下一步" />
+                  <input type="date" className="w-28 h-7 px-1 text-xs border rounded bg-white dark:bg-neutral-800" value={newProgress.date} onChange={e=>setNewProgress({...newProgress,date:e.target.value})} />
+                  <Button variant="ghost" size="sm" onClick={()=>{if(newProgress.desc){onAddProgress(customer.id,{...newProgress});setNewProgress({date:new Date().toISOString().split('T')[0],desc:'',nextStep:''});}}}>+</Button>
+                </div>
+              </div>
+            )}
+          </div>
+          <div className="flex gap-1 shrink-0">
+            <button onClick={()=>onEdit(customer)} className="p-1 text-neutral-400 hover:text-blue-500"><Pencil className="w-3.5 h-3.5" /></button>
+            <button onClick={()=>onDelete(customer.id)} className="p-1 text-neutral-400 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-5">
@@ -956,11 +977,14 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
                 </span>
               ))}
               <button
-                onClick={() => {
+                onClick={async () => {
                   const newTag = prompt('请输入新标签：');
                   if (newTag && newTag.trim()) {
                     const newTags = [...(partner.tags || []), newTag.trim()];
-                    updatePartner({ ...partner, tags: newTags });
+                    try {
+                      await partnerService.update(partner.id, { tags: newTags } as any);
+                      updatePartner({ ...partner, tags: newTags });
+                    } catch (e: any) { alert('保存失败: ' + e.message); }
                   }
                 }}
                 className="flex items-center gap-1 px-2.5 py-1 border border-dashed border-neutral-300 dark:border-neutral-600 text-neutral-500 dark:text-neutral-400 text-xs font-medium rounded-full hover:border-neutral-400 dark:hover:border-neutral-500 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors"
@@ -1340,6 +1364,15 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
               ══════════════════════════════════════════════ */}
           {activeTab === 'overview' && (
             <div className="space-y-6">
+              {/* AI Analysis */}
+              <AIPanel
+                title="AI 伙伴分析"
+                buttonText="AI 智能分析"
+                config={{ aiApiKey: config.aiApiKey as string, aiBaseUrl: config.aiBaseUrl as string, aiModel: config.aiModel as string }}
+                prompt={`分析以下合作伙伴：名称${partner.name}，等级${partner.tier}，类型${partner.type}，行业${partner.industry || '未填'}，地区${partner.city || '未填'}，赢单率${partner.winRate || 0}%，合作年限${partner.years || 0}年。请给出：1)健康度评估 2)关键发现 3)行动建议`}
+                context="你是 PartnerNexus 合作伙伴管理系统的 AI 分析专家。给出专业简洁的分析报告。"
+              />
+
               {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
                   第一段：AI 决策层 - 合作突破口
                   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -3049,130 +3082,10 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
           )}
 
           {/* ══════════════════════════════════════════════
-              TAB 5: 合作时间线
-              ══════════════════════════════════════════════ */}
-          {activeTab === 'timeline' && (
-            <div className="space-y-6">
-              <PartnerTimeline 
-                events={partner.timelineEvents || []} 
-                partnerName={partner.name}
-                onUpdateEvents={(events) => {
-                  debug.log('Timeline events updated:', events);
-                }}
-              />
-            </div>
-          )}
-
-          {/* ══════════════════════════════════════════════
-              TAB 6: 人员管理
+              TAB 5: 人员管理
               ══════════════════════════════════════════════ */}
           {activeTab === 'staff' && (
-            <div className="space-y-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle>合作伙伴人员</CardTitle>
-                    <CardDescription>管理合作伙伴的员工信息、技能和积分</CardDescription>
-                  </div>
-                  <Button onClick={() => navigate(`/partners/${partner.id}/staff`)}>
-                    <Users className="w-4 h-4 mr-2" />
-                    管理人员
-                  </Button>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                          <Users className="w-5 h-5 text-blue-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-neutral-900 dark:text-white">5</p>
-                          <p className="text-sm text-neutral-500">总人数</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                          <Award className="w-5 h-5 text-emerald-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-neutral-900 dark:text-white">850+</p>
-                          <p className="text-sm text-neutral-500">总积分</p>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
-                          <Target className="w-5 h-5 text-amber-600" />
-                        </div>
-                        <div>
-                          <p className="text-2xl font-bold text-neutral-900 dark:text-white">3</p>
-                          <p className="text-sm text-neutral-500">进行中项目</p>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {((partner.contacts || []).length > 0 ? partner.contacts.slice(0, 3).map((c: any, i) => {
-                      const title = c.title || '';
-                      const skills: string[] = [];
-                      if (title.includes('技术') || title.includes('工程师') || title.includes('架构')) {
-                        skills.push('云原生', 'AI', '解决方案');
-                      } else if (title.includes('销售') || title.includes('BD') || title.includes('商务')) {
-                        skills.push('大客户销售', partner.industry || '行业经验');
-                      } else if (title.includes('项目') || title.includes('经理')) {
-                        skills.push('项目管理', 'Scrum');
-                      } else {
-                        skills.push('业务支持', '客户服务');
-                      }
-                      return {
-                        name: [c.lastName, c.firstName].filter(Boolean).join('') || '未知',
-                        title: c.title || '员工',
-                        points: Math.floor(Math.random() * 200) + 100,
-                        status: 'active',
-                        skills,
-                      };
-                    }) : [
-                      { name: '王伟', title: '技术总监', points: 256, status: 'active', skills: ['云原生', 'AI', '解决方案'] },
-                      { name: '李芳', title: '销售经理', points: 189, status: 'active', skills: ['大客户销售', partner.industry || '行业经验'] },
-                      { name: '赵华', title: '项目经理', points: 167, status: 'active', skills: ['项目管理', 'Scrum'] },
-                    ]).map((member, index) => (
-                      <div key={index} className="flex items-center gap-4 p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-white font-semibold">
-                          {member.name.charAt(0)}
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-neutral-900 dark:text-white">{member.name}</span>
-                            <Badge className={member.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-neutral-100 text-neutral-500'}>
-                              {member.status === 'active' ? '在职' : '离职'}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-sm text-neutral-500">{member.title}</span>
-                            <div className="flex flex-wrap gap-1">
-                              {member.skills.map((skill, i) => (
-                                <span key={i} className="text-xs px-2 py-0.5 bg-neutral-200 dark:bg-neutral-700 rounded text-neutral-600 dark:text-neutral-300">
-                                  {skill}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <span className="font-bold text-neutral-900 dark:text-white">{member.points}</span>
-                          <span className="text-xs text-neutral-400 ml-1">积分</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            <StaffManagementTab partnerId={partner.id} />
           )}
 
           {/* ══════════════════════════════════════════════
@@ -3184,18 +3097,25 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <Card>
-                    <CardHeader><CardTitle>基本信息</CardTitle><Button variant="ghost" size="sm" onClick={() => setIsEditing(!isEditing)}>{isEditing ? '取消' : '编辑'}</Button></CardHeader>
+                    <CardHeader><CardTitle>基本信息</CardTitle><div className="flex gap-2">{isEditing ? <><Button variant="brand" size="sm" onClick={handleSave}>保存</Button><Button variant="ghost" size="sm" onClick={() => setIsEditing(false)}>取消</Button></> : <Button variant="ghost" size="sm" onClick={() => setIsEditing(true)}>编辑</Button>}</div></CardHeader>
                     <CardContent>
                       <div className="grid grid-cols-2 gap-3">
-                        <Input label="名称" value={formData.name} onChange={(e) => dispatch({ type: 'SET', field: 'name', value: e.target.value })} disabled={!isEditing} />
+                        <Input label="名称（中文）" value={formData.name} onChange={(e) => dispatch({ type: 'SET', field: 'name', value: e.target.value })} disabled={!isEditing} />
+                        <Input label="名称（英文）" value={formData.englishName || ''} onChange={(e) => dispatch({ type: 'SET', field: 'englishName', value: e.target.value })} disabled={!isEditing} />
+                        <Input label="网址" value={formData.website || ''} onChange={(e) => dispatch({ type: 'SET', field: 'website', value: e.target.value })} disabled={!isEditing} />
                         <Input label="信用代码" value={formData.unifiedSocialCreditCode} onChange={(e) => dispatch({ type: 'SET', field: 'unifiedSocialCreditCode', value: e.target.value })} disabled={!isEditing} />
-                        <Select label="类型" options={TYPE_OPTIONS} value={formData.type} onChange={(e) => dispatch({ type: 'SET', field: 'type', value: e.target.value })} disabled={!isEditing} />
-                        <Select label="等级" options={TIER_OPTIONS} value={formData.tier} onChange={(e) => dispatch({ type: 'SET', field: 'tier', value: e.target.value })} disabled={!isEditing} />
+                        <Select label="类型" options={(config?.partnerTypes || [formData.type]).map(v=>({value:v,label:v}))} value={formData.type} onChange={(e) => dispatch({ type: 'SET', field: 'type', value: e.target.value })} disabled={!isEditing} />
+                        <Select label="等级" options={(config?.partnerTiers || [formData.tier]).map(v=>({value:v,label:v}))} value={formData.tier} onChange={(e) => dispatch({ type: 'SET', field: 'tier', value: e.target.value })} disabled={!isEditing} />
                         <Select label="状态" options={STATUS_OPTIONS} value={formData.status} onChange={(e) => dispatch({ type: 'SET', field: 'status', value: e.target.value })} disabled={!isEditing} />
                         <Input label="加入日期" type="date" value={formData.startDate} onChange={(e) => dispatch({ type: 'SET', field: 'startDate', value: e.target.value })} disabled={!isEditing} />
-                        <Select label="行业" options={INDUSTRY_OPTIONS} value={formData.industry} onChange={(e) => dispatch({ type: 'SET', field: 'industry', value: e.target.value })} disabled={!isEditing} />
-                        <RegionCascader label="所在地区" value={{ province: formData.province, city: formData.city, district: formData.district }} onChange={(v) => { dispatch({ type: 'SET', field: 'province', value: v.province }); dispatch({ type: 'SET', field: 'city', value: v.city }); dispatch({ type: 'SET', field: 'district', value: v.district }); }} />
-                        <div className="col-span-2"><Input label="注册地址" value={formData.registeredAddress} onChange={(e) => dispatch({ type: 'SET', field: 'registeredAddress', value: e.target.value })} disabled={!isEditing} /></div>
+                        <Select label="行业" options={(config?.industries || [formData.industry]).map(v=>({value:v,label:v}))} value={formData.industry} onChange={(e) => dispatch({ type: 'SET', field: 'industry', value: e.target.value })} disabled={!isEditing} />
+                        {isEditing ? (
+                          <RegionCascader label="所在地区" value={{ province: formData.province, city: formData.city, district: formData.district }} onChange={(v) => { dispatch({ type: 'SET', field: 'province', value: v.province }); dispatch({ type: 'SET', field: 'city', value: v.city }); dispatch({ type: 'SET', field: 'district', value: v.district }); }} />
+                        ) : (
+                          <Input label="所在地区" value={[formData.province, formData.city, formData.district].filter(Boolean).join(' · ') || '-'} disabled />
+                        )}
+                        <div className="col-span-2"><Input label="详细地址" value={formData.location || ''} onChange={(e) => dispatch({ type: 'SET', field: 'location', value: e.target.value })} disabled={!isEditing} /></div>
+                        <div className="col-span-2"><Input label="注册地址" value={formData.registeredAddress || ''} onChange={(e) => dispatch({ type: 'SET', field: 'registeredAddress', value: e.target.value })} disabled={!isEditing} /></div>
                         <div className="col-span-2">
                           <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1">合作范围</label>
                           <textarea className="w-full px-3 py-2 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm resize-none disabled:bg-neutral-50 dark:disabled:bg-neutral-800/50 focus:outline-none focus:ring-2 focus:ring-brand/20" rows={2} value={formData.cooperationScope} onChange={(e) => dispatch({ type: 'SET', field: 'cooperationScope', value: e.target.value })} disabled={!isEditing} />
@@ -3207,127 +3127,135 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
                   </Card>
 
                   <Card>
-                    <CardHeader><CardTitle>联系人</CardTitle>{isEditing && <Button variant="ghost" size="sm" onClick={addContact}><Plus className="w-3.5 h-3.5" />添加</Button>}</CardHeader>
+                    <CardHeader><CardTitle>主要联系人</CardTitle></CardHeader>
                     <CardContent>
-                      {contacts.length === 0 ? <EmptyState title="暂无联系人" /> : (
-                        <div className="space-y-3">
-                          {contacts.map((c, i) => (
-                            <div key={i} className={cn('p-3 rounded-lg border', c.isPrimary ? 'border-amber-200 dark:border-amber-800 bg-amber-50/20' : 'border-neutral-200 dark:border-neutral-800')}>
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-neutral-900 dark:text-white">{c.lastName}{c.firstName || '新联系人'}</span>
-                                <div className="flex items-center gap-2">
-                                  <label className="flex items-center gap-1 text-xs cursor-pointer"><input type="radio" name="pc" checked={c.isPrimary} onChange={() => setContacts((p) => p.map((x, j) => ({ ...x, isPrimary: j === i })))} disabled={!isEditing} /> 主要</label>
-                                  {isEditing && contacts.length > 1 && <button onClick={() => removeContact(i)} className="p-1 text-neutral-400 hover:text-red-500"><Plus className="w-3 h-3 rotate-45" /></button>}
-                                </div>
-                              </div>
-                              {isEditing ? (
-                                <div className="grid grid-cols-2 gap-2">
-                                  <Input value={c.lastName} onChange={(e) => updateContact(i, 'lastName', e.target.value)} placeholder="姓" />
-                                  <Input value={c.firstName} onChange={(e) => updateContact(i, 'firstName', e.target.value)} placeholder="名" />
-                                  <Input value={c.department || ''} onChange={(e) => updateContact(i, 'department', e.target.value)} placeholder="部门" />
-                                  <Input value={c.title} onChange={(e) => updateContact(i, 'title', e.target.value)} placeholder="职位" />
-                                  <Input value={c.phone} onChange={(e) => updateContact(i, 'phone', e.target.value)} placeholder="手机号" />
-                                  <Input value={c.email} onChange={(e) => updateContact(i, 'email', e.target.value)} placeholder="邮箱" />
-                                </div>
-                              ) : (
-                                <div className="grid grid-cols-2 gap-1 text-sm">
-                                  {c.department && <span className="text-neutral-500"><span className="text-xs font-medium">部门:</span> {c.department}</span>}
-                                  <span className="text-neutral-500"><span className="text-xs font-medium">职位:</span> {c.title || '-'}</span>
-                                  <span className="text-neutral-500 flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone || c.mobile || '-'}</span>
-                                  <span className="text-neutral-500 flex items-center gap-1"><Mail className="w-3 h-3" />{c.email || '-'}</span>
-                                </div>
-                              )}
+                      {primaryContact ? (
+                        <div className="flex items-start gap-3">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center text-white font-bold shrink-0">{primaryContact.lastName?.charAt(0) || '?'}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-semibold text-neutral-900 dark:text-white">{primaryContact.lastName}{primaryContact.firstName}</p>
+                            <p className="text-xs text-neutral-500">{primaryContact.title || '-'}{primaryContact.department ? ` · ${primaryContact.department}` : ''}</p>
+                            <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-neutral-400">
+                              {primaryContact.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{primaryContact.phone}</span>}
+                              {primaryContact.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{primaryContact.email}</span>}
                             </div>
-                          ))}
+                          </div>
                         </div>
+                      ) : (
+                        <p className="text-sm text-neutral-400 py-2">暂无联系人</p>
                       )}
+                      <button onClick={() => setActiveTab('staff')} className="mt-3 text-xs text-blue-600 hover:underline">查看全部人员 →</button>
                     </CardContent>
                   </Card>
                 </div>
 
                 <div className="space-y-4">
-                  <Card>
-                    <CardHeader><CardTitle>合作里程碑</CardTitle></CardHeader>
-                    <CardContent>
-                      <div className="relative before:absolute before:inset-0 before:ml-5 before:w-px before:bg-neutral-200 dark:before:bg-neutral-800">
-                        {lifecycleStages.map((m, i) => (
-                          <div key={m.year} className="relative flex gap-4 pb-5 last:pb-0">
-                            <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center shrink-0 z-10 border-2', i === lifecycleStages.length - 1 ? 'bg-neutral-900 dark:bg-white border-neutral-900 dark:border-white' : 'bg-white dark:bg-neutral-900 border-neutral-200 dark:border-neutral-700')}>
-                              <span className={cn('text-xs font-semibold', i === lifecycleStages.length - 1 ? 'text-white dark:text-neutral-900' : 'text-neutral-500')}>{m.year.slice(2)}</span>
-                            </div>
-                            <div className="pt-1"><div className="flex items-center gap-2"><span className="text-sm font-semibold text-neutral-900 dark:text-white">{m.stage}</span><span className="text-xs text-neutral-400">{m.event}</span></div><p className="text-xs text-neutral-500 mt-0.5">{m.desc}</p></div>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
+                  <PartnerTimeline
+                    key={partner.id + (partner.milestones?.length || 0)}
+                    events={(partner.milestones || []).map((m: any) => ({ id: m.id || Date.now().toString(), type: m.stage || m.type || 'milestone', title: m.title || m.event || '', description: m.desc || m.description || '', date: m.date || m.year || '', operator: m.operator || '' }))}
+                    partnerName={partner.name}
+                    onUpdateEvents={async (events) => {
+                      const milestones = events.map(e => ({ id: e.id, stage: e.type, title: e.title, description: e.description || '', date: e.date, operator: e.operator || '', year: e.date?.split('-')[0] || '' }));
+                      await supabase.from('partners').update({ milestones }).eq('id', partner.id);
+                      updatePartner({ ...partner, milestones } as any);
+                    }}
+                  />
 
-                  <Card>
-                    <CardHeader><CardTitle>组织架构</CardTitle></CardHeader>
-                    <CardContent>
-                      <div className="flex flex-col items-center text-sm">
-                        <div className="px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 rounded-xl text-center mb-2"><p className="font-semibold">{orgStructure[0].role}</p><p className="text-xs opacity-70">{orgStructure[0].name}</p></div>
-                        <div className="w-px h-3 bg-neutral-300 dark:bg-neutral-600" />
-                        <div className="flex gap-4">
-                          {orgStructure[0].children?.map((c, ci) => (
-                            <div key={ci} className="flex flex-col items-center">
-                              <div className="w-px h-3 bg-neutral-300 dark:bg-neutral-600" />
-                              <div className="px-3 py-2 rounded-lg border border-neutral-200 dark:border-neutral-700 text-center"><p className="font-medium text-neutral-900 dark:text-white">{c.role}</p><p className="text-xs text-neutral-500">{c.name}</p></div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader><CardTitle>等级变迁</CardTitle></CardHeader>
-                    <CardContent>
-                      {[{ from: '注册', to: '银牌', date: '2019Q2' }, { from: '银牌', to: '金牌', date: '2020Q4' }, { from: '金牌', to: '白金', date: '2024Q1' }].map((t, i) => (
-                        <div key={i} className="flex items-center gap-2 py-2"><Badge variant="default" size="sm">{t.from}</Badge><ArrowUpRight className="w-3 h-3 text-emerald-500" /><Badge variant="primary" size="sm">{t.to}</Badge><span className="text-xs text-neutral-400 ml-auto">{t.date}</span></div>
-                      ))}
-                    </CardContent>
-                  </Card>
                 </div>
               </div>
 
-              {/* Lifecycle + Customers + Quarterly stacked */}
+              {/* Key Customers */}
               <Card>
-                <CardHeader><CardTitle>重要客户</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div><CardTitle>重要客户</CardTitle><p className="text-xs text-neutral-400 mt-0.5">{keyCustomers.length} 家客户 · {keyCustomers.reduce((s:number,c:any)=>s+(c.annualRevenue||0),0)>0?'总额 '+cur(keyCustomers.reduce((s:number,c:any)=>s+(c.annualRevenue||0),0)):''}</p></div>
+                  <Button variant="ghost" size="sm" onClick={() => { setShowCustomerForm(!showCustomerForm); setEditingCustomer(null); }}><Plus className="w-3.5 h-3.5" />添加</Button>
+                </CardHeader>
                 <CardContent>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead><tr className="border-b border-neutral-200 dark:border-neutral-800"><th className="text-left py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">客户</th><th className="text-left py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">产品</th><th className="text-center py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">份额</th><th className="text-left py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">竞品</th><th className="text-right py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">年合同额</th><th className="text-center py-2 px-3 text-xs font-semibold text-neutral-500 uppercase">状态</th></tr></thead>
-                      <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                        {keyCustomers.map((c, i) => (
-                          <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                            <td className="py-2.5 px-3 font-medium text-neutral-900 dark:text-white">{c.name}<p className="text-xs text-neutral-400">{c.industry}</p></td>
-                            <td className="py-2.5 px-3 text-neutral-500">{c.product}</td>
-                            <td className="py-2.5 px-3 text-center">{c.ourShare===0?<Badge variant="danger" size="sm">丢标</Badge>:c.ourShare<100?<div className="flex items-center gap-2"><ProgressBar value={c.ourShare} size="sm" className="w-12"/><span className="text-xs">{c.ourShare}%</span></div>:<Badge variant="success" size="sm">独家</Badge>}</td>
-                            <td className="py-2.5 px-3">{c.competitor==='-'?<span className="text-xs text-neutral-400">-</span>:<span className="text-xs font-medium text-amber-600">{c.competitor}</span>}</td>
-                            <td className="py-2.5 px-3 text-right font-medium">{cur(c.value)}</td>
-                            <td className="py-2.5 px-3 text-center"><Badge variant={c.status==='在服'?'success':c.status==='POC'?'info':c.status==='商务'?'warning':'danger'} size="sm">{c.status}</Badge></td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  {(showCustomerForm || editingCustomer) && (
+                    <div className="p-3 mb-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                      <p className="text-xs font-semibold mb-2">{editingCustomer ? '编辑客户' : '添加客户'}</p>
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                        <Input value={editingCustomer ? editForm.name : newCustomer.name} onChange={e => editingCustomer ? setEditForm({...editForm, name: e.target.value}) : setNewCustomer({...newCustomer, name: e.target.value})} placeholder="客户名称 *" />
+                        <Input value={editingCustomer ? editForm.industry : newCustomer.industry} onChange={e => editingCustomer ? setEditForm({...editForm, industry: e.target.value}) : setNewCustomer({...newCustomer, industry: e.target.value})} placeholder="行业" />
+                        <Select value={editingCustomer ? editForm.relationship : newCustomer.relationship} options={[{value:'战略合作',label:'战略合作'},{value:'合作中',label:'合作中'},{value:'潜在客户',label:'潜在客户'},{value:'跟进中',label:'跟进中'},{value:'已流失',label:'已流失'}]} onChange={e => editingCustomer ? setEditForm({...editForm, relationship: e.target.value}) : setNewCustomer({...newCustomer, relationship: e.target.value})} />
+                        <Input type="number" value={editingCustomer ? (editForm.annualRevenue||'') : (newCustomer.annualRevenue||'')} onChange={e => editingCustomer ? setEditForm({...editForm, annualRevenue: Number(e.target.value)}) : setNewCustomer({...newCustomer, annualRevenue: Number(e.target.value)})} placeholder="年合作额" />
+                        <Input value={editingCustomer ? editForm.salesLead : newCustomer.salesLead} onChange={e => editingCustomer ? setEditForm({...editForm, salesLead: e.target.value}) : setNewCustomer({...newCustomer, salesLead: e.target.value})} placeholder="销售负责人" />
+                        <Input value={editingCustomer ? editForm.productsStr : newCustomer.productsStr || ''} onChange={e => editingCustomer ? setEditForm({...editForm, productsStr: e.target.value}) : setNewCustomer({...newCustomer, productsStr: e.target.value})} placeholder="产品/方案（逗号分隔）" />
+                        <Input value={editingCustomer ? editForm.majorProjectsStr : newCustomer.majorProjectsStr || ''} onChange={e => editingCustomer ? setEditForm({...editForm, majorProjectsStr: e.target.value}) : setNewCustomer({...newCustomer, majorProjectsStr: e.target.value})} placeholder="重点项目（逗号分隔）" />
+                        <Input value={editingCustomer ? editForm.contactPerson : newCustomer.contactPerson} onChange={e => editingCustomer ? setEditForm({...editForm, contactPerson: e.target.value}) : setNewCustomer({...newCustomer, contactPerson: e.target.value})} placeholder="客户联系人" />
+                        <Input value={editingCustomer ? editForm.contactPhone : newCustomer.contactPhone} onChange={e => editingCustomer ? setEditForm({...editForm, contactPhone: e.target.value}) : setNewCustomer({...newCustomer, contactPhone: e.target.value})} placeholder="联系电话" />
+                        <Select value={editingCustomer ? editForm.status : newCustomer.status} options={[{value:'在服',label:'在服'},{value:'POC',label:'POC'},{value:'商务',label:'商务'},{value:'跟进中',label:'跟进中'},{value:'丢标',label:'丢标'}]} onChange={e => editingCustomer ? setEditForm({...editForm, status: e.target.value}) : setNewCustomer({...newCustomer, status: e.target.value})} />
+                      </div>
+                      <div className="col-span-full mt-2">
+                        <Input value={editingCustomer ? editForm.goals : newCustomer.goals} onChange={e => editingCustomer ? setEditForm({...editForm, goals: e.target.value}) : setNewCustomer({...newCustomer, goals: e.target.value})} placeholder="合作目标（如：完成HIS系统升级签约，实现AI诊断POC）" />
+                      </div>
+                      <div className="flex gap-2 mt-2 justify-end">
+                        <Button variant="secondary" size="sm" onClick={() => { setShowCustomerForm(false); setEditingCustomer(null); }}>取消</Button>
+                        <Button variant="brand" size="sm" onClick={() => editingCustomer ? saveCustomerEdit() : addCustomer()}>{editingCustomer ? '保存修改' : '添加客户'}</Button>
+                      </div>
+                    </div>
+                  )}
+                  {keyCustomers.length === 0 ? (
+                    <p className="text-sm text-neutral-400 py-4 text-center">暂无重要客户，点击"添加"录入</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {keyCustomers.map((c: any) => (
+                        <CustomerCard key={c.id} customer={c} onEdit={(cust) => { setEditingCustomer(cust.id); const p = (cust.products||[]).join('，'); const m = (cust.majorProjects||[]).join('，'); setEditForm({...cust, productsStr: p, majorProjectsStr: m}); setShowCustomerForm(false); }} onDelete={removeCustomer} onAddProgress={async (custId, prog) => { const updated = keyCustomers.map(x => x.id===custId ? {...x, progress: [...(x.progress||[]), prog]} : x); await saveCustomers(updated); }} cur={cur} />
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
 
+              {/* Work Follow-ups */}
               <Card>
-                <CardHeader><CardTitle>季度沟通记录</CardTitle></CardHeader>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div><CardTitle>工作跟进</CardTitle><p className="text-xs text-neutral-400 mt-0.5">{followUps.length} 条记录 · {followUps.filter(f=>f.status==='已完结').length}完结 · {followUps.filter(f=>f.status==='进行中').length}进行中</p></div>
+                  <Button variant="ghost" size="sm" onClick={() => { setShowFollowUpForm(!showFollowUpForm); setEditingFollowUp(null); }}><Plus className="w-3.5 h-3.5" />添加</Button>
+                </CardHeader>
                 <CardContent>
-                  {quarterlyReviews.map((qr, i) => (
-                    <div key={qr.q} className={cn('flex gap-4 py-3', i>0&&'border-t border-neutral-100 dark:border-neutral-800')}>
-                      <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center shrink-0', i===0?'bg-neutral-900 dark:bg-white':'bg-neutral-100 dark:bg-neutral-800')}><Calendar className={cn('w-4 h-4', i===0?'text-white dark:text-neutral-900':'text-neutral-500')} /></div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1"><span className="text-sm font-semibold text-neutral-900 dark:text-white">{qr.q}</span><span className="text-xs text-neutral-400">{qr.date}</span><Badge variant={qr.progress.includes('进行中')?'info':'success'} size="sm">{qr.progress}</Badge></div>
-                        <div className="grid grid-cols-2 gap-2 text-sm"><div className="p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded"><span className="text-xs text-neutral-500">目标</span><p className="font-medium">{qr.goal}</p></div><div className="p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded"><span className="text-xs text-neutral-500">成果</span><p className="font-medium">{qr.key}</p></div></div>
-                        <p className="text-xs text-neutral-400 mt-1">参会: {qr.attendees.join('、')}</p>
+                  {(showFollowUpForm || editingFollowUp) && (
+                    <div className="p-3 mb-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                      <p className="text-xs font-semibold mb-2">{editingFollowUp ? '编辑跟进' : '添加跟进'}</p>
+                      <div className="space-y-2">
+                        <Input value={newFollowUp.title} onChange={e => setNewFollowUp({...newFollowUp, title: e.target.value})} placeholder="标题 *" />
+                        <div className="flex gap-2">
+                          <Select value={newFollowUp.status} options={[{value:'草稿',label:'草稿'},{value:'进行中',label:'进行中'},{value:'已完结',label:'已完结'},{value:'放弃',label:'放弃'}]} onChange={e => setNewFollowUp({...newFollowUp, status: e.target.value})} />
+                          <Input type="date" value={newFollowUp.date} onChange={e => setNewFollowUp({...newFollowUp, date: e.target.value})} />
+                        </div>
+                        <Input value={newFollowUp.desc} onChange={e => setNewFollowUp({...newFollowUp, desc: e.target.value})} placeholder="详细描述" />
+                        <Input value={newFollowUp.nextStep} onChange={e => setNewFollowUp({...newFollowUp, nextStep: e.target.value})} placeholder="下一步计划" />
+                      </div>
+                      <div className="flex gap-2 mt-2 justify-end">
+                        <Button variant="secondary" size="sm" onClick={() => { setShowFollowUpForm(false); setEditingFollowUp(null); }}>取消</Button>
+                        <Button variant="brand" size="sm" onClick={() => editingFollowUp ? saveFollowUpEdit() : addFollowUp()}>{editingFollowUp ? '保存' : '添加'}</Button>
                       </div>
                     </div>
-                  ))}
+                  )}
+                  {followUps.length === 0 ? (
+                    <p className="text-sm text-neutral-400 py-4 text-center">暂无工作跟进，点击"添加"记录</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {followUps.map((f: any) => (
+                        <div key={f.id} className="flex items-start gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-800 hover:border-neutral-300 transition-colors">
+                          <div className={`w-3 h-3 rounded-full mt-1.5 shrink-0 ${f.status==='已完结'?'bg-emerald-500':f.status==='进行中'?'bg-blue-500':f.status==='草稿'?'bg-neutral-400':'bg-red-400'}`} />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-sm">{f.title}</span>
+                              <Badge variant={f.status==='已完结'?'success':f.status==='进行中'?'info':f.status==='草稿'?'default':'danger'} size="sm">{f.status}</Badge>
+                              <span className="text-xs text-neutral-400">{f.date}</span>
+                            </div>
+                            {f.desc && <p className="text-xs text-neutral-500 mt-1">{f.desc}</p>}
+                            {f.nextStep && <p className="text-xs text-blue-600 mt-0.5">→ {f.nextStep}</p>}
+                          </div>
+                          <div className="flex gap-1 shrink-0">
+                            <button onClick={() => { setEditingFollowUp(f.id); setNewFollowUp({ title: f.title, desc: f.desc||'', status: f.status, date: f.date, nextStep: f.nextStep||'' }); setShowFollowUpForm(false); }} className="p-1 text-neutral-400 hover:text-blue-500"><Pencil className="w-3 h-3" /></button>
+                            <button onClick={() => removeFollowUp(f.id)} className="p-1 text-neutral-400 hover:text-red-500"><Trash2 className="w-3 h-3" /></button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>

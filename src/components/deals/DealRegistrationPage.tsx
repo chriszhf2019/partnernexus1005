@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   FileText, Plus, Search, Filter, ChevronRight, CheckCircle2, Clock,
   XCircle, AlertCircle, Calendar, User, MapPin, MoreHorizontal,
@@ -7,6 +8,7 @@ import {
 } from 'lucide-react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { Deal, DealRegistrationStats, DealStatus, DealLifecycleStage, DealSource, DealConflict } from '../../types';
+import { DEAL_CONFLICTS } from '../../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -18,7 +20,6 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
-import { DEAL_CONFLICTS } from '../../constants';
 
 interface DealRegistrationPageProps {
   stats: DealRegistrationStats;
@@ -69,6 +70,7 @@ const CONFLICT_TYPE_LABELS: Record<string, string> = {
 export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: DealRegistrationPageProps) => {
   const { t } = useLanguage();
   const { config } = useConfig();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'conflicts'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -106,12 +108,11 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
   const sourceDistribution = useMemo(() => {
     const dist: Record<string, { count: number; value: number }> = {};
     deals.forEach(d => {
-      if (d.sourceInfo) {
-        const src = d.sourceInfo.source;
-        if (!dist[src]) dist[src] = { count: 0, value: 0 };
-        dist[src].count++;
-        dist[src].value += d.value;
-      }
+      const src = d.salesTeam || d.sourceInfo?.source || '未分类';
+      const label = src === '渠道报备' ? '渠道报备' : src === '销售自建' ? '销售自建' : src === '市场来源' ? '市场来源' : src;
+      if (!dist[label]) dist[label] = { count: 0, value: 0 };
+      dist[label].count++;
+      dist[label].value += d.value;
     });
     return dist;
   }, [deals]);
@@ -139,7 +140,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
     { label: t('deals.filterProduct'), field: 'productType' as const, options: ['All', '云原生平台', '大数据平台', 'AI 智算平台'] },
     { label: t('deals.filterPartnerType'), field: 'partnerType' as const, options: ['All', 'ISV', 'VAR', 'SI', 'VAD', 'OEM', 'Reseller'] },
     { label: t('deals.filterStage'), field: 'stage' as const, options: ['All', 'Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial', 'ClosedWon', 'ClosedLost'] },
-    { label: t('deals.filterSource'), field: 'source' as const, options: ['All', 'PartnerInitiated', 'ChannelAssigned', 'MDFCampaign', 'MarketingEvent', 'IncentiveProgram', 'Referral'] },
+    { label: '商机来源', field: 'source' as const, options: ['All', '销售自建', '渠道报备', '市场来源'] },
   ];
 
   return (
@@ -215,19 +216,20 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
 
           <Card>
             <CardHeader>
-              <CardTitle>{t('deals.sourceAnalysis')}</CardTitle>
+              <CardTitle>商机来源</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                {Object.entries(sourceDistribution).map(([source, data]) => {
-                  const cfg = SOURCE_CONFIG[source as DealSource];
-                  if (!cfg) return null;
-                  const SourceIcon = cfg.icon;
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['渠道报备','销售自建','市场来源'].map(source => {
+                  const data = sourceDistribution[source] || { count: 0, value: 0 };
+                  const icons: Record<string,any> = { '渠道报备': FileText, '销售自建': User, '市场来源': Zap };
+                  const colors: Record<string,string> = { '渠道报备': 'text-emerald-600', '销售自建': 'text-blue-600', '市场来源': 'text-purple-600' };
+                  const Icon = icons[source] || FileText;
                   return (
                     <div key={source} className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
-                        <SourceIcon className="w-4 h-4 text-neutral-500" />
-                        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{cfg.label}</span>
+                        <Icon className={`w-4 h-4 ${colors[source]}`} />
+                        <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{source}</span>
                       </div>
                       <div className="flex items-end justify-between">
                         <span className="text-xl font-bold text-neutral-900 dark:text-white">{data.count}</span>
@@ -288,14 +290,13 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
               <CardContent>
                 <div className="space-y-3">
                   {conflictDeals.slice(0, 3).map((deal) => {
-                    const conflict = DEAL_CONFLICTS.find(c => c.id === deal.conflictId);
                     return (
                       <div key={deal.id} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900">
                         <p className="text-sm font-medium text-neutral-900 dark:text-white">{deal.title}</p>
-                        <p className="text-xs text-neutral-500 mt-1">{deal.customerName}</p>
+                        <p className="text-xs text-neutral-500 mt-1">{deal.customerName} · {deal.partnerName}</p>
                         <div className="flex items-center justify-between mt-2">
-                          <Badge variant="danger" size="sm">{CONFLICT_TYPE_LABELS[conflict?.type || ''] || '冲突'}</Badge>
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedDeal(deal); setSelectedConflict(DEAL_CONFLICTS.find(c => c.id === deal.conflictId) || null); setShowConflictModal(true); }}>
+                          <Badge variant="danger" size="sm">商机冲突</Badge>
+                          <Button variant="ghost" size="sm" onClick={() => { setSelectedDeal(deal); setShowConflictModal(true); }}>
                             {t('common.view')}
                           </Button>
                         </div>
@@ -389,7 +390,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
                     <tr
                       key={deal.id}
                       className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors group cursor-pointer"
-                      onClick={() => setSelectedDeal(deal)}
+                      onClick={() => navigate(`/deals/${deal.id}`)}
                     >
                       <td className="px-6 py-4">
                         <div>
@@ -437,7 +438,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
-                          onClick={(e) => { e.stopPropagation(); setSelectedDeal(deal); }}
+                          onClick={(e) => { e.stopPropagation(); navigate(`/deals/${deal.id}`); }}
                           className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-brand transition-colors opacity-0 group-hover:opacity-100"
                         >
                           <ChevronRight className="w-4 h-4" />

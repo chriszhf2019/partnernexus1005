@@ -120,23 +120,116 @@ useDeals() → PartnerProfile (按 partner_id 聚合 pipeline)
 | 字段 | 来源 | 关联 |
 |------|------|------|
 | `name` | 用户输入 | - |
-| `type` | 用户选择 | 线下峰会/渠道招募/在线培训/认证培训/联合营销/行业大会 |
-| `status` | 流程变更 | Planning/In Progress/Completed |
+| `type` | 用户选择 | 线下峰会/线下沙龙/Webinar/联合营销/渠道招募/行业大会/培训/其他 |
+| `status` | 流程变更 | Planning/In Progress/Completed/Cancelled |
 | `budget` | 用户输入 | → MDF 消耗统计 |
 | `actual_spend` | 手动 | 实际支出 |
 | `leads_generated` | 手动 | 线索数 → 转化率 |
 | `event_date` | 用户选择 | 活动日期 |
+| `host_type` | 用户选择 | vendor(厂商自办) / partner(代理商合办) |
+| `partner_id` | 用户选择 | → `partners.id` (仅 host_type=partner 时) |
+| `partner_name` | 自动填充 | → `partners.name` |
+| `location` | 用户输入 | 活动地点 |
+| `expected_attendees` | 用户输入 | 预计参会人数 |
+
+### 数据流
+```
+marketing_activities.actual_spend (按 event_date 归属季度) → MarketingPlanPage 实际支出计算
+marketing_activities (全表) → useMarketingData() → MDFModule / MarketingIncentivePage
+marketing_activities → marketingService.getMDFActivities() → PartnerProfile 活动展示
+```
 
 ---
 
-## 5. 激励计划 (Incentive Programs)
+## 5. 营销预算规划 (Marketing Budget Config & Plan)
+
+### marketing_budget_config (预算配置)
+| 字段 | 类型 | 来源 | 用途 | 关联 |
+|------|------|------|------|------|
+| `id` | TEXT | 固定 'current' | 唯一行标识 | - |
+| `annual_budget` | DECIMAL | 自动计算 | 年度总预算 = SUM(q1-4_budget + adjust) | - |
+| `q1_budget` ~ `q4_budget` | DECIMAL | 用户输入/批复 | 各季度基础预算 | → 季度预算显示 |
+| `q1_adjust` ~ `q4_adjust` | DECIMAL | 预算调整 | 季度预算调整金额 | → 调整后预算 = base + adjust |
+| `status` | TEXT | 流程变更 | draft/pending/approved | → 编辑权限控制 |
+| `approved_at` | TIMESTAMPTZ | 自动 | 批复时间 | - |
+
+### marketing_plan (活动计划)
+| 字段 | 类型 | 来源 | 用途 | 关联 |
+|------|------|------|------|------|
+| `year` | INT | 用户选择 | 计划年份 | - |
+| `quarter` | TEXT | 用户选择 | Q1/Q2/Q3/Q4 | → 按季度分组展示 |
+| `activity_type` | TEXT | 用户选择 | Marketing(自办) / PMDF(伙伴合办) | - |
+| `partner_id` | TEXT | 用户选择 | 合作伙伴ID | → `partners.id` |
+| `partner_name` | TEXT | 自动填充 | 合作伙伴名称 | → `partners.name` |
+| `category` | TEXT | 用户选择 | 线下峰会/线下沙龙/Webinar等 | - |
+| `region` / `city` | TEXT | 用户输入 | 活动区域/城市 | - |
+| `expected_date` | DATE | 用户输入 | 预期日期 | - |
+| `total_budget` | DECIMAL | 用户输入 | 预算申请额 | → 预算申请总额统计 |
+| `approved_amount` | DECIMAL | 批复 | 批复金额 | → 预算批复总额统计 |
+| `expected_attendees` | INT | 用户输入 | 预计参加人数 | → 参会统计 |
+| `expected_output` | TEXT | 用户输入 | 预期产出(线索/商机) | - |
+| `responsible_person` | TEXT | 用户输入 | 负责人 | - |
+| `execution_status` | TEXT | 流程变更 | Planning/In Progress/Completed/Cancelled | - |
+| `plan_status` | TEXT | 流程变更 | draft/submitted/approved | → 季度计划状态标签 |
+
+### budget_change_log (预算变更日志)
+| 字段 | 关联 |
+|------|------|
+| `config_id` | → `marketing_budget_config.id` |
+| `action` | 操作描述(保存/提交审批/批复通过/重新批复) |
+| `q1_budget` ~ `q4_budget` | 变更时的各季度预算快照 |
+| `created_at` | 操作时间 |
+
+### global_settings (全局设置)
+| 字段 | 类型 | 用途 |
+|------|------|------|
+| `id` | TEXT | 固定 'default' |
+| `currency` | TEXT | CNY/USD/JPY → formatCurrency() 全站金额格式化 |
+
+### 核心数据关系
+```
+global_settings.currency ──► formatCurrency() ──► 全站金额显示
+
+marketing_budget_config ──► 年度/季度预算 + 调整
+    │                        ├─ annualBudget = SUM(qBudgets)
+    │                        ├─ qBudgets[i] = base + adjust
+    │                        └─ status 控制编辑权限(draft可编辑/approved锁定)
+    │
+    ├──► marketing_plan (year + quarter)
+    │       ├─ total_budget ──► 预算申请总额
+    │       ├─ approved_amount ──► 预算批复总额
+    │       ├─ partner_id ──► partners.id (仅 PMDF 类型)
+    │       └─ execution_status / plan_status 状态追踪
+    │
+    ├──► marketing_activities.actual_spend (按季度聚合)
+    │       └─ 计算: 预算执行率 = totalActual / annualBudget
+    │
+    └──► budget_change_log (预算变更审计追踪)
+```
+
+---
+
+## 6. 激励计划 (Incentive Programs)
 
 | 字段 | 关联 |
 |------|------|
 | `title` | 计划名称 |
+| `trigger_type` | Pipeline Gap / New Product / Competitive / Sales Acceleration |
 | `status` | Active/Upcoming/Ended |
+| `payout_type` | Rebate/Cash/Points |
 | `total_budget` | 总预算 |
-| `claimed_amount` | 已申领 |
+| `claimed_amount` | 已申领/已发放 |
+| `participants_count` | 参与伙伴数 |
+| `description` | 计划描述 |
+| `start_date` / `end_date` | 计划周期 |
+
+### 数据流
+```
+incentive_programs → useMarketingData() → incentiveStats + incentivePrograms
+                  → IncentiveModule (数值全由 props 动态计算)
+                  → IncentivesPage (激励计划管理)
+                  → marketingService.getIncentivePrograms() → PartnerProfile
+```
 
 ---
 
@@ -178,6 +271,11 @@ partners (Supabase) → JOIN partner_name
 
 ## 已知问题
 
+- [x] `marketing_budget_config` / `marketing_plan` / `budget_change_log` / `global_settings` 表定义添加到迁移 (20250603000004)
+- [x] `useMarketingData` 移除初始 mock 数据回退，全部从 Supabase 实时获取
+- [x] `IncentiveModule.tsx` 硬编码假数据替换为基于 props 的动态计算
+- [x] `MDFModule.tsx` 硬编码漏斗/ROI 数据替换为基于 props 的动态计算
+- [x] `marketing-service.ts` 从返回 mock 常量改为异步获取 Supabase 数据
 - [ ] `companyNameEn` 无 UI 展示（仅 DB 存储）
 - [ ] `annualTarget` / `quarterlyTarget` 无 Dashboard KPI 展示
 - [ ] `companyWebsite` 无链接展示

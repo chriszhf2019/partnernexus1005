@@ -82,8 +82,8 @@ export const StrategicMatrix: React.FC = () => {
     return { rowTotals, colTotals };
   }, [metric, INDUSTRIES, REGIONS, HEATMAP_DATA]);
 
-  const currencySymbol = config.currency === 'JPY' || config.currency === 'CNY' ? '¥' : '$';
-  const currencyUnit = config.currency === 'JPY' ? 'W' : 'k'; // Just as an example adjustment
+  const currencySymbol = config.currency === 'CNY' ? '¥' : '$';
+  const currencyUnit = config.currency === 'CNY' ? 'k' : 'k'; // Just as an example adjustment
 
   const getCellColor = (value: number) => {
     const thresholds = {

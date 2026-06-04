@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useConfig } from '../../contexts/ConfigContext';
 import { useMarketingData } from '../../hooks/useData';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -14,16 +15,17 @@ import { Plus, TrendingUp, Users, Calendar, Target, Activity, DollarSign, BarCha
 export const MarketingIncentivePage = () => {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { config } = useConfig();
   const { mdfStats, mdfActivities, incentivePrograms, incentiveStats } = useMarketingData();
   const [q2Plans, setQ2Plans] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
-  const [newActivity, setNewActivity] = useState({ 
-    name: '', 
-    type: '线下峰会', 
-    date: '', 
-    budget: '', 
-    hostType: 'vendor', 
-    partnerId: '', 
+  const [newActivity, setNewActivity] = useState({
+    name: '',
+    type: '线下峰会',
+    date: '',
+    budget: '',
+    hostType: 'vendor',
+    partnerId: '',
     partnerName: '',
     location: '',
     description: '',
@@ -41,7 +43,7 @@ export const MarketingIncentivePage = () => {
   const [partners, setPartners] = useState<any[]>([]);
   const [budgetConfig, setBudgetConfig] = useState<any>({});
 
-  const cur = (v: number) => formatCurrency(v, budgetConfig?.currency || 'CNY');
+  const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
   const [currentYear, setCurrentYear] = useState(2026);
   const [currentQuarter, setCurrentQuarter] = useState('Q2');
@@ -56,7 +58,8 @@ export const MarketingIncentivePage = () => {
 
   useEffect(() => {
     supabase.from('marketing_budget_config').select('*').eq('id', 'current').single().then(({ data }: any) => { if (data) setBudgetConfig(data); });
-    supabase.from('marketing_plan').select('*').eq('year', currentYear).eq('quarter', currentQuarter).eq('plan_status', 'approved').order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
+    // Show both submitted and approved plans (not just approved)
+    supabase.from('marketing_plan').select('*').eq('year', currentYear).eq('quarter', currentQuarter).in('plan_status', ['submitted', 'approved']).order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
     supabase.from('partners').select('id, name, tier').order('name').then(({ data }: any) => { if (data) setPartners(data); });
   }, [currentYear, currentQuarter]);
 
@@ -112,30 +115,13 @@ export const MarketingIncentivePage = () => {
         activityData.partner_name = newActivity.partnerName;
       }
 
-      await supabase.from('marketing_activities').insert(activityData);
+      const { error } = await supabase.from('marketing_activities').insert(activityData);
+      if (error) { alert('创建失败: ' + error.message); setCreating(false); return; }
       setShowCreate(false);
-      setNewActivity({ 
-        name: '', 
-        type: '线下峰会', 
-        date: '', 
-        budget: '', 
-        hostType: 'vendor', 
-        partnerId: '', 
-        partnerName: '',
-        location: '',
-        description: '',
-        contactName: '',
-        contactPhone: '',
-        maxAttendees: 100,
-        enableQuestions: false,
-        enableLottery: false,
-        lotteryReward: '',
-        signupPoints: 10,
-        checkinPoints: 20
-      });
+      // Reload the page to show new data
+      window.location.reload();
     } catch (err) {
-      console.warn('Failed to create marketing activity:', err);
-    } finally {
+      alert('创建活动失败: ' + (err instanceof Error ? err.message : String(err)));
       setCreating(false);
     }
   };
@@ -185,11 +171,7 @@ export const MarketingIncentivePage = () => {
     });
     const monthBudget = monthActivities.reduce((sum: number, a: any) => sum + (a.budget || 0), 0);
     const monthSpend = monthActivities.reduce((sum: number, a: any) => sum + (a.actualSpend || 0), 0);
-    return {
-      month: monthName,
-      budget: monthBudget || (i * 50000 + 100000),
-      spend: monthSpend || Math.floor((i * 50000 + 100000) * 0.75)
-    };
+    return { month: monthName, budget: monthBudget, spend: monthSpend };
   });
 
   const hostTypeOptions = [
@@ -252,8 +234,8 @@ export const MarketingIncentivePage = () => {
             {monthlyBudgetData.map((m, i) => (
               <div key={i} className="flex-1 flex flex-col items-center gap-2">
                 <div className="w-full flex flex-col items-center gap-1">
-                  <div className="w-8 bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${(m.budget / 250000) * 120}px`}}></div>
-                  <div className="w-8 bg-emerald-500 rounded-t -mt-0.5" style={{height: `${(m.spend / 250000) * 120}px`}}></div>
+                  <div className="w-8 bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${Math.max(1, (m.budget / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
+                  <div className="w-8 bg-emerald-500 rounded-t -mt-0.5" style={{height: `${Math.max(0, (m.spend / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
                 </div>
                 <span className="text-xs text-neutral-500">{m.month}</span>
               </div>
@@ -273,7 +255,7 @@ export const MarketingIncentivePage = () => {
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>{curQ} 营销活动</CardTitle>
+              <CardTitle>{currentQuarter} 营销活动</CardTitle>
               <span className="text-xs text-neutral-400">{q2Plans.length + qActivities.length} 个活动 · 批复预算 {cur(totalBudget)} · 实际支出 {cur(totalSpend)}</span>
             </div>
             <div className="flex items-center gap-2">
@@ -300,7 +282,8 @@ export const MarketingIncentivePage = () => {
               )}
               {/* Approved Q2 plans */}
               {q2Plans.map((p: any) => {
-                const act = qActivities.find((a: any) => a.name === p.category || a.type === p.category);
+                // Direct match: plan.expected_output = activity name
+                const act = qActivities.find((a: any) => a.name === p.expected_output);
                 return (
                   <div key={p.id} className="p-3 rounded-lg border border-emerald-100 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10">
                     <div className="flex items-center justify-between mb-2">

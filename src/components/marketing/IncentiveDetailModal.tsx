@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   X, 
   Target, 
@@ -15,11 +15,31 @@ import {
   ArrowUpRight,
   Lightbulb,
   Building2,
-  Briefcase
+  Briefcase,
+  Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../../lib/utils';
 import { AdjustParametersModal } from './AdjustParametersModal';
+import { supabase } from '../../lib/supabase';
+
+interface PartnerData {
+  id: string;
+  name: string;
+  submissions: number;
+  eligible: number;
+  totalValue: string;
+  status: string;
+}
+
+interface OpportunityData {
+  id: string;
+  title: string;
+  value: string;
+  status: string;
+  reason: string;
+  date: string;
+}
 
 interface IncentiveDetailModalProps {
   isOpen: boolean;
@@ -41,25 +61,66 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
   const [activeTab, setActiveTab] = useState<'partners' | 'policy' | 'insights'>('partners');
   const [selectedPartner, setSelectedPartner] = useState<string | null>(null);
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
+  const [partners, setPartners] = useState<PartnerData[]>([]);
+  const [opportunities, setOpportunities] = useState<OpportunityData[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        const [partnersRes, oppsRes] = await Promise.all([
+          supabase.from('program_participants').select('*').eq('program_id', program.id),
+          supabase.from('program_opportunities').select('*').eq('program_id', program.id)
+        ]);
+        
+        if (partnersRes.data) {
+          setPartners(partnersRes.data.map((row: any) => ({
+            id: row.partner_id || `p-${row.id}`,
+            name: row.partner_name || row.name || '未知伙伴',
+            submissions: row.submissions || 0,
+            eligible: row.eligible_count || 0,
+            totalValue: row.total_value ? `¥${(row.total_value / 10000).toFixed(1)}M` : '¥0',
+            status: row.status || 'Active'
+          })));
+        }
+        
+        if (oppsRes.data) {
+          setOpportunities(oppsRes.data.map((row: any) => ({
+            id: row.id,
+            title: row.opportunity_title || row.title || '未命名商机',
+            value: row.value ? `¥${(row.value / 10000).toFixed(1)}M` : '¥0',
+            status: row.is_eligible ? 'Eligible' : 'Ineligible',
+            reason: row.eligible_reason || row.reason || (row.is_eligible ? '符合激励规则' : '不符合激励规则'),
+            date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
+          })));
+        }
+      } catch (error) {
+        console.warn('Failed to fetch incentive data, using fallback:', error);
+        // Fallback mock data when database is unavailable
+        setPartners([
+          { id: 'p1', name: '北京华胜天成科技股份有限公司', submissions: 12, eligible: 8, totalValue: '¥4.5M', status: 'Active' },
+          { id: 'p2', name: '上海中软华信网络科技有限公司', submissions: 8, eligible: 5, totalValue: '¥2.8M', status: 'Active' },
+          { id: 'p3', name: '深圳神州数码云科数据技术有限公司', submissions: 15, eligible: 12, totalValue: '¥8.2M', status: 'High Performer' },
+          { id: 'p4', name: '广州佳都数据服务有限公司', submissions: 5, eligible: 2, totalValue: '¥1.2M', status: 'At Risk' },
+        ]);
+        setOpportunities([
+          { id: 'o1', title: '某省人民医院信创数据库替换项目', value: '¥1.2M', status: 'Eligible', reason: '符合医疗信创专项产品目录', date: '2024-03-15' },
+          { id: 'o2', title: '市中心医院核心业务系统升级', value: '¥800K', status: 'Eligible', reason: '满足金牌伙伴报备规则', date: '2024-03-18' },
+          { id: 'o3', title: '县中医院办公系统采购', value: '¥300K', status: 'Ineligible', reason: '项目金额低于起奖阈值 (¥500K)', date: '2024-03-20' },
+          { id: 'o4', title: '某三甲医院容灾备份方案', value: '¥2.1M', status: 'Ineligible', reason: '非指定竞品替换场景', date: '2024-03-22' },
+        ]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [isOpen, program.id]);
 
   if (!isOpen) return null;
-// ... (rest of the file remains similar, but with the modal integrated)
-
-  // Mock data for partners
-  const partners = [
-    { id: 'p1', name: '北京华胜天成科技股份有限公司', submissions: 12, eligible: 8, totalValue: '¥4.5M', status: 'Active' },
-    { id: 'p2', name: '上海中软华信网络科技有限公司', submissions: 8, eligible: 5, totalValue: '¥2.8M', status: 'Active' },
-    { id: 'p3', name: '深圳神州数码云科数据技术有限公司', submissions: 15, eligible: 12, totalValue: '¥8.2M', status: 'High Performer' },
-    { id: 'p4', name: '广州佳都数据服务有限公司', submissions: 5, eligible: 2, totalValue: '¥1.2M', status: 'At Risk' },
-  ];
-
-  // Mock data for opportunities
-  const opportunities = [
-    { id: 'o1', title: '某省人民医院信创数据库替换项目', value: '¥1.2M', status: 'Eligible', reason: '符合医疗信创专项产品目录', date: '2024-03-15' },
-    { id: 'o2', title: '市中心医院核心业务系统升级', value: '¥800K', status: 'Eligible', reason: '满足金牌伙伴报备规则', date: '2024-03-18' },
-    { id: 'o3', title: '县中医院办公系统采购', value: '¥300K', status: 'Ineligible', reason: '项目金额低于起奖阈值 (¥500K)', date: '2024-03-20' },
-    { id: 'o4', title: '某三甲医院容灾备份方案', value: '¥2.1M', status: 'Ineligible', reason: '非指定竞品替换场景', date: '2024-03-22' },
-  ];
 
   return (
     <AnimatePresence>
@@ -151,18 +212,29 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
               <>
                 {/* Left: Partner List */}
                 <div className="w-1/2 border-r border-slate-200 bg-white overflow-y-auto">
-                  <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <input 
-                        type="text" 
-                        placeholder="搜索伙伴名称..." 
-                        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/10"
-                      />
+                  {loading ? (
+                    <div className="h-full flex items-center justify-center">
+                      <Loader2 className="w-8 h-8 text-slate-400 animate-spin" />
                     </div>
-                  </div>
-                  <div className="divide-y divide-slate-50">
-                    {partners.map((p) => (
+                  ) : (
+                    <>
+                      <div className="p-4 border-b border-slate-100 sticky top-0 bg-white z-10">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                          <input 
+                            type="text" 
+                            placeholder="搜索伙伴名称..." 
+                            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-100 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/10"
+                          />
+                        </div>
+                      </div>
+                      <div className="divide-y divide-slate-50">
+                        {partners.length === 0 ? (
+                          <div className="p-8 text-center">
+                            <Building2 className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                            <p className="text-sm font-bold text-slate-400">暂无参与伙伴</p>
+                          </div>
+                        ) : partners.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => setSelectedPartner(p.id)}
@@ -186,7 +258,9 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
                         <ChevronRight className={cn("w-5 h-5 transition-all", selectedPartner === p.id ? "text-black dark:text-white translate-x-1" : "text-slate-300")} />
                       </button>
                     ))}
-                  </div>
+                    </div>
+                  </>
+                )}
                 </div>
 
                 {/* Right: Opportunity Detail */}

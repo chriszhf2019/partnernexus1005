@@ -1,16 +1,19 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle, TrendingUp, RefreshCw, History, DollarSign, PieChart, BarChart3, AlertCircle, CheckCircle, Users } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle, TrendingUp, RefreshCw, History, DollarSign, PieChart, BarChart3, AlertCircle, CheckCircle, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/Button';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { SearchableSelect } from '../ui/SearchableSelect';
-import { formatCurrency } from '../../lib/utils';
+import { formatCurrency, currencyName } from '../../lib/utils';
+import { useConfig } from '../../contexts/ConfigContext';
 
 const QUARTERS = ['Q1','Q2','Q3','Q4'];
-const QUARTER_LABELS: Record<string, string> = { Q1: 'Q1', Q2: 'Q2', Q3: 'Q3', Q4: 'Q4' };
+const CATEGORIES = ['线下峰会','线下沙龙','Webinar','联合营销','渠道招募','行业大会','培训','其他'];
+const EXEC_STATUSES = ['Planning','In Progress','Completed','Cancelled'];
+const EXEC_LABELS: Record<string,string> = { Planning: '计划中', 'In Progress': '进行中', Completed: '已完成', Cancelled: '已取消' };
+const QCOLORS = ['#2563eb','#059669','#d97706','#7c3aed'];
 
-// 标准化季度名称，确保统一显示为 Q1/Q2/Q3/Q4 格式
 const normalizeQuarter = (quarter: string): string => {
   const mapping: Record<string, string> = {
     'Q1': 'Q1', 'q1': 'Q1', '第一季度': 'Q1', '1': 'Q1',
@@ -20,10 +23,6 @@ const normalizeQuarter = (quarter: string): string => {
   };
   return mapping[quarter] || quarter;
 };
-const CATEGORIES = ['线下峰会','线下沙龙','Webinar','联合营销','渠道招募','行业大会','培训','其他'];
-const EXEC_STATUSES = ['Planning','In Progress','Completed','Cancelled'];
-const EXEC_LABELS: Record<string,string> = { Planning: '计划中', 'In Progress': '进行中', Completed: '已完成', Cancelled: '已取消' };
-const QCOLORS = ['#2563eb','#059669','#d97706','#7c3aed'];
 
 const STATUS_LABEL: Record<string, string> = { draft: '草稿', pending: '待批复', approved: '已批复' };
 const STATUS_COLOR: Record<string, string> = { draft: 'text-neutral-500', pending: 'text-amber-600', approved: 'text-emerald-600' };
@@ -57,73 +56,66 @@ const PieSVG = ({ data, size = 120, currency = 'CNY' }: { data: number[]; size?:
 
 export const MarketingPlanPage = () => {
   const navigate = useNavigate();
-  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  const { config: appConfig } = useConfig();
+  const globalCurrency = (appConfig?.currency || 'CNY') as 'CNY' | 'USD';
+  const fmtW = (v: number) => formatCurrency(v, globalCurrency);
+
+  const now = new Date();
+  const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [plan, setPlan] = useState<any[]>([]);
   const [config, setConfig] = useState<any>({ annual_budget: 0, q1_budget: 0, q2_budget: 0, q3_budget: 0, q4_budget: 0, status: 'draft', q1_adjust: 0, q2_adjust: 0, q3_adjust: 0, q4_adjust: 0 });
   const [savingConfig, setSavingConfig] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
   const [activities, setActivities] = useState<any[]>([]);
   const [changeLog, setChangeLog] = useState<any[]>([]);
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [partners, setPartners] = useState<any[]>([]);
+  const [partnerMDF, setPartnerMDF] = useState<Record<string, { allocated: number; used: number; remaining: number }>>({});
   const [showAdjust, setShowAdjust] = useState(false);
-  const [globalCurrency, setGlobalCurrency] = useState<'CNY' | 'USD' | 'JPY'>('CNY');
-  
-  const fmtW = (v: number) => formatCurrency(v, globalCurrency);
 
-  useEffect(() => {
-    setCurrentYear(new Date().getFullYear());
-  }, []);
+  // Available years: from 2024 to current+1
+  const availableYears = Array.from({ length: (now.getFullYear() + 1) - 2024 + 1 }, (_, i) => 2024 + i);
 
-  useEffect(() => {
-    supabase.from('marketing_budget_config').select('*').eq('id', 'current').single().then(({ data, error }: any) => { 
-      if (error) {
-        console.warn('Failed to load budget config:', error);
-      }
-      if (data) {
-        setConfig(data);
-        console.log('Loaded budget config:', data);
-        console.log('Status value:', data.status, '| Type:', typeof data.status);
-      } else {
-        console.log('No data returned from marketing_budget_config');
-      }
-    }).catch((e: any) => {
-      console.error('Unexpected error:', e);
-    });
-    supabase.from('marketing_plan').select('*').eq('year', currentYear).order('quarter').then(({ data }: any) => { if (data?.length) setPlan(data); });
-    supabase.from('budget_change_log').select('*').eq('config_id', 'current').order('created_at', { ascending: false }).limit(10).then(({ data }: any) => { if (data) setChangeLog(data); });
+  // Load all data for selected year
+  const loadData = (year: number) => {
+    setDataLoaded(false);
+    supabase.from('marketing_budget_config').select('*').eq('id', 'current').single().then(({ data, error }: any) => {
+      if (error) console.warn('Failed to load budget config:', error.message);
+      if (data) { setConfig(data); setDataLoaded(true); }
+    }, () => { setDataLoaded(true); });
+    supabase.from('marketing_plan').select('*').eq('year', year).order('quarter').then(({ data }: any) => { if (data?.length) setPlan(data); else setPlan([]); });
+    supabase.from('budget_change_log').select('*').eq('config_id', 'current').order('created_at', { ascending: false }).limit(20).then(({ data }: any) => { if (data) setChangeLog(data); });
     supabase.from('marketing_activities').select('*').order('event_date').then(({ data }: any) => { if (data) setActivities(data); });
     supabase.from('partners').select('id, name, tier').order('name').then(({ data }: any) => { if (data) setPartners(data); });
-    // Load global currency setting - always use DB value, ignore localStorage cache
-    supabase.from('global_settings').select('currency').eq('id', 'default').single().then(({ data, error }: any) => { 
-      if (error) {
-        console.warn('Failed to load global currency:', error);
+    supabase.from('mdf_allocations').select('*').then(({ data }: any) => {
+      if (data) {
+        const mdfMap: Record<string, { allocated: number; used: number; remaining: number }> = {};
+        data.forEach((a: any) => {
+          const pid = a.partner_id;
+          if (!pid) return;
+          if (!mdfMap[pid]) mdfMap[pid] = { allocated: 0, used: 0, remaining: 0 };
+          mdfMap[pid].allocated += Number(a.amount || 0);
+          if (a.status === 'used') mdfMap[pid].used += Number(a.amount || 0);
+          mdfMap[pid].remaining = mdfMap[pid].allocated - mdfMap[pid].used;
+        });
+        setPartnerMDF(mdfMap);
       }
-      if (data?.currency) {
-        console.log('Currency from DB:', data.currency);
-        setGlobalCurrency(data.currency as 'CNY' | 'USD' | 'JPY');
-        // Update localStorage to match DB
-        localStorage.setItem('global_currency', data.currency);
-      } else {
-        // Fallback to CNY if DB has no value
-        console.log('No currency in DB, using default: CNY');
-        setGlobalCurrency('CNY');
-        localStorage.setItem('global_currency', 'CNY');
-      }
-    }).catch((e: any) => {
-      console.error('Unexpected error loading currency:', e);
-      // On error, use CNY as fallback
-      setGlobalCurrency('CNY');
     });
-  }, [currentYear]);
+  };
 
+  useEffect(() => { loadData(currentYear); }, [currentYear]);
+
+  // Compute actual spend by quarter from activities
   const actualSpendQ = [0, 0, 0, 0];
   activities.forEach((a: any) => {
     const d = a.event_date || a.date || '';
     if (!d) return;
     const m = parseInt(d.split('-')[1] || '0');
-    if (m >= 1 && m <= 3) actualSpendQ[0] += (a.actual_spend || a.actualSpend || 0);
-    else if (m >= 4 && m <= 6) actualSpendQ[1] += (a.actual_spend || a.actualSpend || 0);
-    else if (m >= 7 && m <= 9) actualSpendQ[2] += (a.actual_spend || a.actualSpend || 0);
-    else if (m >= 10 && m <= 12) actualSpendQ[3] += (a.actual_spend || a.actualSpend || 0);
+    const spend = Number(a.actual_spend || a.actualSpend || 0);
+    if (m >= 1 && m <= 3) actualSpendQ[0] += spend;
+    else if (m >= 4 && m <= 6) actualSpendQ[1] += spend;
+    else if (m >= 7 && m <= 9) actualSpendQ[2] += spend;
+    else if (m >= 10 && m <= 12) actualSpendQ[3] += spend;
   });
 
   const logChange = async (action: string) => {
@@ -144,41 +136,65 @@ export const MarketingPlanPage = () => {
   const baseAnnual = QUARTERS.reduce((s, _, i) => s + Number(config[`q${i + 1}_budget`] || 0), 0);
   const totalAdjust = QUARTERS.reduce((s, _, i) => s + Number(config[`q${i + 1}_adjust`] || 0), 0);
   const totalActual = actualSpendQ.reduce((s, v) => s + v, 0);
-  const executionRate = annualBudget > 0 ? Math.round((totalActual / annualBudget) * 100) : 0;
 
   const saveConfig = async (status?: string) => {
     setSavingConfig(true);
-    const update: any = { annual_budget: baseAnnual, q1_budget: qBudgets[0] - Number(config.q1_adjust||0), q2_budget: qBudgets[1] - Number(config.q2_adjust||0), q3_budget: qBudgets[2] - Number(config.q3_adjust||0), q4_budget: qBudgets[3] - Number(config.q4_adjust||0) };
+    setErrorMsg('');
+    // Safety: refuse to save if budget values haven't loaded from DB
+    if (!dataLoaded || annualBudget <= 0) {
+      setErrorMsg('数据加载中，请稍后再试');
+      setSavingConfig(false);
+      return;
+    }
+    const update: any = {
+      annual_budget: baseAnnual,
+      q1_budget: qBudgets[0] - Number(config.q1_adjust || 0),
+      q2_budget: qBudgets[1] - Number(config.q2_adjust || 0),
+      q3_budget: qBudgets[2] - Number(config.q3_adjust || 0),
+      q4_budget: qBudgets[3] - Number(config.q4_adjust || 0),
+    };
     if (status) update.status = status;
     if (status === 'approved') update.approved_at = new Date().toISOString();
     if (status === 'draft') { update.approved_at = null; update.q1_adjust = 0; update.q2_adjust = 0; update.q3_adjust = 0; update.q4_adjust = 0; }
-    await supabase.from('marketing_budget_config').upsert({ id: 'current', ...update });
+
+    const { error } = await supabase.from('marketing_budget_config').upsert({ id: 'current', ...update });
+    if (error) {
+      setErrorMsg('保存失败: ' + error.message + ' (code: ' + error.code + ')');
+      setSavingConfig(false);
+      return;
+    }
     await logChange(status === 'approved' ? '批复通过' : status === 'pending' ? '提交审批' : status === 'draft' ? '重新批复（恢复编辑）' : '保存');
     setConfig((prev: any) => ({ ...prev, ...update }));
     setSavingConfig(false);
-    if (status === 'draft' || status === 'approved') window.location.reload();
+    // Reload change log
+    supabase.from('budget_change_log').select('*').eq('config_id', 'current').order('created_at', { ascending: false }).limit(20).then(({ data }: any) => { if (data) setChangeLog(data); });
   };
 
   const saveAdjustment = async () => {
     setSavingConfig(true);
+    setErrorMsg('');
     const newQ1 = Number(config.q1_budget || 0) + Number(config.q1_adjust || 0);
     const newQ2 = Number(config.q2_budget || 0) + Number(config.q2_adjust || 0);
     const newQ3 = Number(config.q3_budget || 0) + Number(config.q3_adjust || 0);
     const newQ4 = Number(config.q4_budget || 0) + Number(config.q4_adjust || 0);
-    await supabase.from('marketing_budget_config').upsert({
+    const { error } = await supabase.from('marketing_budget_config').upsert({
       id: 'current', status: 'approved',
       q1_budget: newQ1, q2_budget: newQ2, q3_budget: newQ3, q4_budget: newQ4,
       q1_adjust: 0, q2_adjust: 0, q3_adjust: 0, q4_adjust: 0,
     });
+    if (error) {
+      setErrorMsg('调整失败: ' + error.message);
+      setSavingConfig(false);
+      return;
+    }
+    setConfig((prev: any) => ({ ...prev, q1_budget: newQ1, q2_budget: newQ2, q3_budget: newQ3, q4_budget: newQ4, q1_adjust: 0, q2_adjust: 0, q3_adjust: 0, q4_adjust: 0 }));
     setShowAdjust(false);
     setSavingConfig(false);
-    window.location.reload();
   };
 
   const totalPlans = plan.length;
   const completedPlans = plan.filter((p: any) => p.execution_status === 'Completed').length;
   const inProgressPlans = plan.filter((p: any) => p.execution_status === 'In Progress').length;
-  const pendingPlans = plan.filter((p: any) => p.execution_status === 'Planning').length;
   const totalBudgetRequested = plan.reduce((s: number, p: any) => s + Number(p.total_budget || 0), 0);
   const totalBudgetApproved = plan.reduce((s: number, p: any) => s + Number(p.approved_amount || 0), 0);
   const totalExpectedAttendees = plan.reduce((s: number, p: any) => s + Number(p.expected_attendees || 0), 0);
@@ -191,10 +207,19 @@ export const MarketingPlanPage = () => {
         <div className="flex items-center gap-3">
           <button onClick={() => navigate('/marketing')} className="p-1.5 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800"><ArrowLeft className="w-5 h-5" /></button>
           <div>
-            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">年度营销预算规划</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">年度营销预算规划 · <span className="text-sm font-normal text-neutral-500">{currencyName(globalCurrency)} ({globalCurrency})</span></h1>
+              {/* Year selector */}
+              <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-lg px-1">
+                <button onClick={() => currentYear > 2024 && setCurrentYear(currentYear - 1)} className="p-1 hover:bg-white dark:hover:bg-neutral-700 rounded"><ChevronLeft className="w-3.5 h-3.5" /></button>
+                <select value={currentYear} onChange={e => setCurrentYear(Number(e.target.value))} className="bg-transparent text-sm font-semibold focus:outline-none cursor-pointer px-1">
+                  {availableYears.map(y => <option key={y} value={y}>{y}年</option>)}
+                </select>
+                <button onClick={() => currentYear < now.getFullYear() + 1 && setCurrentYear(currentYear + 1)} className="p-1 hover:bg-white dark:hover:bg-neutral-700 rounded"><ChevronRight className="w-3.5 h-3.5" /></button>
+              </div>
+            </div>
             <p className="text-sm text-neutral-500">
-              {new Date().getFullYear()}年度 ·
-              <span className={`ml-1 px-2 py-0.5 rounded text-xs font-medium ${STATUS_BG[config.status] || STATUS_BG['draft']} ${STATUS_COLOR[config.status] || STATUS_COLOR['draft']}`}>{STATUS_LABEL[config.status] || STATUS_LABEL['draft']}</span>
+              <span className={`px-2 py-0.5 rounded text-xs font-medium ${STATUS_BG[config.status] || STATUS_BG['draft']} ${STATUS_COLOR[config.status] || STATUS_COLOR['draft']}`}>{STATUS_LABEL[config.status] || STATUS_LABEL['draft']}</span>
               {isDraft && ' · 可编辑年度和季度预算'}
               {isPending && ' · 等待市场总监批复'}
               {isApproved && ' · 已锁定，可申请调整预算'}
@@ -202,101 +227,38 @@ export const MarketingPlanPage = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isDraft && <Button variant="secondary" size="sm" onClick={() => saveConfig()} disabled={savingConfig}><Save className="w-4 h-4" />保存</Button>}
-          {isDraft && <Button variant="brand" size="sm" onClick={() => saveConfig('pending')} disabled={savingConfig}><Send className="w-4 h-4" />提交审批</Button>}
-          {isPending && (
-            <>
-              <Button variant="danger" size="sm" onClick={() => saveConfig('draft')}><XCircle className="w-4 h-4" />驳回</Button>
-              <Button variant="brand" size="sm" onClick={() => saveConfig('approved')}><CheckCircle2 className="w-4 h-4" />批复通过</Button>
-            </>
-          )}
-          {isApproved && !showAdjust && (
-            <>
-              <Button variant="secondary" size="sm" onClick={() => setShowAdjust(true)}><TrendingUp className="w-4 h-4" />调整预算</Button>
-              <Button variant="secondary" size="sm" onClick={() => saveConfig('draft')}><RefreshCw className="w-4 h-4" />重新批复</Button>
-            </>
-          )}
+          {!dataLoaded && <span className="text-xs text-neutral-400">加载中...</span>}
+          {dataLoaded && isDraft && <><Button variant="secondary" size="sm" onClick={() => saveConfig()} disabled={savingConfig}><Save className="w-4 h-4" />保存</Button><Button variant="brand" size="sm" onClick={() => saveConfig('pending')} disabled={savingConfig}><Send className="w-4 h-4" />提交审批</Button></>}
+          {dataLoaded && isPending && <><Button variant="danger" size="sm" onClick={() => saveConfig('draft')}><XCircle className="w-4 h-4" />驳回</Button><Button variant="brand" size="sm" onClick={() => saveConfig('approved')}><CheckCircle2 className="w-4 h-4" />批复通过</Button></>}
+          {dataLoaded && isApproved && !showAdjust && <><Button variant="secondary" size="sm" onClick={() => setShowAdjust(true)}><TrendingUp className="w-4 h-4" />调整预算</Button><Button variant="secondary" size="sm" onClick={() => saveConfig('draft')}><RefreshCw className="w-4 h-4" />重新批复</Button></>}
         </div>
       </div>
+      {errorMsg && <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600">{errorMsg}</div>}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-blue-600" />
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {[
+          { label: '年度总预算', value: fmtW(annualBudget), icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+          { label: '预算执行率', value: budgetUtilizationRate + '%', icon: BarChart3, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+          { label: '活动计划', value: totalPlans + ' 项', icon: PieChart, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+          { label: '进行中', value: inProgressPlans + ' 项', icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+          { label: '已完成', value: completedPlans + ' 项', icon: CheckCircle, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+          { label: '预计参会', value: totalExpectedAttendees + ' 人', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
+        ].map((kpi, i) => (
+          <Card key={i}>
+            <div className="flex items-center gap-3 p-4">
+              <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center`}><kpi.icon className={kpi.color} /></div>
+              <div><p className="text-xs text-neutral-500">{kpi.label}</p><p className="text-lg font-semibold text-neutral-900 dark:text-white">{kpi.value}</p></div>
             </div>
-            <div>
-              <p className="text-xs text-neutral-500">年度总预算</p>
-              <p className="text-lg font-semibold text-neutral-900 dark:text-white">{fmtW(annualBudget)}</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-              <BarChart3 className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-500">预算执行率</p>
-              <p className="text-lg font-semibold text-emerald-600">{budgetUtilizationRate}%</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center">
-              <PieChart className="w-5 h-5 text-amber-600" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-500">活动计划</p>
-              <p className="text-lg font-semibold text-neutral-900 dark:text-white">{totalPlans} 项</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-500">进行中</p>
-              <p className="text-lg font-semibold text-blue-600">{inProgressPlans} 项</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-              <CheckCircle className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-500">已完成</p>
-              <p className="text-lg font-semibold text-purple-600">{completedPlans} 项</p>
-            </div>
-          </div>
-        </Card>
-        <Card>
-          <div className="flex items-center gap-3 p-4">
-            <div className="w-10 h-10 rounded-lg bg-indigo-50 dark:bg-indigo-900/20 flex items-center justify-center">
-              <Users className="w-5 h-5 text-indigo-600" />
-            </div>
-            <div>
-              <p className="text-xs text-neutral-500">预计参会</p>
-              <p className="text-lg font-semibold text-indigo-600">{totalExpectedAttendees} 人</p>
-            </div>
-          </div>
-        </Card>
+          </Card>
+        ))}
       </div>
 
       {/* Adjust Modal */}
       {showAdjust && (
         <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10">
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-amber-600" />
-              预算调整申请
-            </CardTitle>
+            <CardTitle className="flex items-center gap-2"><AlertCircle className="w-4 h-4 text-amber-600" />预算调整申请</CardTitle>
             <span className="text-xs text-amber-600">在原批复预算基础上调整</span>
           </CardHeader>
           <CardContent>
@@ -316,7 +278,7 @@ export const MarketingPlanPage = () => {
         </Card>
       )}
 
-      {/* Budget Display */}
+      {/* Budget Display + Change Log */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
           <CardHeader><CardTitle><History className="w-4 h-4 inline mr-1" />预算修改记录</CardTitle></CardHeader>
@@ -328,7 +290,7 @@ export const MarketingPlanPage = () => {
                     <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${log.action === '批复通过' ? 'bg-emerald-500' : log.action?.includes('重新批复') ? 'bg-amber-500' : 'bg-blue-500'}`} />
                     <div className="flex-1">
                       <p className="text-xs font-medium">{log.action}</p>
-                      <p className="text-[10px] text-neutral-400">Q1: {fmtW(Number(log.q1_budget||0))} · Q2: {fmtW(Number(log.q2_budget||0))} · Q3: {fmtW(Number(log.q3_budget||0))} · Q4: {fmtW(Number(log.q4_budget||0))}</p>
+                      <p className="text-[10px] text-neutral-400">Q1:{fmtW(Number(log.q1_budget||0))} Q2:{fmtW(Number(log.q2_budget||0))} Q3:{fmtW(Number(log.q3_budget||0))} Q4:{fmtW(Number(log.q4_budget||0))}</p>
                       <p className="text-[10px] text-neutral-400">{new Date(log.created_at).toLocaleString('zh-CN')}</p>
                     </div>
                   </div>
@@ -344,39 +306,21 @@ export const MarketingPlanPage = () => {
               {totalAdjust > 0 && <span className="text-xs text-amber-600">含调整预算 {fmtW(totalAdjust)}</span>}
             </div>
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                <span className="text-xs text-neutral-500">预算</span>
-              </div>
-              <div className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                <span className="text-xs text-neutral-500">实际支出</span>
-              </div>
+              <span className="w-3 h-3 rounded-full bg-blue-500"></span><span className="text-xs text-neutral-500">预算</span>
+              <span className="w-3 h-3 rounded-full bg-emerald-500"></span><span className="text-xs text-neutral-500">实际支出</span>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center">
-                <p className="text-[10px] text-blue-600 uppercase">总预算</p>
-                <p className="text-xl font-bold text-blue-700 dark:text-blue-300">{fmtW(annualBudget)}</p>
-              </div>
-              <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                <p className="text-[10px] text-neutral-400 uppercase">原批复</p>
-                <p className="text-xl font-bold">{fmtW(baseAnnual)}</p>
-              </div>
-              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center">
-                <p className="text-[10px] text-amber-600 uppercase">调整</p>
-                <p className="text-xl font-bold text-amber-700 dark:text-amber-400">{fmtW(totalAdjust)}</p>
-              </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-xl text-center"><p className="text-[10px] text-blue-600 uppercase">总预算</p><p className="text-xl font-bold text-blue-700 dark:text-blue-300">{fmtW(annualBudget)}</p></div>
+              <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center"><p className="text-[10px] text-neutral-400 uppercase">原批复</p><p className="text-xl font-bold">{fmtW(baseAnnual)}</p></div>
+              <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-xl text-center"><p className="text-[10px] text-amber-600 uppercase">调整</p><p className="text-xl font-bold text-amber-700 dark:text-amber-400">{fmtW(totalAdjust)}</p></div>
             </div>
             <div className="space-y-4">
               {QUARTERS.map((q, i) => {
-                const base = Number(config[`q${i + 1}_budget`] || 0);
-                const adj = Number(config[`q${i + 1}_adjust`] || 0);
                 const actual = actualSpendQ[i];
                 const pct = qBudgets[i] > 0 ? Math.round((actual / qBudgets[i]) * 100) : 0;
                 const diff = qBudgets[i] - actual;
-                const now = new Date();
                 const curQ = Math.floor(now.getMonth() / 3) + 1;
                 return (
                   <div key={q} className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
@@ -390,25 +334,17 @@ export const MarketingPlanPage = () => {
                           <span className="text-sm font-bold">{fmtW(qBudgets[i])}</span>
                         )}
                       </div>
-                      {i + 1 <= curQ && (
-                        <div className="flex items-center gap-2">
-                          <span className={`text-xs ${pct > 100 ? 'text-red-500' : pct > 80 ? 'text-amber-500' : 'text-emerald-600'}`}>
-                            实际 {fmtW(actual)} ({pct}%)
-                          </span>
-                          <span className={`text-xs font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                            {diff >= 0 ? `剩余 ${fmtW(diff)}` : `超支 ${fmtW(Math.abs(diff))}`}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                    {i + 1 <= curQ && actual > 0 && (
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${pct > 100 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
-                        </div>
-                        <span className="text-xs text-neutral-500">{pct}%</span>
+                        <span className={`text-xs ${pct > 100 ? 'text-red-500' : pct > 80 ? 'text-amber-500' : 'text-emerald-600'}`}>实际 {fmtW(actual)}</span>
+                        <span className={`text-xs font-medium ${diff >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>{diff >= 0 ? `剩余 ${fmtW(diff)}` : `超支 ${fmtW(Math.abs(diff))}`}</span>
                       </div>
-                    )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${pct > 100 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(pct, 100)}%` }} />
+                      </div>
+                      <span className="text-xs text-neutral-500">{pct}%</span>
+                    </div>
                   </div>
                 );
               })}
@@ -419,7 +355,7 @@ export const MarketingPlanPage = () => {
 
       {/* Budget Distribution Chart */}
       <Card>
-        <CardHeader><CardTitle>{new Date().getFullYear()}年度预算分配与执行情况</CardTitle></CardHeader>
+        <CardHeader><CardTitle>{currentYear}年度预算分配与执行情况</CardTitle></CardHeader>
         <CardContent>
           <div className="flex flex-col lg:flex-row items-center gap-8">
             <PieSVG data={qBudgets} size={140} currency={globalCurrency} />
@@ -430,44 +366,18 @@ export const MarketingPlanPage = () => {
                   const pct = qBudgets[i] > 0 ? Math.round((actualSpendQ[i] / qBudgets[i]) * 100) : 0;
                   return (
                     <div key={q} className="p-3 rounded-lg" style={{ backgroundColor: `${QCOLORS[i]}15` }}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-2 h-2 rounded-full" style={{ background: QCOLORS[i] }} />
-                        <span className="text-xs font-medium">{q}</span>
-                      </div>
+                      <div className="flex items-center gap-2 mb-2"><div className="w-2 h-2 rounded-full" style={{ background: QCOLORS[i] }} /><span className="text-xs font-medium">{q}</span></div>
                       <p className="text-lg font-bold" style={{ color: QCOLORS[i] }}>{fmtW(qBudgets[i])}</p>
-                      <p className="text-[10px] text-neutral-500">
-                        {actualSpendQ[i] > 0 ? (
-                          <span>
-                            已支出 {fmtW(actualSpendQ[i])} ({pct}%)
-                            {remaining >= 0 ? (
-                              <span className="text-emerald-600 ml-1">剩余 {fmtW(remaining)}</span>
-                            ) : (
-                              <span className="text-red-500 ml-1">超支 {fmtW(Math.abs(remaining))}</span>
-                            )}
-                          </span>
-                        ) : '暂未支出'}
-                      </p>
+                      <p className="text-[10px] text-neutral-500">已支出 {fmtW(actualSpendQ[i])} ({pct}%) · {remaining >= 0 ? <span className="text-emerald-600">剩余 {fmtW(remaining)}</span> : <span className="text-red-500">超支 {fmtW(Math.abs(remaining))}</span>}</p>
                     </div>
                   );
                 })}
               </div>
               <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-neutral-600 dark:text-neutral-400">年度预算总计</span>
-                  <span className="font-bold text-blue-600">{fmtW(annualBudget)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1">
-                  <span className="text-neutral-600 dark:text-neutral-400">年度实际支出</span>
-                  <span className="font-bold text-emerald-600">{fmtW(totalActual)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1">
-                  <span className="text-neutral-600 dark:text-neutral-400">预算申请总额</span>
-                  <span className="font-bold text-amber-600">{fmtW(totalBudgetRequested)}</span>
-                </div>
-                <div className="flex items-center justify-between text-xs mt-1">
-                  <span className="text-neutral-600 dark:text-neutral-400">预算批复总额</span>
-                  <span className="font-bold text-purple-600">{fmtW(totalBudgetApproved)}</span>
-                </div>
+                <div className="flex items-center justify-between text-xs"><span className="text-neutral-600 dark:text-neutral-400">年度预算总计</span><span className="font-bold text-blue-600">{fmtW(annualBudget)}</span></div>
+                <div className="flex items-center justify-between text-xs mt-1"><span className="text-neutral-600 dark:text-neutral-400">年度实际支出</span><span className="font-bold text-emerald-600">{fmtW(totalActual)}</span></div>
+                <div className="flex items-center justify-between text-xs mt-1"><span className="text-neutral-600 dark:text-neutral-400">预算申请总额</span><span className="font-bold text-amber-600">{fmtW(totalBudgetRequested)}</span></div>
+                <div className="flex items-center justify-between text-xs mt-1"><span className="text-neutral-600 dark:text-neutral-400">预算批复总额</span><span className="font-bold text-purple-600">{fmtW(totalBudgetApproved)}</span></div>
               </div>
             </div>
           </div>
@@ -484,6 +394,19 @@ export const MarketingPlanPage = () => {
         const updateRow = (id: string, f: string, v: any) => setPlan(prev => prev.map(p => p.id === id ? { ...p, [f]: v } : p));
         const addRow = () => setPlan(prev => [...prev, { id: 'new-' + Date.now() + Math.random(), year: currentYear, quarter: q, activity_type: 'Marketing', partner_id: '', partner_name: '', category: '线下峰会', region: '', city: '', expected_date: '', total_budget: 0, approved_amount: 0, expected_attendees: 0, expected_output: '', responsible_person: '', goal: '', execution_status: 'Planning', budget: 0, target_leads: 0, target_opps: 0, _new: true }]);
         const removeRow = (id: string) => setPlan(prev => prev.filter(p => p.id !== id));
+        const savePlanRows = async (targetPlanStatus: 'draft' | 'submitted') => {
+          for (const p of items) {
+            const r: any = { year: currentYear, quarter: q, category: p.category, activity_type: p.activity_type, partner_id: p.partner_id, partner_name: p.partner_name, region: p.region, city: p.city, expected_date: p.expected_date, total_budget: Number(p.total_budget)||0, approved_amount: Number(p.approved_amount)||0, expected_attendees: Number(p.expected_attendees)||0, expected_output: p.expected_output, responsible_person: p.responsible_person, goal: p.goal, execution_status: p.execution_status, plan_status: targetPlanStatus, budget: Number(p.total_budget)||0, target_leads: Number(p.expected_output)||0, target_opps: 0 };
+            if ((p as any)._new) await supabase.from('marketing_plan').insert(r);
+            else await supabase.from('marketing_plan').update(r).eq('id', p.id);
+          }
+          loadData(currentYear);
+        };
+        const approveAll = async () => {
+          for (const p of items) { await supabase.from('marketing_plan').update({ plan_status: 'approved' }).eq('id', p.id); }
+          loadData(currentYear);
+        };
+
         return (
           <Card key={q}>
             <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -499,15 +422,15 @@ export const MarketingPlanPage = () => {
                       return <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${colors[pStatus] || colors.draft}`}>{labels[pStatus] || '草稿'}</span>;
                     })()}
                   </div>
-                  <span className="text-xs text-neutral-400">季度预算 {fmtW(qBudget)} · 已批复 {fmtW(approvedTotal)} · {items.length} 项 · {remaining >= 0 ? <span className="text-emerald-600">剩余 {fmtW(remaining)}</span> : <span className="text-red-500">超支 {fmtW(Math.abs(remaining))}</span>}</span>
+                  <span className="text-xs text-neutral-400">季度预算 {fmtW(qBudget)} · 已批复 {fmtW(approvedTotal)} · {items.length} 项 · {lineTotal > 0 ? <span>申请 {fmtW(lineTotal)} · </span> : ''}{remaining >= 0 ? <span className="text-emerald-600">剩余 {fmtW(remaining)}</span> : <span className="text-red-500">超支 {fmtW(Math.abs(remaining))}</span>}{items.filter((p: any) => p.activity_type === 'PMDF').length > 0 ? <span className="text-purple-500"> · PMDF {items.filter((p: any) => p.activity_type === 'PMDF').length}项</span> : ''}</span>
                 </div>
               </div>
               <div className="flex items-center gap-1">
                 <Button variant="secondary" size="sm" onClick={addRow}><Plus className="w-3.5 h-3.5" />添加</Button>
-                <Button variant="secondary" size="sm" onClick={async () => { for (const p of items) { const r = { year: currentYear, quarter: q, category: p.category, activity_type: p.activity_type, partner_id: p.partner_id, partner_name: p.partner_name, region: p.region, city: p.city, expected_date: p.expected_date, total_budget: Number(p.total_budget)||0, approved_amount: Number(p.approved_amount)||0, expected_attendees: Number(p.expected_attendees)||0, expected_output: p.expected_output, responsible_person: p.responsible_person, goal: p.goal, execution_status: p.execution_status, plan_status: 'draft', budget: Number(p.total_budget)||0, target_leads: Number(p.expected_output)||0, target_opps: 0 }; if ((p as any)._new) await supabase.from('marketing_plan').insert(r); else await supabase.from('marketing_plan').update(r).eq('id', p.id); } window.location.reload(); }}>保存</Button>
-                <Button variant="brand" size="sm" onClick={async () => { for (const p of items) { const r = { year: currentYear, quarter: q, category: p.category, activity_type: p.activity_type, partner_id: p.partner_id, partner_name: p.partner_name, region: p.region, city: p.city, expected_date: p.expected_date, total_budget: Number(p.total_budget)||0, approved_amount: Number(p.approved_amount)||0, expected_attendees: Number(p.expected_attendees)||0, expected_output: p.expected_output, responsible_person: p.responsible_person, goal: p.goal, execution_status: p.execution_status, plan_status: 'submitted', budget: Number(p.total_budget)||0, target_leads: Number(p.expected_output)||0, target_opps: 0 }; if ((p as any)._new) await supabase.from('marketing_plan').insert(r); else await supabase.from('marketing_plan').update(r).eq('id', p.id); } window.location.reload(); }}>提交</Button>
+                <Button variant="secondary" size="sm" onClick={() => savePlanRows('draft')}>保存</Button>
+                <Button variant="brand" size="sm" onClick={() => savePlanRows('submitted')}>提交</Button>
                 {items.length > 0 && items[0].plan_status === 'submitted' && (
-                  <Button variant="brand" size="sm" onClick={async () => { for (const p of items) { await supabase.from('marketing_plan').update({ plan_status: 'approved' }).eq('id', p.id); } window.location.reload(); }}>批复通过</Button>
+                  <Button variant="brand" size="sm" onClick={approveAll}>批复通过</Button>
                 )}
               </div>
             </CardHeader>
@@ -519,18 +442,7 @@ export const MarketingPlanPage = () => {
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-neutral-200 dark:border-neutral-800 text-[10px] text-neutral-500">
-                        <th className="text-left py-2 px-2">类型</th>
-                        <th className="text-left py-2 px-2">合作伙伴</th>
-                        <th className="text-left py-2 px-2">类别</th>
-                        <th className="text-left py-2 px-2">城市</th>
-                        <th className="text-left py-2 px-2">时间</th>
-                        <th className="text-right py-2 px-2">总预算</th>
-                        <th className="text-right py-2 px-2">批复</th>
-                        <th className="text-right py-2 px-2">参加人数</th>
-                        <th className="text-left py-2 px-2">产出</th>
-                        <th className="text-left py-2 px-2">负责人</th>
-                        <th className="text-center py-2 px-2">状态</th>
-                        <th className="w-8"></th>
+                        <th className="text-left py-2 px-2">类型</th><th className="text-left py-2 px-2">合作伙伴</th><th className="text-left py-2 px-2">类别</th><th className="text-left py-2 px-2">城市</th><th className="text-left py-2 px-2">时间</th><th className="text-right py-2 px-2">总预算</th><th className="text-right py-2 px-2">批复</th><th className="text-right py-2 px-2">参加人数</th><th className="text-left py-2 px-2">产出</th><th className="text-left py-2 px-2">负责人</th><th className="text-center py-2 px-2">状态</th><th className="w-8"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -540,62 +452,50 @@ export const MarketingPlanPage = () => {
                           <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                             <td className="py-2 px-2">
                               <select value={p.activity_type || 'Marketing'} onChange={e => updateRow(p.id, 'activity_type', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">
-                                <option value="Marketing">Marketing</option>
-                                <option value="PMDF">PMDF</option>
+                                <option value="Marketing">Marketing</option><option value="PMDF">PMDF</option>
                               </select>
                             </td>
                             <td className="py-2 px-2">
                               {isPMDF ? (
-                                <SearchableSelect value={p.partner_id || ''} onChange={(id, label) => { updateRow(p.id, 'partner_id', id); updateRow(p.id, 'partner_name', label); }} options={partners.map((pt: any) => ({ id: pt.id, label: pt.name, sub: pt.tier }))} placeholder="搜索伙伴..." className="w-28" />
-                              ) : (
-                                <span className="text-neutral-400 text-[11px]">自办</span>
-                              )}
+                                <div>
+                                  <SearchableSelect value={p.partner_id || ''} onChange={(id, label) => { updateRow(p.id, 'partner_id', id); updateRow(p.id, 'partner_name', label); }} options={partners.map((pt: any) => ({ id: pt.id, label: pt.name, sub: pt.tier }))} placeholder="搜索伙伴..." className="w-28" />
+                                  {p.partner_id && partnerMDF[p.partner_id] && (
+                                    <span className={`text-[9px] block ${partnerMDF[p.partner_id].remaining > 0 ? 'text-emerald-600' : 'text-red-500'}`}>MDF: {fmtW(partnerMDF[p.partner_id].allocated)} / 余{fmtW(partnerMDF[p.partner_id].remaining)}</span>
+                                  )}
+                                </div>
+                              ) : <span className="text-neutral-400 text-[11px]">自办</span>}
                             </td>
-                            <td className="py-2 px-2">
-                              <select value={p.category || '线下峰会'} onChange={e => updateRow(p.id, 'category', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">
-                                {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                              </select>
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-20 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.city || ''} onChange={e => updateRow(p.id, 'city', e.target.value)} placeholder="城市" />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-28 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="date" value={p.expected_date || ''} onChange={e => updateRow(p.id, 'expected_date', e.target.value)} />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.total_budget || ''} onChange={e => updateRow(p.id, 'total_budget', e.target.value)} />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.approved_amount || ''} onChange={e => updateRow(p.id, 'approved_amount', e.target.value)} />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-12 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.expected_attendees || ''} onChange={e => updateRow(p.id, 'expected_attendees', e.target.value)} />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.expected_output || ''} onChange={e => updateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
-                            </td>
-                            <td className="py-2 px-2">
-                              <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.responsible_person || ''} onChange={e => updateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" />
-                            </td>
+                            <td className="py-2 px-2"><select value={p.category || '线下峰会'} onChange={e => updateRow(p.id, 'category', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">{CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}</select></td>
+                            <td className="py-2 px-2"><input className="w-20 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.city || ''} onChange={e => updateRow(p.id, 'city', e.target.value)} placeholder="城市" /></td>
+                            <td className="py-2 px-2"><input className="w-28 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="date" value={p.expected_date || ''} onChange={e => updateRow(p.id, 'expected_date', e.target.value)} /></td>
+                            <td className="py-2 px-2"><input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.total_budget || ''} onChange={e => updateRow(p.id, 'total_budget', e.target.value)} /></td>
+                            <td className="py-2 px-2"><input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.approved_amount || ''} onChange={e => updateRow(p.id, 'approved_amount', e.target.value)} /></td>
+                            <td className="py-2 px-2"><input className="w-12 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" type="number" value={p.expected_attendees || ''} onChange={e => updateRow(p.id, 'expected_attendees', e.target.value)} /></td>
+                            <td className="py-2 px-2"><input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.expected_output || ''} onChange={e => updateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" /></td>
+                            <td className="py-2 px-2"><input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none" value={p.responsible_person || ''} onChange={e => updateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" /></td>
                             <td className="py-2 px-2">
                               <select value={p.execution_status || 'Planning'} onChange={e => updateRow(p.id, 'execution_status', e.target.value)} className={`w-16 bg-transparent text-[11px] focus:outline-none ${p.execution_status === 'Completed' ? 'text-emerald-600' : p.execution_status === 'In Progress' ? 'text-blue-600' : p.execution_status === 'Cancelled' ? 'text-red-400' : 'text-neutral-500'}`}>
                                 {EXEC_STATUSES.map(s => <option key={s} value={s}>{EXEC_LABELS[s]}</option>)}
                               </select>
                             </td>
-                            <td className="py-2 px-2">
-                              <button onClick={() => removeRow(p.id)} className="p-1 text-neutral-400 hover:text-red-500 transition-colors">
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            </td>
+                            <td className="py-2 px-2"><button onClick={() => removeRow(p.id)} className="p-1 text-neutral-400 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button></td>
                           </tr>
                         );
                       })}
+                      {/* Category breakdown */}
+                      {(() => {
+                        const catMap: Record<string, { count: number; budget: number; approved: number; attendees: number }> = {};
+                        items.forEach((p: any) => {
+                          const cat = p.category || '其他';
+                          if (!catMap[cat]) catMap[cat] = { count: 0, budget: 0, approved: 0, attendees: 0 };
+                          catMap[cat].count++; catMap[cat].budget += Number(p.total_budget || 0); catMap[cat].approved += Number(p.approved_amount || 0); catMap[cat].attendees += Number(p.expected_attendees || 0);
+                        });
+                        return Object.entries(catMap).map(([cat, agg]) => (
+                          <tr key={`cat-${cat}`} className="text-[10px] text-neutral-500"><td className="py-1 px-2" colSpan={5}>  └ {cat} ({agg.count}项)</td><td className="py-1 px-2 text-right">{fmtW(agg.budget)}</td><td className="py-1 px-2 text-right">{fmtW(agg.approved)}</td><td className="py-1 px-2 text-right">{agg.attendees}</td><td colSpan={4}></td></tr>
+                        ));
+                      })()}
                       <tr className="bg-neutral-50 dark:bg-neutral-800/50 font-semibold text-[11px]">
-                        <td className="py-2 px-2" colSpan={5}>合计 {items.length} 项</td>
-                        <td className="py-2 px-2 text-right">{fmtW(lineTotal)}</td>
-                        <td className="py-2 px-2 text-right">{fmtW(approvedTotal)}</td>
-                        <td className="py-2 px-2 text-right">{items.reduce((s: number, p: any) => s + Number(p.expected_attendees||0), 0)}</td>
-                        <td colSpan={4}></td>
+                        <td className="py-2 px-2" colSpan={5}>合计 {items.length} 项</td><td className="py-2 px-2 text-right">{fmtW(lineTotal)}</td><td className="py-2 px-2 text-right">{fmtW(approvedTotal)}</td><td className="py-2 px-2 text-right">{items.reduce((s: number, p: any) => s + Number(p.expected_attendees||0), 0)}</td><td colSpan={4}></td>
                       </tr>
                     </tbody>
                   </table>
@@ -606,9 +506,7 @@ export const MarketingPlanPage = () => {
         );
       })}
 
-      <div className="flex justify-end">
-        <Button variant="secondary" onClick={() => navigate('/marketing')}>返回营销首页</Button>
-      </div>
+      <div className="flex justify-end"><Button variant="secondary" onClick={() => navigate('/marketing')}>返回营销首页</Button></div>
     </div>
   );
 };

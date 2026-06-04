@@ -1,4 +1,5 @@
-import { useState, useMemo, useDeferredValue, useCallback } from 'react';
+import { useState, useEffect, useMemo, useDeferredValue, useCallback } from 'react';
+import { TIER_STYLES, STATUS_CONFIG } from '../../lib/partner-labels';
 import { useNavigate } from 'react-router-dom';
 import { Search, Upload, Pencil, Trash2, MapPin, Phone, CheckCircle2, XCircle, X, CheckSquare, RefreshCw, Users, UserCheck, Clock, Star } from 'lucide-react';
 import { Partner, PartnerStatus, PartnerTier } from '../../types';
@@ -14,8 +15,8 @@ import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
-import { TIER_STYLES, TYPE_LABELS, STATUS_CONFIG, TIER_LABELS } from '../../lib/partner-labels';
 import { partnerService } from '../../services/partner-service';
+import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 
 interface PartnerListProps {
@@ -43,6 +44,14 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const [tab, setTab] = useState<'all' | 'pending'>('all');
   const [approvePartner, setApprovePartner] = useState<Partner | null>(null);
   const [approvalForm, setApprovalForm] = useState({ tier: 'Gold' as PartnerTier, status: 'Cooperating' as PartnerStatus, tags: '', manager: '' });
+  // Load internal users from settings for manager selection
+  const [internalUsers, setInternalUsers] = useState<{name:string}[]>([]);
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('internal_users') || '[]');
+      setInternalUsers(saved.filter((u: any) => u.status === 'active'));
+    } catch {}
+  }, []);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const { toast } = useToast();
@@ -104,6 +113,19 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
         manager: approvalForm.manager,
         tags: approvalForm.tags.split(',').map((s: string) => s.trim()).filter(Boolean),
       }, user?.email || 'admin');
+
+      // Auto-generate milestone events
+      const now = new Date().toISOString().split('T')[0];
+      const milestones: any[] = [];
+      // Always add approved event
+      milestones.push({ id: crypto.randomUUID(), stage: 'approved', title: '合作伙伴批复通过', description: `正式成为${approvalForm.tier}级合作伙伴，渠道经理：${approvalForm.manager || '未指定'}`, date: now, year: now.split('-')[0], operator: user?.email || 'admin' });
+      // Add tier change event if tier changed from original
+      if (approvePartner.tier !== approvalForm.tier) {
+        const isUpgrade = ['Registered','Silver','Gold','Platinum','Diamond'].indexOf(approvalForm.tier) < ['Registered','Silver','Gold','Platinum','Diamond'].indexOf(approvalForm.tier);
+        milestones.push({ id: crypto.randomUUID(), stage: isUpgrade ? 'tier_upgrade' : 'tier_downgrade', title: `等级${isUpgrade?'提升':'调整'}：${approvePartner.tier} → ${approvalForm.tier}`, description: `合作伙伴等级从${approvePartner.tier}${isUpgrade?'晋升':'调整'}为${approvalForm.tier}`, date: now, year: now.split('-')[0], operator: user?.email || 'admin' });
+      }
+      await supabase.from('partners').update({ milestones }).eq('id', approvePartner.id);
+
       toast('success', `「${approvePartner.name}」已批复`);
       setApprovePartner(null);
       await refresh();
@@ -234,7 +256,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
           <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">{t('common.type')}</span>
           <select className="h-8 px-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-brand" value={typeFilter} onChange={(e) => { setTypeFilter(e.target.value); setPage(1); }}>
             <option value="All">{t('common.all')}</option>
-            {[...new Set([...(config.partnerTypes || ['Reseller','ISV','SI','Service','VAD','VAR','OEM']), ...partnerTypes])].map(t => <option key={t} value={t}>{TYPE_LABELS[t] || t}</option>)}
+            {[...new Set([...(config.partnerTypes || ['Reseller','ISV','SI','Service','VAD','VAR','OEM']), ...partnerTypes])].map(t => <option key={t} value={t}>{t}</option>)}
           </select>
         </div>
         {(statusFilter !== 'All' || tierFilter !== 'All' || typeFilter !== 'All') && (
@@ -281,7 +303,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-neutral-600 dark:text-neutral-300">{TYPE_LABELS[partner.type] || partner.type}</td>
+                      <td className="px-6 py-4 text-sm text-neutral-600 dark:text-neutral-300">{partner.type}</td>
                       <td className="px-6 py-4">
                         <span className={cn('inline-flex px-2 py-0.5 rounded-md text-xs font-medium border', tierStyle)}>{partner.tier}</span>
                       </td>
@@ -360,9 +382,9 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
             </div>
             <p className="text-sm text-neutral-500 mb-4">{t('partners.approveDesc')}「{approvePartner.name}」</p>
             <div className="space-y-3">
-              <Select label={t('partners.tier')} options={(config?.partnerTiers || ['Platinum','Gold','Silver','Registered']).map(v=>({value:v,label:TIER_LABELS[v as PartnerTier] || v}))} value={approvalForm.tier} onChange={(e) => setApprovalForm({...approvalForm, tier: e.target.value as PartnerTier})} />
+              <Select label={t('partners.tier')} options={(config?.partnerTiers || ['Platinum','Gold','Silver','Registered']).map(v=>({value:v,label:v}))} value={approvalForm.tier} onChange={(e) => setApprovalForm({...approvalForm, tier: e.target.value as PartnerTier})} />
               <Select label={t('partners.status')} options={(config?.partnerStatuses || ['Cooperating','Inactive','Prospective']).map(v=>({value:v,label:STATUS_CONFIG[v as PartnerStatus]?.label || v}))} value={approvalForm.status} onChange={(e) => setApprovalForm({...approvalForm, status: e.target.value as PartnerStatus})} />
-              <Input label={t('partners.manager')} value={approvalForm.manager} onChange={(e) => setApprovalForm({...approvalForm, manager: e.target.value})} placeholder={t('partners.managerPlaceholder')} />
+              <Select label={t('partners.manager')} options={[...internalUsers.map((u: any) => ({ value: u.name, label: `${u.name} · ${u.department || ''}` })), { value: '__custom', label: '其他（手动输入）' }]} value={approvalForm.manager} onChange={(e) => { if (e.target.value === '__custom') { const name = prompt('请输入渠道经理姓名:'); if (name) setApprovalForm({...approvalForm, manager: name}); } else { setApprovalForm({...approvalForm, manager: e.target.value}); } }} />
               <Input label={t('partners.tags')} value={approvalForm.tags} onChange={(e) => setApprovalForm({...approvalForm, tags: e.target.value})} placeholder={t('partners.tagsPlaceholder')} />
             </div>
             <div className="flex justify-end gap-3 mt-6">

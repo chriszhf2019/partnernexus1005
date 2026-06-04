@@ -1,6 +1,6 @@
 import { db } from '../lib/supabase';
-import type { Deal, DealLifecycleEvent, DealLifecycleStage } from '../types';
-import { DEALS, DEAL_STATS } from '../constants';
+import type { Deal, DealLifecycleEvent, DealLifecycleStage, DealRegistrationStats } from '../types';
+import { DEALS } from '../constants';
 import type { PaginatedResponse, DealFilters } from './types';
 
 // ── DB ↔ TS normalization ────────────────────────────
@@ -58,8 +58,10 @@ function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {
     isPriority: 'is_priority',
     hasConflict: 'has_conflict',
   };
+  // Known fields that don't exist in DB - skip them (expectedCloseDate is mapped to end_date above, so not skipped)
+  const skipFields = new Set(['lastActivityDate', 'customerIndustry', 'province', 'city', 'stage', 'lifecycle', 'sourceInfo', 'conversionMetrics', 'notes', 'nextAction', 'nextActionDate']);
   for (const [k, v] of Object.entries(deal)) {
-    if (v === undefined) continue;
+    if (v === undefined || skipFields.has(k)) continue;
     out[map[k] || k] = v;
   }
   return out;
@@ -98,11 +100,26 @@ export const dealService = {
   },
 
   create: async (deal: Omit<Deal, 'id'>): Promise<Deal> => {
-    const snake = toSnakeDeal(deal);
-    // Ensure required legacy columns exist
-    if (!snake.customer) snake.customer = deal.customerName || '';
-    snake.created_date = snake.created_date || new Date().toISOString().split('T')[0];
-    const { data, error } = await db.deals().insert(snake).select().single();
+    // Build insert object directly with only DB columns
+    const insertData: Record<string, any> = {
+      title: deal.title || '',
+      customer: deal.customerName || '',
+      value: Number(deal.value || 0),
+      partner_id: deal.partnerId || null,
+      partner_name: deal.partnerName || '',
+      partner_type: deal.partnerType || 'Reseller',
+      status: deal.status || 'Pending',
+      region: deal.region || '',
+      sales_name: deal.salesName || '',
+      sales_team: deal.salesTeam || (deal.partnerId ? '渠道报备' : '销售自建'),
+      product_type: deal.productType || '',
+      created_date: deal.createdDate || new Date().toISOString().split('T')[0],
+      end_date: deal.expectedCloseDate || '',
+      is_priority: deal.isPriority ?? false,
+      has_conflict: deal.hasConflict ?? false,
+      description: deal.description || '',
+    };
+    const { data, error } = await db.deals().insert(insertData).select().single();
     if (error) throw new Error(error.message);
     return normalizeDeal(data);
   },
@@ -114,5 +131,53 @@ export const dealService = {
     if (error) throw new Error(error.message);
   },
 
-  getStats: () => DEAL_STATS,
+  getStats: async (): Promise<DealRegistrationStats> => {
+    try {
+      const { data } = await db.deals().select('*');
+      const deals = ((data || []) as any[]).map(normalizeDeal);
+      const now = new Date();
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const weekStart = new Date(now.getTime() - now.getDay() * 86400000);
+
+      const wonDeals = deals.filter(d => d.status === 'Converted' || d.status === 'Closed Won' || d.status === 'Approved');
+      const stageDist = {} as Record<DealLifecycleStage, number>;
+      const sourceDist = {} as Record<string, number>;
+      deals.forEach(d => {
+        stageDist[d.stage] = (stageDist[d.stage] || 0) + 1;
+        const src = d.sourceInfo?.source || 'PartnerInitiated';
+        sourceDist[src] = (sourceDist[src] || 0) + 1;
+      });
+
+      return {
+        yearNew: deals.filter(d => d.createdDate && new Date(d.createdDate) >= yearStart).length,
+        quarterNew: deals.filter(d => d.createdDate && new Date(d.createdDate) >= quarterStart).length,
+        monthNew: deals.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
+        weekNew: deals.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
+        rejected: deals.filter(d => d.status === 'Rejected').length,
+        closed: wonDeals.length,
+        totalPipelineValue: deals.reduce((s, d) => s + Number(d.value || 0), 0),
+        avgCycleDays: deals.filter(d => d.conversionMetrics?.totalCycleDays).length > 0
+          ? Math.round(deals.reduce((s, d) => s + (d.conversionMetrics?.totalCycleDays || 0), 0) / deals.filter(d => d.conversionMetrics?.totalCycleDays).length)
+          : 0,
+        conversionRate: deals.length > 0
+          ? Math.round((wonDeals.length / deals.length) * 100)
+          : 0,
+        stageDistribution: stageDist as Record<DealLifecycleStage, number>,
+        sourceDistribution: sourceDist as Record<any, number>,
+        conflictCount: deals.filter(d => d.hasConflict).length,
+        overdueCount: deals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost' && d.status !== 'Converted').length,
+      };
+    } catch {
+      return {
+        yearNew: 0, quarterNew: 0, monthNew: 0, weekNew: 0,
+        rejected: 0, closed: 0, totalPipelineValue: 0, avgCycleDays: 0,
+        conversionRate: 0,
+        stageDistribution: {} as Record<DealLifecycleStage, number>,
+        sourceDistribution: {} as Record<string, number>,
+        conflictCount: 0, overdueCount: 0,
+      };
+    }
+  },
 };

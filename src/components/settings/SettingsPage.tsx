@@ -30,31 +30,13 @@ const deptOptions = [
   { value: '渠道商', label: '渠道商（外部）' },
 ];
 
-const defaultUsers: SystemUser[] = [
-  { id: 'u1', name: 'Alex Rivera', email: 'alex@partnernxus.com', role: 'admin', department: '管理层', phone: '13800000001', status: 'active', lastLogin: '2025-05-23 08:30', source: 'admin' },
-  { id: 'u2', name: '张伟', email: 'zhangw@partnernxus.com', role: 'channel_director', department: '渠道部', phone: '13800000002', status: 'active', lastLogin: '2025-05-22 17:15', source: 'admin' },
-  { id: 'u3', name: '李娜', email: 'lina@partnernxus.com', role: 'marketing_manager', department: '市场部', phone: '13800000003', status: 'active', lastLogin: '2025-05-23 09:00', source: 'admin' },
-  { id: 'u4', name: '王强', email: 'wangq@partnernxus.com', role: 'sales_manager', department: '销售部', phone: '13800000004', status: 'active', lastLogin: '2025-04-15 14:20', source: 'admin' },
-  { id: 'u5', name: '神州数码-管理员', email: 'dc_admin@digitalchina.com', role: 'partner_admin', department: '渠道商', phone: '13900000001', status: 'active', lastLogin: '2025-05-20 10:00', source: 'partner' },
-  { id: 'u6', name: '东软-销售', email: 'sales@neusoft.com', role: 'partner_sales', department: '渠道商', phone: '13900000002', status: 'active', lastLogin: '2025-05-21 14:30', source: 'partner' },
-  { id: 'u7', name: '浪潮-工程师', email: 'engineer@inspur.com', role: 'partner_engineer', department: '渠道商', phone: '13900000003', status: 'active', lastLogin: '2025-05-19 09:15', source: 'partner' },
-];
-
-const defaultLogs: OperationLog[] = [
-  { id: 'log1', userId: 'u1', userName: 'Alex Rivera', action: 'create', timestamp: '2025-05-23 08:30', operator: '系统管理员' },
-  { id: 'log2', userId: 'u2', userName: '张伟', action: 'create', timestamp: '2025-05-22 17:15', operator: 'Alex Rivera' },
-  { id: 'log3', userId: 'u5', userName: '神州数码-管理员', action: 'create', timestamp: '2025-05-20 10:00', operator: '张伟' },
-  { id: 'log4', userId: 'u6', userName: '东软-销售', action: 'create', timestamp: '2025-05-21 14:30', operator: '张伟' },
-  { id: 'log5', userId: 'u7', userName: '浪潮-工程师', action: 'create', timestamp: '2025-05-19 09:15', operator: '张伟' },
-];
-
 const defaultCompany: CompanyInfo = {
-  nameCN: '星辰科技数据有限公司', nameEN: 'StarTech Data Co., Ltd.',
-  logo: '', address: '北京市海淀区中关村科技园',
-  phone: '400-888-8888', email: 'contact@startech.com', website: 'https://www.startech.com',
-  businessModel: '渠道合作伙伴关系管理（PRM），覆盖招募、赋能、激励、商机全生命周期',
-  annualTarget: '¥5,000万', quarterlyTarget: '¥1,250万',
-  partnerTarget: '新增100家', channelRegions: '华北、华东、华南', coreBusiness: '信创、医疗、金融',
+  nameCN: '', nameEN: '',
+  logo: '', address: '',
+  phone: '', email: '', website: '',
+  businessModel: '',
+  annualTarget: '', quarterlyTarget: '',
+  partnerTarget: '', channelRegions: '', coreBusiness: '',
 };
 
 export const SettingsPage = () => {
@@ -88,7 +70,7 @@ export const SettingsPage = () => {
   const [showUserForm, setShowUserForm] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [userForm, setUserForm] = useState<SystemUser>({ id: '', name: '', email: '', role: 'channel_manager', department: '渠道部', phone: '', status: 'active', lastLogin: '-', source: 'admin' });
-  const [logs, setLogs] = useState<OperationLog[]>(defaultLogs);
+  const [logs, setLogs] = useState<OperationLog[]>([]);
   const [activeUserTab, setActiveUserTab] = useState<'all' | 'internal' | 'partner'>('all');
 
   // Load real internal users from Supabase Auth + localStorage
@@ -97,19 +79,6 @@ export const SettingsPage = () => {
     const saved = localStorage.getItem('internal_users');
     if (saved) {
       try { setUsers(JSON.parse(saved)); } catch {}
-    } else {
-      // Initialize with just the admin user (matches Supabase Auth)
-      setUsers([{
-        id: 'b176c7fe-7e59-4f8b-8534-d22b223c2808',
-        name: '系统管理员',
-        email: 'admin@partnernxus.com',
-        role: 'admin' as UserRole,
-        department: '管理层',
-        phone: '',
-        status: 'active' as const,
-        lastLogin: '2026-06-02',
-        source: 'admin' as const,
-      }]);
     }
   }, []);
 
@@ -214,7 +183,16 @@ export const SettingsPage = () => {
 
   const handleSave = async () => {
     setSaving(true);
-    try { await updateConfig(editingConfig); toast('success', t('settings.saved')); } catch { toast('error', '保存失败'); }
+    try {
+      await updateConfig(editingConfig);
+      // Also sync currency to global_settings for backward compatibility
+      if (editingConfig.currency) {
+        const { supabase: sb } = await import('../../lib/supabase');
+        const { error } = await sb.from('global_settings').upsert({ id: 'default', currency: editingConfig.currency, updated_at: new Date().toISOString() });
+        if (error) console.warn('Failed to sync currency to global_settings:', error.message);
+      }
+      toast('success', t('settings.saved'));
+    } catch { toast('error', '保存失败'); }
     setSaving(false);
   };
 
@@ -283,7 +261,7 @@ export const SettingsPage = () => {
 
   const { user, role } = useAuth();
 
-  const currencyOptions = [{ value: 'CNY', label: '人民币 (CNY ¥)' }, { value: 'USD', label: '美元 (USD $)' }, { value: 'JPY', label: '日元 (JPY ¥)' }];
+  const currencyOptions = [{ value: 'CNY', label: '人民币 (CNY ¥)' }, { value: 'USD', label: '美元 (USD $)' }];
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
@@ -298,7 +276,7 @@ export const SettingsPage = () => {
       </div>
 
       <Tabs tabs={[
-        { id: 'company', label: '公司信息' }, { id: 'users', label: '用户管理' }, { id: 'roles', label: '角色权限' }, { id: 'security', label: '安全设置' }, { id: 'global', label: '全局设置' }, { id: 'classification', label: '分类引擎' },
+        { id: 'company', label: '公司信息' }, { id: 'users', label: '用户管理' }, { id: 'roles', label: '角色权限' }, { id: 'security', label: '安全设置' }, { id: 'global', label: '全局设置' }, { id: 'classification', label: '分类引擎' }, { id: 'ai', label: 'AI 配置' },
       ]} activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'company' && (
@@ -364,19 +342,19 @@ export const SettingsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">伙伴等级 <span className="text-neutral-400">(PartnerList筛选/批复)</span></label>
-                    <Input value={editingConfig.partnerTiers.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerTiers: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Diamond, Platinum, Gold, Silver, Registered" />
+                    <Input value={editingConfig.partnerTiers.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerTiers: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="Diamond, Platinum, Gold, Silver, Registered" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">伙伴类型 <span className="text-neutral-400">(PartnerList/PartnerForm)</span></label>
-                    <Input value={(editingConfig.partnerTypes || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerTypes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Reseller, ISV, SI, Service, VAD, VAR, OEM" />
+                    <Input value={(editingConfig.partnerTypes || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerTypes: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="Reseller, ISV, SI, Service, VAD, VAR, OEM" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">伙伴状态 <span className="text-neutral-400">(PartnerList 状态筛选)</span></label>
-                    <Input value={(editingConfig.partnerStatuses || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerStatuses: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="Cooperating, Inactive, Prospective, Rejected" />
+                    <Input value={(editingConfig.partnerStatuses || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerStatuses: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="Cooperating, Inactive, Prospective, Rejected" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">合作厂商 <span className="text-neutral-400">(PartnerForm 厂商选择)</span></label>
-                    <Input value={(editingConfig.partnerVendors || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerVendors: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="华为, 浪潮, 联想, Oracle, AWS" />
+                    <Input value={(editingConfig.partnerVendors || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, partnerVendors: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="华为, 浪潮, 联想, Oracle, AWS" />
                   </div>
                 </div>
               </div>
@@ -387,19 +365,19 @@ export const SettingsPage = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">产品类型 <span className="text-neutral-400">(DealForm 产品选择)</span></label>
-                    <Input value={(editingConfig.productTypes || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, productTypes: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="云原生平台, 大数据平台, AI 智算平台" />
+                    <Input value={(editingConfig.productTypes || []).join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, productTypes: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="云原生平台, 大数据平台, AI 智算平台" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">销售阶段 <span className="text-neutral-400">(DealForm 阶段选择)</span></label>
-                    <Input value={editingConfig.salesStages.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, salesStages: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="1. 需求发现, 2. 方案阶段, 3. 商务洽谈, 4. 合同签约, 5. 售后回访" />
+                    <Input value={editingConfig.salesStages.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, salesStages: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="1. 需求发现, 2. 方案阶段, 3. 商务洽谈, 4. 合同签约, 5. 售后回访" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">区域设定 <span className="text-neutral-400">(Partner/Deal 筛选 + Dashboard)</span></label>
-                    <Input value={editingConfig.regions.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, regions: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="华北, 华东, 华南, 西部, 华中" />
+                    <Input value={editingConfig.regions.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, regions: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="华北, 华东, 华南, 西部, 华中" />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">行业设定 <span className="text-neutral-400">(Partner/Deal 筛选 + Dashboard)</span></label>
-                    <Input value={editingConfig.industries.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, industries: e.target.value.split(',').map((s) => s.trim()).filter(Boolean) })} placeholder="金融, 医疗, 政务, 制造, 教育" />
+                    <Input value={editingConfig.industries.join(', ')} onChange={(e) => setEditingConfig({ ...editingConfig, industries: e.target.value.split(/[，,]/).map((s) => s.trim()).filter(Boolean) })} placeholder="金融, 医疗, 政务, 制造, 教育" />
                   </div>
                 </div>
               </div>
@@ -412,9 +390,9 @@ export const SettingsPage = () => {
                 <div className="bg-neutral-50/50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700 rounded-xl p-3">
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-2">
                     {[
-                      { key: 'approved', label: '合作伙伴批复' },
-                      { key: 'tier_upgrade', label: '级别提升' },
-                      { key: 'tier_downgrade', label: '级别降级' },
+                      { key: 'approved', label: '合作伙伴批复', auto: true },
+                      { key: 'tier_upgrade', label: '级别提升', auto: true },
+                      { key: 'tier_downgrade', label: '级别降级', auto: true },
                       { key: 'first_deal', label: '首个商机报备' },
                       { key: 'first_order', label: '首个订单' },
                       { key: 'manager_change', label: '负责人变更' },
@@ -424,12 +402,20 @@ export const SettingsPage = () => {
                       { key: 'certification', label: '获得认证' },
                       { key: 'mdf_approved', label: 'MDF审批通过' },
                       { key: 'award', label: '获得奖项' },
-                    ].map((event) => (
+                    ].map((event) => {
+                      const enabled = (editingConfig.timelineEvents || []).includes(event.key) || (editingConfig.timelineEvents === undefined && event.auto);
+                      return (
                       <label key={event.key} className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
-                        <input type="checkbox" defaultChecked className="w-4 h-4 rounded border-neutral-300" />
+                        <input type="checkbox" checked={enabled} onChange={(e) => {
+                          const current = editingConfig.timelineEvents || ['approved','tier_upgrade','tier_downgrade'];
+                          const next = e.target.checked ? [...current, event.key] : current.filter((k:string) => k !== event.key);
+                          setEditingConfig({...editingConfig, timelineEvents: next});
+                        }} className="w-4 h-4 rounded border-neutral-300" />
                         <span>{event.label}</span>
+                        {event.auto && <span className="text-[10px] text-blue-500">自动</span>}
                       </label>
-                    ))}
+                      );
+                    })}
                     <label className="flex items-center gap-2 text-sm text-neutral-700 dark:text-neutral-300 cursor-pointer">
                       <input type="checkbox" className="w-4 h-4 rounded border-neutral-300" />
                       <span>其他</span>
@@ -1237,6 +1223,46 @@ export const SettingsPage = () => {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* ═══ AI 配置 ═══ */}
+      {activeTab === 'ai' && (
+        <Card>
+          <CardHeader><CardTitle>AI 接口配置</CardTitle><CardDescription>配置 AI 服务连接参数，用于智能分析、预测和建议功能</CardDescription></CardHeader>
+          <CardContent className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">API Key</label>
+              <Input type="password" value={editingConfig.aiApiKey || ''} onChange={(e) => setEditingConfig({ ...editingConfig, aiApiKey: e.target.value })} placeholder="sk-xxxxxxxx" />
+              <p className="text-xs text-neutral-400 mt-1">支持 DeepSeek、OpenAI 或任何兼容 OpenAI API 的服务</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">API Base URL</label>
+              <Input value={editingConfig.aiBaseUrl || 'https://api.deepseek.com'} onChange={(e) => setEditingConfig({ ...editingConfig, aiBaseUrl: e.target.value })} placeholder="https://api.deepseek.com" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">模型名称</label>
+              <Input value={editingConfig.aiModel || 'deepseek-chat'} onChange={(e) => setEditingConfig({ ...editingConfig, aiModel: e.target.value })} placeholder="deepseek-chat" />
+              <p className="text-xs text-neutral-400 mt-1">如 deepseek-chat、gpt-4o、claude-3-opus 等</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="brand" size="sm" onClick={handleSave} loading={saving}><Save className="w-4 h-4" />保存 AI 配置</Button>
+              <Button variant="secondary" size="sm" onClick={async () => {
+                const apiKey = editingConfig.aiApiKey;
+                const baseUrl = editingConfig.aiBaseUrl || 'https://api.deepseek.com';
+                const model = editingConfig.aiModel || 'deepseek-chat';
+                if (!apiKey) { alert('请先填写 API Key'); return; }
+                toast('info', '正在测试连接...');
+                try {
+                  const { aiQuery } = await import('../../services/ai-service');
+                  const result = await aiQuery('回复"OK"', '', { aiApiKey: apiKey, aiBaseUrl: baseUrl, aiModel: model });
+                  if (result.includes('OK')) toast('success', 'AI 连接成功！');
+                  else if (result.includes('AI 调用失败')) toast('error', result);
+                  else toast('success', 'AI 连接成功！响应: ' + result.substring(0, 80));
+                } catch (e: any) { toast('error', '连接失败: ' + e.message); }
+              }}>测试连接</Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       {activeTab === 'global' && (
