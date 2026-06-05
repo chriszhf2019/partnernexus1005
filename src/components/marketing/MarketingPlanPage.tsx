@@ -24,7 +24,7 @@ const normalizeQuarter = (quarter: string): string => {
   return mapping[quarter] || quarter;
 };
 
-const STATUS_LABEL: Record<string, string> = { draft: '草稿', pending: '待批复', approved: '已批复' };
+const STATUS_LABEL: Record<string, string> = { draft: '草稿', pending: '已提交', approved: '已批复' };
 const STATUS_COLOR: Record<string, string> = { draft: 'text-neutral-500', pending: 'text-amber-600', approved: 'text-emerald-600' };
 const STATUS_BG: Record<string, string> = { draft: 'bg-neutral-100 dark:bg-neutral-800', pending: 'bg-amber-50 dark:bg-amber-900/20', approved: 'bg-emerald-50 dark:bg-emerald-900/20' };
 
@@ -302,7 +302,7 @@ export const MarketingPlanPage = () => {
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
-              <CardTitle>年度预算 {isApproved ? '（已批复）' : isPending ? '（待批复）' : '（可编辑）'}</CardTitle>
+              <CardTitle>年度预算 {isApproved ? '（已批复）' : isPending ? '（已提交）' : '（可编辑）'}</CardTitle>
               {totalAdjust > 0 && <span className="text-xs text-amber-600">含调整预算 {fmtW(totalAdjust)}</span>}
             </div>
             <div className="flex items-center gap-2">

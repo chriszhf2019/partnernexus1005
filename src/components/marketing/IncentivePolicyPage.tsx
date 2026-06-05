@@ -31,11 +31,8 @@ const CATEGORY_LABELS: Record<IncentiveCategory, { label: string; color: string 
 
 const STATUS_LABELS: Record<IncentiveStatus, { label: string; color: string }> = {
   draft: { label: '草稿', color: 'bg-neutral-100 text-neutral-700' },
-  pending: { label: '待批复', color: 'bg-amber-100 text-amber-700' },
-  approved: { label: '已批复', color: 'bg-blue-100 text-blue-700' },
-  in_progress: { label: '执行中', color: 'bg-purple-100 text-purple-700' },
-  completed: { label: '已完成', color: 'bg-emerald-100 text-emerald-700' },
-  cancelled: { label: '已取消', color: 'bg-red-100 text-red-700' },
+  pending: { label: '已提交', color: 'bg-amber-100 text-amber-700' },
+  approved: { label: '已批复', color: 'bg-emerald-100 text-emerald-700' },
 };
 
 interface Props {
@@ -184,7 +181,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
       { q: 'Q3', budget: annualBudget?.q3Budget || 0, used: plans.filter(p => p.quarter === 'Q3').reduce((s, p) => s + (p.approvedAmount || 0), 0) },
       { q: 'Q4', budget: annualBudget?.q4Budget || 0, used: plans.filter(p => p.quarter === 'Q4').reduce((s, p) => s + (p.approvedAmount || 0), 0) },
     ],
-    activePlansCount: plans.filter(p => p.status === 'in_progress' || p.status === 'approved').length,
+    activePlansCount: plans.filter(p => p.status === 'approved' || p.status === 'pending').length,
     totalPayoutYTD: executions.filter(e => e.payoutStatus === 'paid').reduce((s, e) => s + e.payoutAmount, 0),
     avgAchievementRate: 0,
     topPerformers: []
@@ -192,7 +189,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
 
   const quarterlyPlans = plans.filter(p => p.quarter === quarter);
   const pendingPlans = plans.filter(p => p.status === 'pending');
-  const completedPlans = plans.filter(p => p.status === 'completed');
+  const completedPlans = plans.filter(p => p.status === 'approved');
 
   // Handlers
   const handleSaveBudget = async () => {
@@ -293,19 +290,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
     loadData();
   };
 
-  const handleStartPlan = async (planId: string) => {
-    await supabase.from('incentive_quarterly_plan')
-      .update({ status: 'in_progress' })
-      .eq('id', planId);
-    loadData();
-  };
 
-  const handleCompletePlan = async (planId: string) => {
-    await supabase.from('incentive_quarterly_plan')
-      .update({ status: 'completed' })
-      .eq('id', planId);
-    loadData();
-  };
 
   const handleSaveEvaluation = async () => {
     if (!showEvaluationModal || typeof showEvaluationModal === 'boolean') return;
@@ -411,7 +396,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
   };
 
   const getQuarterlyUsed = (q: string) => {
-    return plans.filter(p => p.quarter === q && (p.status === 'approved' || p.status === 'in_progress' || p.status === 'completed'))
+    return plans.filter(p => p.quarter === q && p.status === 'approved')
       .reduce((s, p) => s + (p.approvedAmount || 0), 0);
   };
 
@@ -584,7 +569,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
               <CardHeader className="bg-amber-50 dark:bg-amber-900/20 rounded-t-lg">
                 <CardTitle className="text-base flex items-center gap-2 text-amber-800 dark:text-amber-200">
                   <Clock className="w-5 h-5" />
-                  待批复计划 ({pendingPlans.length})
+                  已提交计划 ({pendingPlans.length})
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 pt-4">
@@ -697,17 +682,12 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
                             <Send className="w-4 h-4 mr-1" /> 提交
                           </Button>
                         )}
+                        {plan.status === 'pending' && (
+                          <Button variant="brand" size="sm" onClick={() => handleApprovePlan(plan.id, plan.totalBudget)}>
+                            <Check className="w-4 h-4 mr-1" /> 批复
+                          </Button>
+                        )}
                         {plan.status === 'approved' && (
-                          <Button variant="brand" size="sm" onClick={() => handleStartPlan(plan.id)}>
-                            开始执行
-                          </Button>
-                        )}
-                        {plan.status === 'in_progress' && (
-                          <Button variant="outline" size="sm" onClick={() => handleCompletePlan(plan.id)}>
-                            <Check className="w-4 h-4 mr-1" /> 完成
-                          </Button>
-                        )}
-                        {plan.status === 'completed' && (
                           <Button variant="ghost" size="sm" onClick={() => { setShowPlanDetail(plan); setShowEvaluationModal(plan as any); }}>
                             <ThumbsUp className="w-4 h-4 mr-1" /> 评估
                           </Button>
@@ -792,7 +772,7 @@ export const IncentivePolicyPage: React.FC<Props> = ({ initialYear }) => {
             <Card>
               <CardContent className="text-center py-12">
                 <ThumbsUp className="w-12 h-12 mx-auto text-neutral-400 mb-3" />
-                <p className="text-neutral-500">暂无已完成需要评估的计划</p>
+                <p className="text-neutral-500">暂无已批复需要评估的计划</p>
               </CardContent>
             </Card>
           ) : (

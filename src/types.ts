@@ -445,7 +445,7 @@ export interface AnnualIncentiveBudget {
 
 // 激励类型
 export type IncentiveScope = 'global' | 'targeted';  // 全范围 / 定向
-export type IncentiveStatus = 'draft' | 'pending' | 'approved' | 'in_progress' | 'completed' | 'cancelled';
+export type IncentiveStatus = 'draft' | 'pending' | 'approved';
 export type IncentiveCategory = 'volume_rebate' | 'new_product' | 'competitive' | 'velocity' | 'loyalty' | 'training';
 
 // 激励方向/策略
