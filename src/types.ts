@@ -502,6 +502,12 @@ export interface QuarterlyIncentivePlan {
   // 目标设定
   targets: IncentiveTarget[];
   
+  // 阶梯奖励规则
+  tierRules?: IncentiveTierRule[];
+  
+  // 定向规则
+  targetingRules?: IncentiveTargetingRule[];
+  
   // 执行追踪
   executions?: IncentiveExecution[];
   
@@ -521,6 +527,162 @@ export interface IncentiveTarget {
   unit?: string;                          // 单位
   weight?: number;                        // 权重
   description?: string;
+}
+
+// 阶梯奖励规则
+export interface IncentiveTierRule {
+  id?: string;
+  planId: string;
+  tierOrder: number;                      // 阶梯序号
+  minThreshold: number;                   // 最低阈值
+  maxThreshold?: number;                  // 最高阈值（undefined表示无上限）
+  rewardAmount: number;                   // 奖励金额
+  rewardType: 'fixed' | 'percentage';     // 固定金额或百分比
+  description?: string;
+}
+
+// 定向规则
+export interface IncentiveTargetingRule {
+  id?: string;
+  planId: string;
+  ruleType: 'region' | 'tier' | 'industry' | 'partner_type' | 'custom';
+  operator: 'in' | 'not_in' | 'contains' | 'equals';
+  values: string[];
+  description?: string;
+}
+
+// 激励模板
+export interface IncentiveTemplate {
+  id: string;
+  name: string;                           // 模板名称
+  category: string;                       // 模板类别
+  description?: string;
+  icon?: string;                          // 图标标识
+  isActive: boolean;
+  config: any;                            // 完整的计划配置JSON
+  defaultBudget: number;                  // 默认预算
+  defaultDurationDays: number;            // 默认持续天数
+  usageCount: number;                     // 使用次数
+  avgRoi?: number;                        // 平均ROI
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 审批步骤
+export interface ApprovalStep {
+  step: number;
+  role: string;                           // 审批角色
+  approver?: string;                      // 审批人
+  status: 'pending' | 'approved' | 'rejected';
+  comment?: string;
+  approvedAt?: string;
+}
+
+// 激励申请
+export interface IncentiveApplication {
+  id: string;
+  planId: string;
+  planTitle?: string;
+  partnerId: string;
+  partnerName: string;
+  partnerTier?: string;
+  metric: string;                         // 申请的指标
+  claimedValue: number;                   // 申报数值
+  payoutAmount: number;                   // 申请奖励金额
+  relatedDeals?: { id: string; title: string; value: number }[];
+  supportingDocuments?: { name: string; url: string }[];
+  status: 'pending' | 'reviewing' | 'approved' | 'rejected' | 'paid' | 'cancelled';
+  currentStep: number;
+  workflowSteps: ApprovalStep[];
+  approvalHistory?: { step: number; action: string; operator: string; timestamp: string; comment?: string }[];
+  approvedBy?: string;
+  approvedAt?: string;
+  invoiceNumber?: string;                 // 发票号码
+  taxId?: string;                         // 纳税人识别号
+  bankAccount?: string;                   // 银行账户信息
+  submittedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 预算预警配置
+export interface IncentiveBudgetAlert {
+  id: string;
+  planId: string;
+  warningThreshold: number;               // 软性预警阈值 (0.9 = 90%)
+  stopThreshold: number;                  // 硬性止损阈值 (1.0 = 100%)
+  warningNotified: boolean;
+  stopTriggered: boolean;
+  lastCheckedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ROI追踪
+export interface IncentiveROITracking {
+  id: string;
+  planId: string;
+  planTitle?: string;
+  totalPayout: number;                    // 总发放金额
+  totalBudgetUsed: number;                // 总预算使用
+  totalRevenue: number;                   // 关联订单总金额
+  totalPipeline: number;                  // 关联Pipeline金额
+  dealsCreated: number;                   // 创建商机数
+  dealsWon: number;                       // 赢单数量
+  roi: number;                            // ROI = total_revenue / total_payout
+  pipelineContribution: number;           // Pipeline贡献率
+  costPerDeal: number;                    // 单商机成本
+  trackingPeriod: 'monthly' | 'quarterly' | 'yearly';
+  periodStart: string;
+  periodEnd: string;
+  calculatedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 伙伴参与追踪
+export interface IncentiveParticipationTracking {
+  id: string;
+  planId: string;
+  partnerId: string;
+  partnerName: string;
+  partnerTier?: string;
+  partnerRegion?: string;
+  partnerIndustry?: string;
+  isParticipated: boolean;
+  firstApplicationAt?: string;
+  totalApplications: number;
+  totalPayoutReceived: number;
+  dealsRegistered: number;
+  dealsWon: number;
+  revenueContributed: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// 结算记录
+export interface IncentiveSettlementRecord {
+  id: string;
+  applicationId: string;
+  planId: string;
+  partnerId: string;
+  partnerName?: string;
+  settlementAmount: number;               // 结算金额
+  settlementCurrency: string;
+  invoiceNumber?: string;
+  invoiceAmount?: number;
+  invoiceDate?: string;
+  taxRate: number;
+  paymentMethod: 'bank_transfer' | 'online' | 'cash';
+  bankName?: string;
+  bankAccount?: string;
+  accountName?: string;
+  status: 'pending' | 'invoiced' | 'paid' | 'completed';
+  voucherNumber?: string;
+  settledAt?: string;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 // 激励执行记录
