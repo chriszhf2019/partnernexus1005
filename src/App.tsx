@@ -43,6 +43,7 @@ const CampaignDetailPage = retryableLazy(() => import('./components/marketing/Ca
 const BudgetManagementPage = retryableLazy(() => import('./components/marketing/BudgetManagementPage').then(m => ({ default: m.BudgetManagementPage })));
 const ChannelCampaignPage = retryableLazy(() => import('./components/marketing/ChannelCampaignPage').then(m => ({ default: m.ChannelCampaignPage })));
 const IncentivePolicyPage = retryableLazy(() => import('./components/marketing/IncentivePolicyPage').then(m => ({ default: m.IncentivePolicyPage })));
+const MarketingActivityDetail = retryableLazy(() => import('./components/marketing/MarketingActivityDetail').then(m => ({ default: m.MarketingActivityDetail })));
 
 function EcosystemRoute() {
   const navigate = useNavigate();
@@ -321,6 +322,7 @@ function AppLayout() {
               <Route path="/deals/:id" element={<Suspense fallback={<PageLoader />}><DealDetailPage /></Suspense>} />
               <Route path="/deals/:id/edit" element={<Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense>} />
               <Route path="/marketing" element={<MarketingRoute />} />
+              <Route path="/marketing/activity/:id" element={<Suspense fallback={<PageLoader />}><MarketingActivityDetail /></Suspense>} />
               <Route path="/marketing/plan" element={<Suspense fallback={<PageLoader />}><MarketingPlanPage /></Suspense>} />
               <Route path="/marketing/campaigns" element={<Suspense fallback={<PageLoader />}><CampaignManagementPage /></Suspense>} />
               <Route path="/marketing/campaigns/:id" element={<Suspense fallback={<PageLoader />}><CampaignDetailPage /></Suspense>} />

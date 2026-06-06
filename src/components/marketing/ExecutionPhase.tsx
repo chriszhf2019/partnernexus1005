@@ -4,7 +4,8 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import {
   ChevronDown, ChevronRight, Plus, CheckCircle2, Circle, User, FileText,
-  Clock, AlertCircle, CheckSquare, Square, MessageCircle, Upload, Link2
+  Clock, AlertCircle, CheckSquare, Square, MessageCircle, Upload, Link2,
+  Trash2
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 
@@ -62,6 +63,10 @@ export const ExecutionPhase = ({ activityId }: ExecutionPhaseProps) => {
   const [selectedPhaseForTemplate, setSelectedPhaseForTemplate] = useState<string | null>(null);
   const [selectedTemplates, setSelectedTemplates] = useState<string[]>([]);
   const [timelineLogs, setTimelineLogs] = useState<any[]>([]);
+  const [attachments, setAttachments] = useState<any[]>([]);
+  const [showAddAttachmentModal, setShowAddAttachmentModal] = useState(false);
+  const [currentAttachmentPhaseId, setCurrentAttachmentPhaseId] = useState<string | null>(null);
+  const [newAttachment, setNewAttachment] = useState({ name: '', type: 'file', url: '', file_type: '' });
 
   useEffect(() => {
     loadData();
@@ -84,12 +89,19 @@ export const ExecutionPhase = ({ activityId }: ExecutionPhaseProps) => {
 
     // 获取最近动态
     const { data: logsData } = await supabase
-      .from('marketing_execution_logs')
+      .from('marketing_phase_logs')
       .select('*')
       .eq('activity_id', activityId)
       .order('created_at', { ascending: false })
       .limit(10);
     setTimelineLogs(logsData || []);
+
+    // 获取附件
+    const { data: attachmentsData } = await supabase
+      .from('marketing_phase_attachments')
+      .select('*')
+      .eq('activity_id', activityId);
+    setAttachments(attachmentsData || []);
 
     // 默认展开当前进行中的阶段
     const currentPhase = phasesData?.find(p => p.status === 'in_progress');
@@ -197,12 +209,41 @@ export const ExecutionPhase = ({ activityId }: ExecutionPhaseProps) => {
     }
   };
 
-  const addLog = async (message: string) => {
-    await supabase.from('marketing_execution_logs').insert({
+  const addLog = async (message: string, action: string = 'update') => {
+    await supabase.from('marketing_phase_logs').insert({
       activity_id: activityId,
-      message,
+      action,
+      description: message,
+      operator: '当前用户',
       created_at: new Date().toISOString()
     });
+  };
+
+  const handleAddAttachment = async () => {
+    if (!newAttachment.name || !currentAttachmentPhaseId) return;
+    try {
+      await supabase.from('marketing_phase_attachments').insert({
+        activity_id: activityId,
+        phase_id: currentAttachmentPhaseId,
+        ...newAttachment,
+        uploaded_by: '当前用户',
+        created_at: new Date().toISOString()
+      });
+      await addLog(`添加了附件「${newAttachment.name}」`, 'add');
+      setNewAttachment({ name: '', type: 'file', url: '', file_type: '' });
+      setShowAddAttachmentModal(false);
+      loadData();
+    } catch (e) {
+      alert('添加附件失败');
+    }
+  };
+
+  const handleDeleteAttachment = async (attachmentId: string) => {
+    if (!confirm('确定要删除这个附件吗？')) return;
+    const attachment = attachments.find(a => a.id === attachmentId);
+    await supabase.from('marketing_phase_attachments').delete().eq('id', attachmentId);
+    await addLog(`删除了附件「${attachment?.name}」`, 'delete');
+    loadData();
   };
 
   const getStatusColor = (status: string) => {
@@ -547,19 +588,41 @@ export const ExecutionPhase = ({ activityId }: ExecutionPhaseProps) => {
                       阶段产出/附件
                     </h4>
                     <div className="flex flex-wrap gap-2">
-                      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 rounded-lg">
-                        <FileText className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm">活动策划案.pdf</span>
-                      </div>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 rounded-lg">
-                        <FileText className="w-4 h-4 text-green-500" />
-                        <span className="text-sm">嘉宾名单.xlsx</span>
-                      </div>
-                      <div className="flex items-center gap-2 px-3 py-2 bg-neutral-100 rounded-lg">
-                        <Link2 className="w-4 h-4 text-purple-500" />
-                        <span className="text-sm">公众号推文链接</span>
-                      </div>
-                      <Button size="sm" variant="outline" className="h-8">
+                      {attachments.filter(a => a.phase_id === phase.id).map((attachment) => (
+                        <div 
+                          key={attachment.id} 
+                          className="flex items-center gap-2 px-3 py-2 bg-neutral-100 rounded-lg group"
+                        >
+                          {attachment.type === 'link' ? (
+                            <Link2 className="w-4 h-4 text-purple-500" />
+                          ) : (
+                            <FileText className={`w-4 h-4 ${attachment.file_type?.includes('pdf') ? 'text-red-500' : attachment.file_type?.includes('xlsx') ? 'text-green-500' : 'text-blue-500'}`} />
+                          )}
+                          <a 
+                            href={attachment.url || '#'} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-sm text-blue-600 hover:underline truncate max-w-[150px]"
+                          >
+                            {attachment.name}
+                          </a>
+                          <button
+                            onClick={() => handleDeleteAttachment(attachment.id)}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-2 text-red-500 hover:text-red-600"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="h-8"
+                        onClick={() => {
+                          setCurrentAttachmentPhaseId(phase.id);
+                          setShowAddAttachmentModal(true);
+                        }}
+                      >
                         <Upload className="w-4 h-4 mr-1" />
                         添加附件
                       </Button>
@@ -688,6 +751,66 @@ export const ExecutionPhase = ({ activityId }: ExecutionPhaseProps) => {
                   setSelectedTemplates([]);
                 }}>取消</Button>
                 <Button onClick={handleAddTemplateTasks}>添加选中任务</Button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 添加附件弹窗 */}
+        {showAddAttachmentModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="bg-white rounded-xl p-6 w-full max-w-md">
+              <h3 className="text-lg font-bold mb-4">添加附件</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-neutral-600">附件名称</label>
+                  <input
+                    type="text"
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newAttachment.name}
+                    onChange={(e) => setNewAttachment({ ...newAttachment, name: e.target.value })}
+                    placeholder="附件名称"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-600">类型</label>
+                  <select
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newAttachment.type}
+                    onChange={(e) => setNewAttachment({ ...newAttachment, type: e.target.value })}
+                  >
+                    <option value="file">文件</option>
+                    <option value="link">链接</option>
+                    <option value="image">图片</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-600">URL/链接</label>
+                  <input
+                    type="text"
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newAttachment.url}
+                    onChange={(e) => setNewAttachment({ ...newAttachment, url: e.target.value })}
+                    placeholder="文件URL或链接地址"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-neutral-600">文件类型</label>
+                  <input
+                    type="text"
+                    className="w-full mt-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={newAttachment.file_type}
+                    onChange={(e) => setNewAttachment({ ...newAttachment, file_type: e.target.value })}
+                    placeholder="如：pdf, xlsx, docx"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2 mt-6">
+                <Button variant="ghost" onClick={() => {
+                  setShowAddAttachmentModal(false);
+                  setNewAttachment({ name: '', type: 'file', url: '', file_type: '' });
+                }}>取消</Button>
+                <Button onClick={handleAddAttachment}>保存附件</Button>
               </div>
             </div>
           </div>

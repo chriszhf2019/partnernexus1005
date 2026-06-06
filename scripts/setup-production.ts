@@ -31,7 +31,7 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
 const TEST_USERS = [
   {
     email: 'admin@partnernxus.com',
-    password: 'Admin@2024!',
+    password: 'YOUR_PASSWORD',
     display_name: '系统管理员',
     role: 'admin',
     confirm: true,

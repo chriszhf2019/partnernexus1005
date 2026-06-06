@@ -10,7 +10,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { SearchableSelect } from '../ui/SearchableSelect';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { Plus, TrendingUp, Users, Calendar, Target, Activity, DollarSign, BarChart3, PieChart, ExternalLink, X, Filter, ChevronRight, Trophy, Flame, Award, Zap, Building2, Handshake, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckSquare, QrCode, Share2, Copy, Eye } from 'lucide-react';
+import { Plus, TrendingUp, Users, Calendar, Target, Activity, DollarSign, BarChart3, PieChart, ExternalLink, X, Filter, ChevronRight, Trophy, Flame, Award, Zap, Building2, Handshake, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckSquare, QrCode, Share2, Copy, Eye, Image, Tag, MessageSquare, CalendarDays, Info } from 'lucide-react';
 
 export const MarketingIncentivePage = () => {
   const { t } = useLanguage();
@@ -19,24 +19,44 @@ export const MarketingIncentivePage = () => {
   const { mdfStats, mdfActivities, incentivePrograms, incentiveStats } = useMarketingData();
   const [q2Plans, setQ2Plans] = useState<any[]>([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [showInvitationModal, setShowInvitationModal] = useState(false);
+  const [invitationType, setInvitationType] = useState<'link' | 'qrcode' | 'mini'>('link');
   const [newActivity, setNewActivity] = useState({
     name: '',
     type: '线下峰会',
     date: '',
+    endDate: '',
+    startTime: '',
+    endTime: '',
     budget: '',
     hostType: 'vendor',
     partnerId: '',
     partnerName: '',
     location: '',
+    province: '',
+    city: '',
+    district: '',
     description: '',
+    coverImage: '',
+    tags: '',
     contactName: '',
     contactPhone: '',
     maxAttendees: 100,
     enableQuestions: false,
     enableLottery: false,
+    enableCheckin: true,
+    enableShare: true,
     lotteryReward: '',
     signupPoints: 10,
-    checkinPoints: 20
+    checkinPoints: 20,
+    sharePoints: 15,
+    questionPoints: 5,
+    lotteryPoints: 10,
+    interactionPoints: 8,
+    invitePoints: 25,
+    reviewPoints: 12,
+    completePoints: 30
   });
   const [creating, setCreating] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -58,8 +78,7 @@ export const MarketingIncentivePage = () => {
 
   useEffect(() => {
     supabase.from('marketing_budget_config').select('*').eq('id', 'current').single().then(({ data }: any) => { if (data) setBudgetConfig(data); });
-    // Show both submitted and approved plans (not just approved)
-    supabase.from('marketing_plan').select('*').eq('year', currentYear).eq('quarter', currentQuarter).in('plan_status', ['submitted', 'approved']).order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
+    supabase.from('marketing_plan').select('*').eq('year', currentYear).eq('quarter', currentQuarter).in('execution_status', ['approved', 'Approved', 'In Progress', '进行中']).order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
     supabase.from('partners').select('id, name, tier').order('name').then(({ data }: any) => { if (data) setPartners(data); });
   }, [currentYear, currentQuarter]);
 
@@ -91,22 +110,39 @@ export const MarketingIncentivePage = () => {
         name: newActivity.name,
         type: newActivity.type,
         event_date: newActivity.date || new Date().toISOString().split('T')[0],
+        end_date: newActivity.endDate,
+        start_time: newActivity.startTime,
+        end_time: newActivity.endTime,
         status: 'Planning',
         budget: Number(newActivity.budget),
         actual_spend: 0,
         leads_generated: 0,
         progress: 0,
         host_type: newActivity.hostType,
+        province: newActivity.province,
+        city: newActivity.city,
+        district: newActivity.district,
         location: newActivity.location,
+        cover_image: newActivity.coverImage,
+        tags: newActivity.tags,
         description: newActivity.description,
         contact_name: newActivity.contactName,
         contact_phone: newActivity.contactPhone,
         max_attendees: Number(newActivity.maxAttendees),
+        enable_checkin: newActivity.enableCheckin,
         enable_questions: newActivity.enableQuestions,
         enable_lottery: newActivity.enableLottery,
+        enable_share: newActivity.enableShare,
         lottery_reward: newActivity.lotteryReward,
         signup_points: Number(newActivity.signupPoints),
         checkin_points: Number(newActivity.checkinPoints),
+        share_points: Number(newActivity.sharePoints),
+        question_points: Number(newActivity.questionPoints),
+        lottery_points: Number(newActivity.lotteryPoints),
+        interaction_points: Number(newActivity.interactionPoints),
+        invite_points: Number(newActivity.invitePoints),
+        review_points: Number(newActivity.reviewPoints),
+        complete_points: Number(newActivity.completePoints),
         invitation_code: Math.random().toString(36).substring(2, 10).toUpperCase(),
       };
 
@@ -115,14 +151,41 @@ export const MarketingIncentivePage = () => {
         activityData.partner_name = newActivity.partnerName;
       }
 
-      const { error } = await supabase.from('marketing_activities').insert(activityData);
-      if (error) { alert('创建失败: ' + error.message); setCreating(false); return; }
-      setShowCreate(false);
-      // Reload the page to show new data
-      window.location.reload();
+      const { error, data } = await supabase.from('marketing_activities').insert(activityData).select();
+      if (error) { 
+        alert('创建失败: ' + error.message); 
+        setCreating(false); 
+        return; 
+      }
+      
+      if (data?.[0]) {
+        setShowCreate(false);
+        setShowInvitationModal(true);
+      }
+      setCreating(false);
     } catch (err) {
       alert('创建活动失败: ' + (err instanceof Error ? err.message : String(err)));
       setCreating(false);
+    }
+  };
+
+  const [copied, setCopied] = useState(false);
+  const [invitationUrl, setInvitationUrl] = useState('');
+  const [invitationQrCode, setInvitationQrCode] = useState('');
+
+  useEffect(() => {
+    if (showInvitationModal) {
+      const url = `${window.location.origin}/invitation/${newActivity.invitation_code || Math.random().toString(36).substring(2, 10).toUpperCase()}`;
+      setInvitationUrl(url);
+      setInvitationQrCode(`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(url)}`);
+    }
+  }, [showInvitationModal, newActivity.invitation_code]);
+
+  const copyToClipboard = async () => {
+    if (invitationUrl) {
+      await navigator.clipboard.writeText(invitationUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -304,7 +367,7 @@ export const MarketingIncentivePage = () => {
               {filteredActivities.filter((a: any) => !q2Plans.some((p: any) => p.category === a.type || p.category === a.name)).map((act: any) => {
                 const pct = act.budget > 0 ? Math.round(((act.actualSpend || 0) / act.budget) * 100) : 0;
                 return (
-                  <div key={act.id} className="p-3 rounded-lg border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors">
+                  <div key={act.id} className="p-3 rounded-lg border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors cursor-pointer" onClick={() => navigate(`/marketing/activity/${act.id}`)}>
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <Badge variant={act.hostType === 'partner' ? 'warning' : 'default'} size="sm">
@@ -315,7 +378,10 @@ export const MarketingIncentivePage = () => {
                           {act.status === 'Completed' ? '已完成' : act.status === 'In Progress' ? '进行中' : '计划中'}
                         </Badge>
                       </div>
-                      <span className="text-sm font-semibold">{cur(act.actualSpend || 0)} / {cur(act.budget)}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-semibold">{cur(act.actualSpend || 0)} / {cur(act.budget)}</span>
+                        <ChevronRight className="w-4 h-4 text-neutral-400" />
+                      </div>
                     </div>
                     <ProgressBar value={pct} size="sm" variant={pct >= 90 ? 'danger' : 'brand'} />
                     <div className="flex items-center justify-between mt-1.5 text-[11px] text-neutral-400">
@@ -333,7 +399,8 @@ export const MarketingIncentivePage = () => {
                           </div>
                           <div className="flex items-center gap-1">
                             <button 
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const link = `${window.location.origin}/invitation/${act.invitationCode}`;
                                 navigator.clipboard.writeText(link);
                                 alert('邀请函链接已复制到剪贴板');
@@ -344,14 +411,18 @@ export const MarketingIncentivePage = () => {
                               <Copy className="w-3.5 h-3.5 text-neutral-500" />
                             </button>
                             <button 
-                              onClick={() => window.open(`/invitation/${act.invitationCode}`, '_blank')}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.open(`/invitation/${act.invitationCode}`, '_blank');
+                              }}
                               className="p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
                               title="预览邀请函"
                             >
                               <Eye className="w-3.5 h-3.5 text-neutral-500" />
                             </button>
                             <button 
-                              onClick={() => {
+                              onClick={(e) => {
+                                e.stopPropagation();
                                 const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/invitation/${act.invitationCode}`)}`;
                                 window.open(qrUrl, '_blank');
                               }}
@@ -465,13 +536,118 @@ export const MarketingIncentivePage = () => {
       {/* Create Activity Modal */}
       {showCreate && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm overflow-y-auto" onClick={() => setShowCreate(false)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl p-8 w-full max-w-5xl max-h-[95vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold">新建营销活动</h3>
-              <button onClick={() => setShowCreate(false)} className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
+              <button onClick={() => {
+                setShowCreate(false);
+                setSelectedPlan(null);
+                setNewActivity({
+                  name: '',
+                  type: '线下峰会',
+                  date: '',
+                  endDate: '',
+                  startTime: '',
+                  endTime: '',
+                  budget: '',
+                  hostType: 'vendor',
+                  partnerId: '',
+                  partnerName: '',
+                  location: '',
+                  province: '',
+                  city: '',
+                  district: '',
+                  description: '',
+                  coverImage: '',
+                  tags: '',
+                  contactName: '',
+                  contactPhone: '',
+                  maxAttendees: 100,
+                  enableQuestions: false,
+                  enableLottery: false,
+                  enableCheckin: true,
+                  enableShare: true,
+                  lotteryReward: '',
+                  signupPoints: 10,
+                  checkinPoints: 20,
+                  sharePoints: 15,
+                  questionPoints: 5,
+                  lotteryPoints: 10,
+                  interactionPoints: 8,
+                  invitePoints: 25,
+                  reviewPoints: 12,
+                  completePoints: 30
+                });
+              }} className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Quarter Approved Plans List */}
+            {q2Plans.length > 0 && (
+              <div>
+                <label className="text-xs font-semibold text-neutral-500 block mb-2">从已批复计划选择（可选）</label>
+                <div className="border rounded-lg overflow-hidden">
+                  {q2Plans.map((plan) => (
+                    <button
+                      key={plan.id}
+                      onClick={() => {
+                        setSelectedPlan(plan);
+                        setNewActivity({
+                          name: plan.category || '',
+                          type: plan.category || '线下峰会',
+                          date: plan.expected_date || '',
+                          budget: String(plan.approved_amount || plan.total_budget || ''),
+                          hostType: plan.activity_type === 'PMDF' ? 'partner' : 'vendor',
+                          partnerId: plan.partner_id || '',
+                          partnerName: plan.partner_name || '',
+                          location: plan.city || '',
+                          description: plan.goal || '',
+                          contactName: plan.responsible_person || '',
+                          contactPhone: '',
+                          maxAttendees: Number(plan.expected_attendees) || 100,
+                          enableQuestions: false,
+                          enableLottery: false,
+                          lotteryReward: '',
+                          signupPoints: 10,
+                          checkinPoints: 20
+                        });
+                      }}
+                      className={`w-full px-4 py-3 flex items-center justify-between transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${
+                        selectedPlan?.id === plan.id
+                          ? 'bg-green-50 dark:bg-green-900/20'
+                          : ''
+                      } ${plan !== q2Plans[q2Plans.length - 1] ? 'border-b border-neutral-200 dark:border-neutral-700' : ''}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded-full">
+                          {plan.quarter}
+                        </span>
+                        <span className="text-sm font-medium">{plan.category}</span>
+                        {plan.activity_type === 'PMDF' && (
+                          <Badge variant="secondary" className="text-[10px]">PMDF</Badge>
+                        )}
+                        <Badge className="text-[10px]" variant={
+                          ['executed', 'Completed', '已完成'].includes(plan.execution_status || '') ? 'success' :
+                          ['approved', 'Approved', 'In Progress', '进行中'].includes(plan.execution_status || '') ? 'info' : 'default'
+                        }>
+                          {['executed', 'Completed', '已完成'].includes(plan.execution_status || '') ? '已完成' :
+                           ['approved', 'Approved', 'In Progress', '进行中'].includes(plan.execution_status || '') ? '已批复' : '草稿'}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs text-neutral-500">
+                          {plan.partner_name || '厂商自办'}
+                        </span>
+                        <span className="text-sm font-semibold text-blue-600">
+                          {cur(Number(plan.approved_amount || plan.total_budget || 0))}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="space-y-4">
               {/* Host Type Selection */}
@@ -530,16 +706,46 @@ export const MarketingIncentivePage = () => {
                 </div>
               </div>
 
-              {/* Date and Budget */}
-              <div className="grid grid-cols-3 gap-4">
+              {/* Date and Time */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-xs font-semibold text-neutral-500 block mb-2">日期</label>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">开始日期</label>
                   <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
                     type="date" 
                     value={newActivity.date} 
                     onChange={e => setNewActivity({...newActivity, date: e.target.value})} 
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">结束日期</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="date" 
+                    value={newActivity.endDate} 
+                    onChange={e => setNewActivity({...newActivity, endDate: e.target.value})} 
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">开始时间</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="time" 
+                    value={newActivity.startTime} 
+                    onChange={e => setNewActivity({...newActivity, startTime: e.target.value})} 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">结束时间</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="time" 
+                    value={newActivity.endTime} 
+                    onChange={e => setNewActivity({...newActivity, endTime: e.target.value})} 
+                  />
+                </div>
+              </div>
+
+              {/* Budget and Capacity */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-500 block mb-2">预算 *</label>
                   <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
@@ -560,18 +766,73 @@ export const MarketingIncentivePage = () => {
                 </div>
               </div>
 
-              {/* Location and Contact */}
+              {/* Location */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">省份</label>
+                  <select className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    value={newActivity.province} 
+                    onChange={e => setNewActivity({...newActivity, province: e.target.value})}
+                  >
+                    <option value="">请选择省份</option>
+                    {['北京市','上海市','广东省','浙江省','江苏省','山东省','四川省','湖北省'].map(p => <option key={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">城市</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    value={newActivity.city} 
+                    onChange={e => setNewActivity({...newActivity, city: e.target.value})} 
+                    placeholder="城市"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">区域</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    value={newActivity.district} 
+                    onChange={e => setNewActivity({...newActivity, district: e.target.value})} 
+                    placeholder="区/县"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
+                  <MapPin className="w-3 h-3" />详细地址
+                </label>
+                <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                  value={newActivity.location} 
+                  onChange={e => setNewActivity({...newActivity, location: e.target.value})} 
+                  placeholder="请输入详细地址"
+                />
+              </div>
+
+              {/* Cover Image and Tags */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
-                    <MapPin className="w-3 h-3" />地点
+                    <Image className="w-3 h-3" />封面图片URL
                   </label>
                   <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
-                    value={newActivity.location} 
-                    onChange={e => setNewActivity({...newActivity, location: e.target.value})} 
-                    placeholder="请输入活动地点"
+                    value={newActivity.coverImage} 
+                    onChange={e => setNewActivity({...newActivity, coverImage: e.target.value})} 
+                    placeholder="https://..."
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
+                    <Tag className="w-3 h-3" />标签
+                  </label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    value={newActivity.tags} 
+                    onChange={e => setNewActivity({...newActivity, tags: e.target.value})} 
+                    placeholder="用逗号分隔"
+                  />
+                </div>
+              </div>
+
+              {/* Agenda and Guests */}
+              {/* Contact */}
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
                     <User className="w-3 h-3" />联系人
@@ -582,19 +843,17 @@ export const MarketingIncentivePage = () => {
                     placeholder="请输入联系人姓名"
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
+                    <Phone className="w-3 h-3" />联系电话
+                  </label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    value={newActivity.contactPhone} 
+                    onChange={e => setNewActivity({...newActivity, contactPhone: e.target.value})} 
+                    placeholder="请输入联系电话"
+                  />
+                </div>
               </div>
-
-              <div>
-                <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
-                  <Phone className="w-3 h-3" />联系电话
-                </label>
-                <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
-                  value={newActivity.contactPhone} 
-                  onChange={e => setNewActivity({...newActivity, contactPhone: e.target.value})} 
-                  placeholder="请输入联系电话"
-                />
-              </div>
-
               {/* Description */}
               <div>
                 <label className="text-xs font-semibold text-neutral-500 block mb-2 flex items-center gap-1">
@@ -612,7 +871,15 @@ export const MarketingIncentivePage = () => {
                 <label className="text-xs font-semibold text-neutral-500 block mb-3">活动功能</label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 cursor-pointer">
-                    <CheckSquare className={`w-5 h-5 ${newActivity.enableQuestions ? 'text-blue-600' : 'text-neutral-400'}`} />
+                    <CheckSquare className={`w-5 h-5 ${newActivity.enableCheckin ? 'text-green-600' : 'text-neutral-400'}`} />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">启用签到功能</p>
+                      <p className="text-xs text-neutral-400">支持扫码签到</p>
+                    </div>
+                    <input type="checkbox" checked={newActivity.enableCheckin} onChange={e => setNewActivity({...newActivity, enableCheckin: e.target.checked})} className="hidden" />
+                  </label>
+                  <label className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 cursor-pointer">
+                    <MessageSquare className={`w-5 h-5 ${newActivity.enableQuestions ? 'text-blue-600' : 'text-neutral-400'}`} />
                     <div className="flex-1">
                       <p className="text-sm font-medium">启用提问功能</p>
                       <p className="text-xs text-neutral-400">允许参会者在线提问</p>
@@ -626,6 +893,14 @@ export const MarketingIncentivePage = () => {
                       <p className="text-xs text-neutral-400">现场抽奖互动</p>
                     </div>
                     <input type="checkbox" checked={newActivity.enableLottery} onChange={e => setNewActivity({...newActivity, enableLottery: e.target.checked})} className="hidden" />
+                  </label>
+                  <label className="flex items-center gap-3 p-3 rounded-lg border border-neutral-200 dark:border-neutral-700 cursor-pointer">
+                    <Share2 className={`w-5 h-5 ${newActivity.enableShare ? 'text-purple-600' : 'text-neutral-400'}`} />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium">启用分享功能</p>
+                      <p className="text-xs text-neutral-400">支持微信分享</p>
+                    </div>
+                    <input type="checkbox" checked={newActivity.enableShare} onChange={e => setNewActivity({...newActivity, enableShare: e.target.checked})} className="hidden" />
                   </label>
                 </div>
               </div>
@@ -643,7 +918,7 @@ export const MarketingIncentivePage = () => {
               )}
 
               {/* Points Settings */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="text-xs font-semibold text-neutral-500 block mb-2">报名积分</label>
                   <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
@@ -662,6 +937,169 @@ export const MarketingIncentivePage = () => {
                     placeholder="20"
                   />
                 </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">分享积分</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="number" 
+                    value={newActivity.sharePoints} 
+                    onChange={e => setNewActivity({...newActivity, sharePoints: parseInt(e.target.value) || 0})} 
+                    placeholder="15"
+                  />
+                </div>
+                {newActivity.enableQuestions && (
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500 block mb-2">提问积分</label>
+                    <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                      type="number" 
+                      value={newActivity.questionPoints} 
+                      onChange={e => setNewActivity({...newActivity, questionPoints: parseInt(e.target.value) || 0})} 
+                      placeholder="5"
+                    />
+                  </div>
+                )}
+                {newActivity.enableLottery && (
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-500 block mb-2">抽奖积分</label>
+                    <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                      type="number" 
+                      value={newActivity.lotteryPoints} 
+                      onChange={e => setNewActivity({...newActivity, lotteryPoints: parseInt(e.target.value) || 0})} 
+                      placeholder="10"
+                    />
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">互动积分</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="number" 
+                    value={newActivity.interactionPoints} 
+                    onChange={e => setNewActivity({...newActivity, interactionPoints: parseInt(e.target.value) || 0})} 
+                    placeholder="8"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">邀请积分</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="number" 
+                    value={newActivity.invitePoints} 
+                    onChange={e => setNewActivity({...newActivity, invitePoints: parseInt(e.target.value) || 0})} 
+                    placeholder="25"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">评价积分</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="number" 
+                    value={newActivity.reviewPoints} 
+                    onChange={e => setNewActivity({...newActivity, reviewPoints: parseInt(e.target.value) || 0})} 
+                    placeholder="12"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-500 block mb-2">完成积分</label>
+                  <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" 
+                    type="number" 
+                    value={newActivity.completePoints} 
+                    onChange={e => setNewActivity({...newActivity, completePoints: parseInt(e.target.value) || 0})} 
+                    placeholder="30"
+                  />
+                </div>
+              </div>
+              <div className="space-y-4">
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-xl p-6">
+                  <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-3 flex items-center gap-2">
+                    <Info className="w-4 h-4" />
+                    活动创建提示
+                  </h4>
+                  <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-2">
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></span>
+                      从已批复计划选择可以快速填充活动基本信息
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></span>
+                      邀请函链接在活动创建成功后自动生成
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></span>
+                      积分设置用于激励参会者参与活动互动
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 flex-shrink-0"></span>
+                      活动功能可根据实际需求灵活启用或关闭
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-neutral-50 dark:bg-neutral-800 rounded-xl p-6">
+                  <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-200 mb-3 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" />
+                    活动时间说明
+                  </h4>
+                  <p className="text-xs text-neutral-500 mb-3">
+                    活动日期范围和时间设置用于生成邀请函和提醒通知。
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">开始日期</span>
+                      <span className="text-neutral-700 dark:text-neutral-300">{newActivity.date || '未设置'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">结束日期</span>
+                      <span className="text-neutral-700 dark:text-neutral-300">{newActivity.endDate || '未设置'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">开始时间</span>
+                      <span className="text-neutral-700 dark:text-neutral-300">{newActivity.startTime || '未设置'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">结束时间</span>
+                      <span className="text-neutral-700 dark:text-neutral-300">{newActivity.endTime || '未设置'}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6">
+                  <h4 className="text-sm font-semibold text-green-800 dark:text-green-300 mb-3 flex items-center gap-2">
+                    <Zap className="w-4 h-4" />
+                    快捷操作
+                  </h4>
+                  <div className="space-y-2">
+                    <button 
+                      onClick={() => {
+                        const now = new Date();
+                        setNewActivity({
+                          ...newActivity,
+                          date: now.toISOString().split('T')[0],
+                          startTime: '09:00',
+                          endTime: '17:00'
+                        });
+                      }}
+                      className="w-full p-3 text-left rounded-lg bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors"
+                    >
+                      设置为今天
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setNewActivity({
+                          ...newActivity,
+                          signupPoints: 10,
+                          checkinPoints: 20,
+                          sharePoints: 15,
+                          questionPoints: 5,
+                          lotteryPoints: 10,
+                          interactionPoints: 8,
+                          invitePoints: 25,
+                          reviewPoints: 12,
+                          completePoints: 30
+                        });
+                      }}
+                      className="w-full p-3 text-left rounded-lg bg-white dark:bg-neutral-700 border border-neutral-200 dark:border-neutral-600 text-xs hover:bg-neutral-50 dark:hover:bg-neutral-600 transition-colors"
+                    >
+                      重置积分默认值
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -670,6 +1108,56 @@ export const MarketingIncentivePage = () => {
               <Button variant="brand" onClick={handleCreateActivity} disabled={creating || !newActivity.name || !newActivity.budget || (newActivity.hostType === 'partner' && !newActivity.partnerId)}>
                 {creating ? '创建中...' : '创建活动'}
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invitation Modal */}
+      {showInvitationModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-neutral-900 rounded-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-6 border-b border-neutral-200 dark:border-neutral-800">
+              <h3 className="text-lg font-semibold">生成邀请函</h3>
+              <button onClick={() => { setShowInvitationModal(false); window.location.reload(); }} className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <div className="bg-neutral-100 dark:bg-neutral-800 rounded-lg p-4 mb-4">
+                <label className="text-xs font-semibold text-neutral-500 block mb-2">邀请函链接</label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={invitationUrl}
+                    readOnly
+                    className="flex-1 h-10 px-3 bg-white dark:bg-neutral-700 border rounded-lg text-sm"
+                  />
+                  <Button size="sm" onClick={copyToClipboard} className="h-10">
+                    {copied ? <span className="flex items-center gap-1"><CheckSquare className="w-4 h-4" />已复制</span> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="flex flex-col items-center mb-4">
+                <div className="bg-white border-2 border-neutral-200 dark:border-neutral-700 rounded-lg p-4 mb-4">
+                  <img src={invitationQrCode} alt="QR Code" className="w-48 h-48" />
+                </div>
+                <p className="text-sm text-neutral-500">扫码报名 / 分享链接</p>
+              </div>
+
+              <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <h4 className="text-sm font-semibold text-blue-800 dark:text-blue-300 mb-2">邀请函分发方式</h4>
+                <ul className="text-xs text-blue-700 dark:text-blue-400 space-y-1">
+                  <li>分享链接到微信群或朋友圈</li>
+                  <li>打印二维码张贴在活动现场</li>
+                  <li>发送给合作伙伴进行转发</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 p-6 border-t border-neutral-200 dark:border-neutral-800">
+              <Button variant="secondary" onClick={() => { setShowInvitationModal(false); window.location.reload(); }}>关闭</Button>
+              <Button variant="brand" onClick={() => { setShowInvitationModal(false); window.location.reload(); }}>完成</Button>
             </div>
           </div>
         </div>
