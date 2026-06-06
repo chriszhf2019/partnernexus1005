@@ -262,6 +262,8 @@ interface QuarterlyPlanCardProps {
   quarter: string;
   qIndex: number;
   qBudget: number;
+  qOriginalBudget?: number;
+  qAdjust?: number;
   items: PlanActivity[];
   partners: any[];
   partnerMDF: Record<string, PartnerMDF>;
@@ -277,7 +279,7 @@ interface QuarterlyPlanCardProps {
 }
 
 const QuarterlyPlanCard = memo(({
-  quarter, qIndex, qBudget, items, partners, partnerMDF, currentYear,
+  quarter, qIndex, qBudget, qOriginalBudget, qAdjust, items, partners, partnerMDF, currentYear,
   onUpdateRow, onAddRow, onRemoveRow, onSaveRows, onApproveAll, onReload, fmt,
   saving,
 }: QuarterlyPlanCardProps) => {
@@ -317,12 +319,19 @@ const QuarterlyPlanCard = memo(({
               </span>
             </div>
             <span className="text-xs text-neutral-400">
-              季度预算 {fmt(qBudget)} · 已批复 {fmt(approvedTotal)} · {items.length} 项
+              季度预算 {fmt(qBudget)}
+              {qOriginalBudget && qOriginalBudget !== qBudget ? <span className="text-amber-600"> (调整: {qAdjust && qAdjust > 0 ? '+' : ''}{fmt(qAdjust||0)})</span> : ''}
+              {' · '}已批复 {fmt(approvedTotal)} · {items.length} 项
               {lineTotal > 0 && <> · 申请 {fmt(lineTotal)}</>}
               {' · '}
               {remaining >= 0 ? <span className="text-emerald-600">剩余 {fmt(remaining)}</span> : <span className="text-red-500">超支 {fmt(Math.abs(remaining))}</span>}
               {pmdfCount > 0 && <span className="text-purple-500"> · PMDF {pmdfCount}项</span>}
             </span>
+            {qOriginalBudget && qOriginalBudget !== qBudget && (
+              <span className="text-[10px] text-amber-600 mt-0.5 block">
+                📌 原计划 {fmt(qOriginalBudget)} → 调整后 {fmt(qBudget)}
+              </span>
+            )}
             {/* 效能进度条 */}
             {qBudget > 0 && (
               <div className="mt-2 space-y-1">
@@ -584,6 +593,10 @@ export const MarketingPlanPage = () => {
   );
 
   const annualBudget = useMemo(() => qBudgets.reduce((s, v) => s + v, 0), [qBudgets]);
+  const originalQBudgets = useMemo(
+    () => QUARTERS.map((_, i) => Number(config[`q${i + 1}_budget` as keyof BudgetConfig] || 0)),
+    [config],
+  );
   const baseAnnual = useMemo(
     () => QUARTERS.reduce((s, _, i) => s + Number(config[`q${i + 1}_budget` as keyof BudgetConfig] || 0), 0),
     [config],
@@ -1151,6 +1164,8 @@ export const MarketingPlanPage = () => {
           quarter={q}
           qIndex={i}
           qBudget={qBudgets[i]}
+          qOriginalBudget={originalQBudgets[i]}
+          qAdjust={(qBudgets[i]||0) - (originalQBudgets[i]||0)}
           items={quarterlyItems[i]}
           partners={partners}
           partnerMDF={partnerMDF}
