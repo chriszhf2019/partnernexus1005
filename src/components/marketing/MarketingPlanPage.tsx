@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle,
   TrendingUp, RefreshCw, History, DollarSign, PieChart, BarChart3,
-  AlertCircle, CheckCircle, Users, ChevronLeft, ChevronRight, Loader2,
+  AlertCircle, AlertTriangle, CheckCircle, Users, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/Button';
@@ -12,6 +12,7 @@ import { SearchableSelect } from '../ui/SearchableSelect';
 import { formatCurrency, currencyName } from '../../lib/utils';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useToast } from '../ui/Toast';
+import { LeadDrilldownDrawer } from './LeadDrilldownDrawer';
 
 // ── Constants ──────────────────────────────────────────
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
@@ -455,11 +456,19 @@ const QuarterlyPlanCard = memo(({
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.expected_output || ''} onChange={e => onUpdateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
                         {execStatus === 'executed' && (p as any).actual_leads > 0 && (
-                          <button onClick={() => navigate('/deals')} className="text-[9px] block text-blue-500 hover:underline">
+                          <button onClick={() => setDrilldownActivity(p)} className="text-[9px] block text-blue-500 hover:underline text-left">
                             实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机 →
                           </button>
                         )}
                       </td>
+                      {/* 行级预警 */}
+                      {execStatus === 'executed' && (p as any).actual_spend >= p.total_budget && !(p as any).actual_leads && (
+                        <td className="py-2 px-1">
+                          <span className="inline-flex items-center gap-1 text-[10px] text-red-500 animate-pulse" title="超支且零产出！">
+                            <AlertTriangle className="w-3 h-3" />超支无产出
+                          </span>
+                        </td>
+                      )}
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.responsible_person || ''} onChange={e => onUpdateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" />
                       </td>
@@ -532,6 +541,7 @@ export const MarketingPlanPage = () => {
   const [partnerMDF, setPartnerMDF] = useState<Record<string, PartnerMDF>>({});
   const [showAdjust, setShowAdjust] = useState(false);
   const [savingRows, setSavingRows] = useState(false);
+  const [drilldownActivity, setDrilldownActivity] = useState<PlanActivity | null>(null);
 
   // Available years cache
   const availableYears = useMemo(
@@ -1226,6 +1236,19 @@ export const MarketingPlanPage = () => {
         </p>
         <Button variant="secondary" onClick={() => navigate('/marketing')}>返回营销首页</Button>
       </div>
+
+      {/* Lead Drilldown Drawer */}
+      {drilldownActivity && (
+        <LeadDrilldownDrawer
+          open={!!drilldownActivity}
+          onClose={() => setDrilldownActivity(null)}
+          activityId={drilldownActivity.id}
+          activityName={drilldownActivity.category + ' - ' + drilldownActivity.quarter}
+          plannedLeads={drilldownActivity.expected_output || '0'}
+          actualLeads={drilldownActivity.actual_leads || 0}
+          actualOpps={drilldownActivity.actual_opps || 0}
+        />
+      )}
     </div>
   );
 };
