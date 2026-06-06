@@ -243,6 +243,13 @@ export interface Deal {
   isStagnant?: boolean; // 是否异常停滞
   expiresInDays?: number; // 有效期剩余天数
   winLossAnalysis?: WinLossAnalysis; // 赢单/丢单分析
+  originActivityId?: string; // 关联营销活动ID
+  originActivityName?: string; // 关联营销活动名称
+  originInvitationCode?: string; // 关联邀请码
+  healthScore?: number; // 商机健康度评分 (0-100)
+  leadResponseTime?: number; // 线索首次响应时长(小时)
+  isNewLogo?: boolean; // 是否新客户
+  protectionRemainingDays?: number; // 保护期剩余天数
 }
 
 export interface DealRegistrationStats {

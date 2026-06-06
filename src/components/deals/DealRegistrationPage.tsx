@@ -783,6 +783,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                   <th className="px-6 py-3.5 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colValue')}</th>
                   <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">停留天数</th>
                   <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colStage')}</th>
+                  <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">健康度</th>
                   <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colPriority')}</th>
                   <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">最新动态</th>
                   <th className="px-6 py-3.5 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('common.actions')}</th>
@@ -854,13 +855,25 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                           <Badge variant="default" size="sm">{deal.partnerType}</Badge>
                         </td>
                         
-                        {/* 来源 */}
+                        {/* 来源 + 关联活动 */}
                         <td className="px-6 py-4">
                           {sourceCfg && (
                             <div className="flex items-center gap-2">
                               <sourceCfg.icon className="w-4 h-4 text-neutral-400" />
                               <span className="text-xs text-neutral-500">{sourceCfg.label}</span>
                             </div>
+                          )}
+                          {deal.originActivityName && (
+                            <button onClick={(e) => { e.stopPropagation(); navigate('/marketing'); }} className="mt-1 flex items-center gap-1 text-xs text-purple-600 hover:text-purple-800 hover:underline">
+                              <Target className="w-3 h-3" />
+                              <span className="truncate max-w-[100px]">{deal.originActivityName}</span>
+                            </button>
+                          )}
+                          {deal.leadResponseTime !== undefined && deal.leadResponseTime > 0 && (
+                            <p className={cn('text-[10px] mt-0.5', deal.leadResponseTime <= 24 ? 'text-emerald-500' : deal.leadResponseTime <= 48 ? 'text-amber-500' : 'text-red-500')}>
+                              响应: {deal.leadResponseTime}h
+                              {deal.leadResponseTime <= 24 && ' ⚡速响'}
+                            </p>
                           )}
                         </td>
                         
@@ -929,8 +942,25 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                             <StageIcon className="w-3.5 h-3.5" />
                             {stageCfg.label}
                           </div>
+                          {deal.protectionRemainingDays && deal.protectionRemainingDays > 0 && (
+                            <p className="text-[10px] text-amber-500 mt-0.5">🛡️ 保护 {deal.protectionRemainingDays}天</p>
+                          )}
                         </td>
-                        
+
+                        {/* 健康度 */}
+                        <td className="px-6 py-4 text-center">
+                          {deal.healthScore !== undefined ? (
+                            <div className="flex items-center justify-center gap-1">
+                              <div className={cn(
+                                'w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold',
+                                deal.healthScore >= 80 ? 'bg-emerald-100 text-emerald-700' :
+                                deal.healthScore >= 50 ? 'bg-amber-100 text-amber-700' :
+                                'bg-red-100 text-red-700'
+                              )}>{deal.healthScore}</div>
+                            </div>
+                          ) : <span className="text-xs text-neutral-400">-</span>}
+                        </td>
+
                         {/* 优先级 */}
                         <td className="px-6 py-4 text-center">
                           {deal.isPriority ? (

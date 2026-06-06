@@ -45,6 +45,13 @@ function normalizeDeal(row: any): Deal {
     isStagnant: row.is_stagnant ?? row.isStagnant ?? false,
     expiresInDays: Number(row.expires_in_days || row.expiresInDays || 0),
     activities: Array.isArray(row.activities) ? row.activities : [],
+    originActivityId: row.origin_activity_id || undefined,
+    originActivityName: row.origin_activity_name || undefined,
+    originInvitationCode: row.origin_invitation_code || undefined,
+    healthScore: Number(row.health_score) || 50,
+    leadResponseTime: Number(row.lead_response_time) || undefined,
+    isNewLogo: row.is_new_logo ?? false,
+    protectionRemainingDays: Number(row.protection_remaining_days) || undefined,
     winLossAnalysis: row.win_loss_reason ? {
       reason: row.win_loss_reason,
       description: row.win_loss_description || undefined,
