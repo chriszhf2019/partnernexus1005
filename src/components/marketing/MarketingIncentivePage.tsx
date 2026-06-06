@@ -10,7 +10,13 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { SearchableSelect } from '../ui/SearchableSelect';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { Plus, TrendingUp, Users, Calendar, Target, Activity, DollarSign, BarChart3, PieChart, ExternalLink, X, Filter, ChevronRight, Trophy, Flame, Award, Zap, Building2, Handshake, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckSquare, QrCode, Share2, Copy, Eye, Image, Tag, MessageSquare, CalendarDays, Info } from 'lucide-react';
+import { Plus, TrendingUp, Users, Calendar, Target, Activity, DollarSign, BarChart3, PieChart, ExternalLink, X, Filter, ChevronRight, Trophy, Flame, Award, Zap, Building2, Handshake, MapPin, Phone, User, FileText, Gift, MessageCircle, CheckSquare, QrCode, Share2, Copy, Eye, Image, Tag, MessageSquare, CalendarDays, Info, Receipt, Package, UserCheck, Wrench } from 'lucide-react';
+import { MDFClaimsPanel } from './MDFClaimsPanel';
+import { CampaignROIPanel } from './CampaignROIPanel';
+import { MarketingAssetLibrary } from './MarketingAssetLibrary';
+import { MarketingCalendarPanel } from './MarketingCalendarPanel';
+import { LeadNurturingPanel } from './LeadNurturingPanel';
+import { ResourceMarketplace } from './ResourceMarketplace';
 
 export const MarketingIncentivePage = () => {
   const { t } = useLanguage();
@@ -63,6 +69,14 @@ export const MarketingIncentivePage = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [partners, setPartners] = useState<any[]>([]);
   const [budgetConfig, setBudgetConfig] = useState<any>({});
+
+  // New panel states
+  const [showMDFClaims, setShowMDFClaims] = useState(false);
+  const [showROIPanel, setShowROIPanel] = useState(false);
+  const [showAssetLibrary, setShowAssetLibrary] = useState(false);
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [showLeadNurturing, setShowLeadNurturing] = useState(false);
+  const [showResourceMarket, setShowResourceMarket] = useState(false);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -276,6 +290,29 @@ export const MarketingIncentivePage = () => {
             </div>
           </Card>
         ))}
+      </div>
+
+      {/* 功能快捷入口 */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs font-medium text-neutral-500 mr-2">功能快捷入口:</span>
+        <Button variant="secondary" size="sm" onClick={() => setShowMDFClaims(true)}>
+          <Receipt className="w-3.5 h-3.5 mr-1" />MDF 核销
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowROIPanel(true)}>
+          <Target className="w-3.5 h-3.5 mr-1" />ROI 追踪
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowAssetLibrary(true)}>
+          <Package className="w-3.5 h-3.5 mr-1" />资料库
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowCalendar(true)}>
+          <Calendar className="w-3.5 h-3.5 mr-1" />年度规划
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowLeadNurturing(true)}>
+          <UserCheck className="w-3.5 h-3.5 mr-1" />线索培育
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowResourceMarket(true)}>
+          <Wrench className="w-3.5 h-3.5 mr-1" />资源市场
+        </Button>
       </div>
 
       {/* Budget Trend Chart */}
@@ -1182,6 +1219,14 @@ export const MarketingIncentivePage = () => {
           </div>
         </div>
       )}
+
+      {/* New Panels */}
+      <MDFClaimsPanel open={showMDFClaims} onClose={() => setShowMDFClaims(false)} />
+      <CampaignROIPanel open={showROIPanel} onClose={() => setShowROIPanel(false)} />
+      <MarketingAssetLibrary open={showAssetLibrary} onClose={() => setShowAssetLibrary(false)} />
+      <MarketingCalendarPanel open={showCalendar} onClose={() => setShowCalendar(false)} />
+      <LeadNurturingPanel open={showLeadNurturing} onClose={() => setShowLeadNurturing(false)} />
+      <ResourceMarketplace open={showResourceMarket} onClose={() => setShowResourceMarket(false)} />
     </div>
   );
 };
