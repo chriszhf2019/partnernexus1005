@@ -9,6 +9,7 @@ const variants = {
   danger: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400',
   info: 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-400',
   primary: 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900',
+  brand: 'bg-brand/10 text-brand dark:bg-brand/20 dark:text-brand',
 } as const;
 
 const sizes = {

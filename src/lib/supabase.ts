@@ -21,4 +21,9 @@ export const db = {
   mpOrders: () => supabase.from('mp_orders'),
   settings: () => supabase.from('settings'),
   operationLogs: () => supabase.from('partner_operation_logs'),
+  dealActivities: () => supabase.from('deal_activities'),
+  protectionRules: () => supabase.from('protection_rules'),
+  ruleExecutionLogs: () => supabase.from('rule_execution_logs'),
+  savedViews: () => supabase.from('saved_views'),
+  filterHistory: () => supabase.from('filter_history'),
 };

@@ -8,8 +8,12 @@ import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   MessageSquare, Users, CalendarDays, Flag, Timer, AlertTriangle,
   Phone, Mail, ListTodo, RefreshCw, Send, Share2, Star, Bookmark,
   Filter, Layout, ChevronLeft, Award, Clock8, Handshake, Sparkles,
-  BarChart2, PieChart, Settings
+  BarChart2, PieChart, Settings, TrendingDown,
 } from 'lucide-react';
+import { InlineEdit } from './components/InlineEdit';
+import { WinLossPanel } from './components/WinLossPanel';
+import { RuleEnginePanel } from './components/RuleEnginePanel';
+import { PresetFilterBar } from './components/PresetFilterBar';
 import { cn, formatCurrency } from '../../lib/utils';
 import { Deal, DealRegistrationStats, DealStatus, DealLifecycleStage, DealSource, DealConflict, DealStageProbability, WinLossReason } from '../../types';
 import { DEAL_CONFLICTS } from '../../constants';
@@ -150,6 +154,11 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   
   const [showPreviewPopover, setShowPreviewPopover] = useState(false);
   const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+
+  // New panels
+  const [showWinLossPanel, setShowWinLossPanel] = useState(false);
+  const [showRuleEngine, setShowRuleEngine] = useState(false);
+  const [activePreset, setActivePreset] = useState<string | null>(null);
 
   // 计算加权管线金额
   const calculateWeightedValue = (deal: Deal): number => {
@@ -683,6 +692,14 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button variant="secondary" size="sm" onClick={() => setShowWinLossPanel(true)}>
+              <TrendingDown className="w-4 h-4 mr-1" />
+              赢单/丢单分析
+            </Button>
+            <Button variant="secondary" size="sm" onClick={() => setShowRuleEngine(true)}>
+              <Settings className="w-4 h-4 mr-1" />
+              规则引擎
+            </Button>
             <Button variant="outline" size="sm" onClick={() => setShowViewManager(true)}>
               <Layout className="w-4 h-4 mr-1" />
               视图管理
@@ -714,6 +731,33 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
             </div>
           ))}
           <span className="ml-auto text-xs text-neutral-400 shrink-0">{filteredDeals.length} {t('common.results')}</span>
+        </div>
+
+        {/* 快捷预设筛选 */}
+        <div className="px-6 py-2 border-b border-neutral-100 dark:border-neutral-800">
+          <PresetFilterBar
+            deals={deals}
+            currentUser={config?.companyName || ''}
+            userRegion="华东"
+            activePreset={activePreset}
+            onSelectPreset={(preset) => {
+              if (!preset) {
+                setActivePreset(null);
+                setSelectedStageFilter('All');
+                return;
+              }
+              setActivePreset(preset.id);
+              if (preset.filters.stage) setSelectedStageFilter(preset.filters.stage);
+              if (preset.filters.isStagnant !== undefined) {
+                // 应用停滞过滤
+                setFilters(prev => ({ ...prev, stage: 'All' }));
+              }
+              if (preset.filters.minValue) {
+                // 金额过滤应用到搜索
+                setSearchQuery(`value>=${preset.filters.minValue}`);
+              }
+            }}
+          />
         </div>
 
         {filteredDeals.length === 0 ? (
@@ -1735,6 +1779,20 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 赢单/丢单综合分析面板 */}
+      <WinLossPanel
+        open={showWinLossPanel}
+        onClose={() => setShowWinLossPanel(false)}
+        deals={deals}
+        onNavigateDeal={(dealId) => { setShowWinLossPanel(false); navigate(`/deals/${dealId}`); }}
+      />
+
+      {/* 规则引擎面板 */}
+      <RuleEnginePanel
+        open={showRuleEngine}
+        onClose={() => setShowRuleEngine(false)}
+      />
     </div>
   );
 };

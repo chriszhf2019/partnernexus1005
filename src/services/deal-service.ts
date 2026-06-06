@@ -38,6 +38,19 @@ function normalizeDeal(row: any): Deal {
     notes: row.notes || undefined,
     nextAction: row.next_action || row.nextAction || undefined,
     nextActionDate: row.next_action_date || row.nextActionDate || undefined,
+    customerContact: row.customer_contact || row.customerContact || '',
+    customerPhone: row.customer_phone || row.customerPhone || '',
+    weightedValue: Number(row.weighted_value || row.weightedValue || 0),
+    daysInCurrentStage: Number(row.days_in_current_stage || row.daysInCurrentStage || 0),
+    isStagnant: row.is_stagnant ?? row.isStagnant ?? false,
+    expiresInDays: Number(row.expires_in_days || row.expiresInDays || 0),
+    activities: Array.isArray(row.activities) ? row.activities : [],
+    winLossAnalysis: row.win_loss_reason ? {
+      reason: row.win_loss_reason,
+      description: row.win_loss_description || undefined,
+      competitor: row.win_loss_competitor || undefined,
+      keyFactors: Array.isArray(row.win_loss_key_factors) ? row.win_loss_key_factors : undefined,
+    } : undefined,
   };
 }
 
@@ -57,9 +70,15 @@ function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {
     expectedCloseDate: 'end_date',
     isPriority: 'is_priority',
     hasConflict: 'has_conflict',
+    customerContact: 'customer_contact',
+    customerPhone: 'customer_phone',
+    weightedValue: 'weighted_value',
+    daysInCurrentStage: 'days_in_current_stage',
+    isStagnant: 'is_stagnant',
+    expiresInDays: 'expires_in_days',
   };
   // Known fields that don't exist in DB - skip them (expectedCloseDate is mapped to end_date above, so not skipped)
-  const skipFields = new Set(['lastActivityDate', 'customerIndustry', 'province', 'city', 'stage', 'lifecycle', 'sourceInfo', 'conversionMetrics', 'notes', 'nextAction', 'nextActionDate']);
+  const skipFields = new Set(['lastActivityDate', 'customerIndustry', 'province', 'city', 'stage', 'lifecycle', 'sourceInfo', 'conversionMetrics', 'notes', 'nextAction', 'nextActionDate', 'activities', 'winLossAnalysis']);
   for (const [k, v] of Object.entries(deal)) {
     if (v === undefined || skipFields.has(k)) continue;
     out[map[k] || k] = v;
@@ -118,6 +137,13 @@ export const dealService = {
       is_priority: deal.isPriority ?? false,
       has_conflict: deal.hasConflict ?? false,
       description: deal.description || '',
+      customer_contact: deal.customerContact || '',
+      customer_phone: deal.customerPhone || '',
+      weighted_value: deal.weightedValue || 0,
+      days_in_current_stage: deal.daysInCurrentStage || 0,
+      is_stagnant: deal.isStagnant || false,
+      expires_in_days: deal.expiresInDays || null,
+      activities: deal.activities || [],
     };
     const { data, error } = await db.deals().insert(insertData).select().single();
     if (error) throw new Error(error.message);

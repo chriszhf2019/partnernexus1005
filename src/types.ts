@@ -136,6 +136,71 @@ export interface DealAssignment {
   status: 'Pending' | 'Accepted' | 'Rejected';
 }
 
+// ── 保护规则 ─────────────────────────────────────────
+export interface ProtectionRule {
+  id: string;
+  name: string;
+  protectionDays: number;
+  requireRecentActivity: boolean;
+  recentActivityDays: number;
+  expireAction: 'notify_only' | 'auto_release';
+  notifyBeforeDays: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RuleExecutionLog {
+  id: string;
+  ruleId: string;
+  dealId: string;
+  action: 'notified' | 'released' | 'warned';
+  details?: string;
+  executedAt: string;
+}
+
+// ── 预设筛选 ─────────────────────────────────────────
+export interface SavedView {
+  id: string;
+  userId: string;
+  name: string;
+  filters: Record<string, any>;
+  isPreset: boolean;
+  isAIRecommended: boolean;
+  sortOrder: number;
+  icon: string;
+  badgeType: 'count' | 'value' | 'none';
+  createdAt: string;
+}
+
+export interface PresetFilter {
+  id: string;
+  name: string;
+  icon: string;
+  filters: {
+    status?: string[];
+    stage?: string;
+    isStagnant?: boolean;
+    expiresInDaysMax?: number;
+    minValue?: number;
+    region?: string[];
+    assignedTo?: string;
+    productType?: string[];
+  };
+  isSystem: boolean;
+  isAIRecommended: boolean;
+  sortOrder: number;
+  badge: 'count' | 'value' | 'none';
+}
+
+export interface FilterHistory {
+  id: string;
+  userId: string;
+  filters: Record<string, any>;
+  resultCount: number;
+  createdAt: string;
+}
+
 export interface Deal {
   id: string;
   title: string;
