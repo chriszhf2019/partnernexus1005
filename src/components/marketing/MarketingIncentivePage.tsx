@@ -56,7 +56,8 @@ export const MarketingIncentivePage = () => {
     interactionPoints: 8,
     invitePoints: 25,
     reviewPoints: 12,
-    completePoints: 30
+    completePoints: 30,
+    invitation_code: ''
   });
   const [creating, setCreating] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all');
@@ -576,7 +577,8 @@ export const MarketingIncentivePage = () => {
                   interactionPoints: 8,
                   invitePoints: 25,
                   reviewPoints: 12,
-                  completePoints: 30
+                  completePoints: 30,
+                  invitation_code: ''
                 });
               }} className="p-1 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800">
                 <X className="w-5 h-5" />
@@ -597,20 +599,38 @@ export const MarketingIncentivePage = () => {
                           name: plan.category || '',
                           type: plan.category || '线下峰会',
                           date: plan.expected_date || '',
+                          endDate: '',
+                          startTime: '',
+                          endTime: '',
                           budget: String(plan.approved_amount || plan.total_budget || ''),
                           hostType: plan.activity_type === 'PMDF' ? 'partner' : 'vendor',
                           partnerId: plan.partner_id || '',
                           partnerName: plan.partner_name || '',
                           location: plan.city || '',
+                          province: '',
+                          city: '',
+                          district: '',
                           description: plan.goal || '',
+                          coverImage: '',
+                          tags: '',
                           contactName: plan.responsible_person || '',
                           contactPhone: '',
                           maxAttendees: Number(plan.expected_attendees) || 100,
                           enableQuestions: false,
                           enableLottery: false,
+                          enableCheckin: true,
+                          enableShare: true,
                           lotteryReward: '',
                           signupPoints: 10,
-                          checkinPoints: 20
+                          checkinPoints: 20,
+                          sharePoints: 15,
+                          questionPoints: 5,
+                          lotteryPoints: 10,
+                          interactionPoints: 8,
+                          invitePoints: 25,
+                          reviewPoints: 12,
+                          completePoints: 30,
+                          invitation_code: ''
                         });
                       }}
                       className={`w-full px-4 py-3 flex items-center justify-between transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800 ${

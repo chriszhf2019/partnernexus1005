@@ -92,7 +92,7 @@ export const DEAL_STATS: DealRegistrationStats = {
     'IncentiveProgram': 8,
     'Referral': 5
   },
-  conflictCount: 7,
+  conflictCount: 3,
   overdueCount: 15
 };
 
@@ -132,7 +132,15 @@ export const DEALS: Deal[] = [
     },
     description: '浙江省立医院现有 CMS 系统升级，包括架构重构和云原生改造',
     nextAction: '提交技术方案初稿',
-    nextActionDate: '2024-10-01'
+    nextActionDate: '2024-10-01',
+    activities: [
+      { id: 'a1', dealId: 'd1', type: 'meeting', content: '与客户CIO进行需求沟通，确认项目范围和时间节点', actor: '陈伟', createdAt: '2024-09-20 14:30' },
+      { id: 'a2', dealId: 'd1', type: 'note', content: '@张伟 客户对云原生架构比较关注，建议下周二安排架构师技术交流', actor: '陈伟', createdAt: '2024-09-19 10:15', mentions: ['张伟'] },
+      { id: 'a3', dealId: 'd1', type: 'update', content: '客户已确认技术选型，等待预算审批', actor: '张伟', createdAt: '2024-09-18 16:00' }
+    ],
+    daysInCurrentStage: 33,
+    isStagnant: false,
+    expiresInDays: 102
   },
   {
     id: 'd2',
@@ -180,7 +188,10 @@ export const DEALS: Deal[] = [
     },
     description: '苏州市卫健委医疗健康数据湖平台建设，包含数据采集、存储、分析和应用',
     nextAction: '提交数据治理方案',
-    nextActionDate: '2024-10-15'
+    nextActionDate: '2024-10-15',
+    daysInCurrentStage: 71,
+    isStagnant: true,
+    expiresInDays: 193
   },
   {
     id: 'd3',
@@ -215,7 +226,13 @@ export const DEALS: Deal[] = [
       source: 'PartnerInitiated',
       leadQuality: 'Warm'
     },
-    description: 'AI 辅助诊断系统建设，因与浙江省立医院项目存在客户归属冲突被终止'
+    description: 'AI 辅助诊断系统建设，因与浙江省立医院项目存在客户归属冲突被终止',
+    winLossAnalysis: {
+      reason: 'Relationship',
+      description: '因客户归属冲突导致丢单，浙江和上海两家瑞金医院同属一个医疗集团，根据区域划分原则，浙江省立医院项目由华东医卫云科负责',
+      competitor: '华东医卫云科技术有限公司',
+      keyFactors: ['客户归属规则', '区域划分', '合作伙伴关系']
+    }
   },
   {
     id: 'd4',
@@ -264,7 +281,10 @@ export const DEALS: Deal[] = [
     },
     description: '智慧医院整体建设一期，包含HIS系统升级和院区网络改造',
     nextAction: '商务谈判最终报价',
-    nextActionDate: '2024-10-10'
+    nextActionDate: '2024-10-10',
+    daysInCurrentStage: 21,
+    isStagnant: false,
+    expiresInDays: 70
   },
   {
     id: 'd5',
@@ -298,7 +318,10 @@ export const DEALS: Deal[] = [
       leadQuality: 'Warm',
       initialContactDate: '2024-07-25'
     },
-    description: '医保数据中台建设，实现与省级医保平台互联互通'
+    description: '医保数据中台建设，实现与省级医保平台互联互通',
+    daysInCurrentStage: 45,
+    isStagnant: false,
+    expiresInDays: 132
   },
   {
     id: 'd6',
@@ -407,7 +430,10 @@ export const DEALS: Deal[] = [
       leadQuality: 'Hot',
       initialContactDate: '2024-06-01'
     },
-    description: '医联体信息平台，覆盖武汉市属10家医院'
+    description: '医联体信息平台，覆盖武汉市属10家医院',
+    daysInCurrentStage: 81,
+    isStagnant: true,
+    expiresInDays: 100
   },
   {
     id: 'd9',
@@ -454,7 +480,12 @@ export const DEALS: Deal[] = [
       leadQuality: 'Hot',
       initialContactDate: '2024-03-01'
     },
-    description: '医院私有云平台建设'
+    description: '医院私有云平台建设',
+    winLossAnalysis: {
+      reason: 'Product',
+      description: '产品方案满足客户需求，技术优势明显',
+      keyFactors: ['技术方案', '服务能力', '价格竞争力']
+    }
   },
   {
     id: 'd10',
@@ -548,7 +579,10 @@ export const DEALS: Deal[] = [
       leadQuality: 'Hot',
       initialContactDate: '2024-05-10'
     },
-    description: '智慧警务大数据分析平台，覆盖全市公安系统'
+    description: '智慧警务大数据分析平台，覆盖全市公安系统',
+    daysInCurrentStage: 21,
+    isStagnant: false,
+    expiresInDays: 100
   },
   {
     id: 'd12',
@@ -615,7 +649,10 @@ export const DEALS: Deal[] = [
       leadQuality: 'Hot',
       initialContactDate: '2024-08-05'
     },
-    description: '医院信息系统云原生架构升级'
+    description: '医院信息系统云原生架构升级',
+    daysInCurrentStage: 39,
+    isStagnant: false,
+    expiresInDays: 160
   },
   {
     id: 'd14',
@@ -684,7 +721,8 @@ export const DEALS: Deal[] = [
     lastActivityDate: '2024-09-20',
     expectedCloseDate: '2024-11-30',
     isPriority: true,
-    hasConflict: false,
+    hasConflict: true,
+    conflictId: 'cf3',
     lifecycle: [
       { stage: 'Registered', date: '2024-05-08', description: '合作伙伴提交报备', actor: '王浩', durationDays: 0 },
       { stage: 'UnderReview', date: '2024-05-10', description: '渠道经理审核中', actor: '王强', durationDays: 2 },
@@ -707,7 +745,44 @@ export const DEALS: Deal[] = [
       leadQuality: 'Hot',
       initialContactDate: '2024-04-25'
     },
-    description: 'AI 辅助诊疗系统，包含影像分析和临床决策支持'
+    description: 'AI 辅助诊疗系统，包含影像分析和临床决策支持',
+    daysInCurrentStage: 32,
+    isStagnant: false,
+    expiresInDays: 71
+  },
+  {
+    id: 'd18',
+    title: '深圳市政府智慧政务平台二期',
+    customerId: 'c18',
+    customerName: '深圳市人民政府',
+    customerIndustry: '政府',
+    value: 12000000,
+    partnerId: '10',
+    partnerName: '深圳智慧城市科技',
+    partnerType: 'SI',
+    stage: 'UnderReview',
+    status: 'Pending',
+    region: '华南',
+    province: '广东',
+    city: '深圳',
+    salesName: '刘洋',
+    salesTeam: '政府事业部',
+    productType: '云原生平台',
+    createdDate: '2024-09-15',
+    lastActivityDate: '2024-09-20',
+    expectedCloseDate: '2025-03-31',
+    hasConflict: true,
+    conflictId: 'cf3',
+    lifecycle: [
+      { stage: 'Registered', date: '2024-09-15', description: '合作伙伴提交报备', actor: '刘洋', durationDays: 0 },
+      { stage: 'UnderReview', date: '2024-09-18', description: '渠道经理审核中，发现与d15存在冲突', actor: '刘洋', durationDays: 3 }
+    ],
+    sourceInfo: {
+      source: 'ChannelAssigned',
+      leadQuality: 'Hot',
+      initialContactDate: '2024-09-10'
+    },
+    description: '智慧政务平台二期建设，包含数据中台和AI能力平台'
   }
 ];
 
@@ -721,7 +796,9 @@ export const DEAL_CONFLICTS: DealConflict[] = [
     resolution: '上海瑞金医院项目终止，由上海智医科技负责后续跟进浙江省立医院项目',
     resolvedBy: 'Alex Rivera',
     resolvedDate: '2024-08-25',
-    createdDate: '2024-08-22'
+    createdDate: '2024-08-22',
+    protectionPeriodDays: 90,
+    firstReportedDealId: 'd1'
   },
   {
     id: 'cf2',
@@ -729,7 +806,19 @@ export const DEAL_CONFLICTS: DealConflict[] = [
     dealIds: ['d12', 'd6'],
     description: '天津市肿瘤医院 AI 智算平台项目可能存在多伙伴报备冲突',
     status: 'Pending',
-    createdDate: '2024-09-21'
+    createdDate: '2024-09-21',
+    protectionPeriodDays: 90,
+    firstReportedDealId: 'd12'
+  },
+  {
+    id: 'cf3',
+    type: 'MultiPartnerSameDeal',
+    dealIds: ['d15', 'd18'],
+    description: '深圳市政府智慧政务平台项目存在三家伙伴同时报备',
+    status: 'Pending',
+    createdDate: '2024-09-18',
+    protectionPeriodDays: 90,
+    firstReportedDealId: 'd15'
   }
 ];
 

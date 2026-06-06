@@ -2,6 +2,17 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import { dealService } from '../services/deal-service';
 import type { CockpitData, Partner, Deal } from '../types';
 
+// 阶段概率配置
+const STAGE_PROBABILITIES: Record<string, { probability: number; avgCycleDays: number }> = {
+  'Registered':    { probability: 10, avgCycleDays: 3 },
+  'UnderReview':  { probability: 20, avgCycleDays: 5 },
+  'Approved':     { probability: 35, avgCycleDays: 7 },
+  'Solution':     { probability: 50, avgCycleDays: 14 },
+  'Commercial':   { probability: 80, avgCycleDays: 21 },
+  'ClosedWon':    { probability: 100, avgCycleDays: 0 },
+  'ClosedLost':   { probability: 0, avgCycleDays: 0 },
+};
+
 export function usePartners() {
   const partnerListRef = useRef<Partner[]>([]);
 
@@ -28,38 +39,71 @@ export function useDeals() {
   useEffect(() => {
     dealService.list().then((result) => {
       const items = result.items;
-      setDeals(items);
+      
+      // 计算每个商机的额外字段
+      const enrichedDeals = items.map((deal: Deal) => {
+        // 计算当前阶段停留天数
+        const lifecycleEvents = deal.lifecycle || [];
+        const currentStageEvent = lifecycleEvents[lifecycleEvents.length - 1];
+        const daysInCurrentStage = currentStageEvent?.durationDays || 0;
+        
+        // 判断是否异常停滞（超过该阶段平均周期的2倍）
+        const avgDays = STAGE_PROBABILITIES[deal.stage]?.avgCycleDays || 7;
+        const isStagnant = daysInCurrentStage > avgDays * 2;
+        
+        // 计算有效期剩余天数（假设报备有效期为90天）
+        const createdDate = new Date(deal.createdDate || Date.now());
+        const expireDate = new Date(createdDate.getTime() + 90 * 24 * 60 * 60 * 1000);
+        const now = new Date();
+        const expiresInDays = Math.max(0, Math.ceil((expireDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+        
+        // 计算加权金额
+        const probability = STAGE_PROBABILITIES[deal.stage]?.probability || 0;
+        const weightedValue = Math.round(deal.value * probability / 100);
+        
+        return {
+          ...deal,
+          daysInCurrentStage,
+          isStagnant,
+          expiresInDays,
+          weightedValue,
+        };
+      });
+      
+      setDeals(enrichedDeals);
+      
       const now = new Date();
       const yearStart = new Date(now.getFullYear(), 0, 1);
       const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const weekStart = new Date(now.getTime() - now.getDay() * 86400000);
+      
       setStats({
-        yearNew: items.filter(d => d.createdDate && new Date(d.createdDate) >= yearStart).length,
-        quarterNew: items.filter(d => d.createdDate && new Date(d.createdDate) >= quarterStart).length,
-        monthNew: items.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
-        weekNew: items.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
-        rejected: items.filter(d => d.status === 'Rejected').length,
-        closed: items.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length,
-        totalPipelineValue: items.reduce((s, d) => s + Number(d.value || 0), 0),
-        avgCycleDays: items.filter(d => d.conversionMetrics?.totalCycleDays).length > 0
-          ? Math.round(items.reduce((s, d) => s + (d.conversionMetrics?.totalCycleDays || 0), 0) / items.filter(d => d.conversionMetrics?.totalCycleDays).length)
+        yearNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= yearStart).length,
+        quarterNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= quarterStart).length,
+        monthNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
+        weekNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
+        rejected: enrichedDeals.filter(d => d.status === 'Rejected').length,
+        closed: enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length,
+        totalPipelineValue: enrichedDeals.reduce((s, d) => s + Number(d.value || 0), 0),
+        avgCycleDays: enrichedDeals.filter(d => d.conversionMetrics?.totalCycleDays).length > 0
+          ? Math.round(enrichedDeals.reduce((s, d) => s + (d.conversionMetrics?.totalCycleDays || 0), 0) / enrichedDeals.filter(d => d.conversionMetrics?.totalCycleDays).length)
           : 0,
-        conversionRate: items.length > 0
-          ? Math.round((items.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length / items.length) * 100)
+        conversionRate: enrichedDeals.length > 0
+          ? Math.round((enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length / enrichedDeals.length) * 100)
           : 0,
-        stageDistribution: items.reduce((acc, d) => {
+        stageDistribution: enrichedDeals.reduce((acc, d) => {
           const stage = d.stage || 'Registered';
           acc[stage] = (acc[stage] || 0) + 1;
           return acc;
         }, {} as Record<string, number> as Record<string, number>),
-        sourceDistribution: items.reduce((acc, d) => {
+        sourceDistribution: enrichedDeals.reduce((acc, d) => {
           const source = d.sourceInfo?.source || 'Unknown';
           acc[source] = (acc[source] || 0) + 1;
           return acc;
         }, {} as Record<string, number>),
-        conflictCount: items.filter(d => d.hasConflict).length,
-        overdueCount: items.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost').length,
+        conflictCount: enrichedDeals.filter(d => d.hasConflict).length,
+        overdueCount: enrichedDeals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost').length,
       });
     }).catch(() => {});
   }, []);

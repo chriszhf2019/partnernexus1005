@@ -9,7 +9,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { Modal } from '../ui/Modal';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
-import { Gift, TrendingUp, Users, Target, Plus, Calendar, Settings, BarChart3, FileText, X, RefreshCw, Layers, Eye, Edit, Download } from 'lucide-react';
+import { Gift, TrendingUp, Users, Target, Plus, Calendar, Settings, BarChart3, FileText, X, RefreshCw, Layers, Eye, Edit, Download, Bell, AlertCircle, TrendingDown, PieChart, Award, Zap, Shield, Check, Send, ThumbsUp, Briefcase, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 // 概览页面组件
@@ -182,7 +182,7 @@ const IncentivesOverview: React.FC = () => {
   );
 };
 
-// 政策管理页面组件
+// 政策管理页面组件 - 完整优化版
 const IncentivePolicyManagement: React.FC = () => {
   const { config } = useConfig();
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
@@ -191,11 +191,35 @@ const IncentivePolicyManagement: React.FC = () => {
   const [programs, setPrograms] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
   const [applications, setApplications] = useState<any[]>([]);
+  const [budgetAlerts, setBudgetAlerts] = useState<any[]>([]);
+  const [roiData, setRoiData] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'plans' | 'templates' | 'applications' | 'analytics'>('plans');
   
+  // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
+  const [showTierModal, setShowTierModal] = useState(false);
+  const [showTargetingModal, setShowTargetingModal] = useState(false);
+
+  // Form states
+  const [newPlan, setNewPlan] = useState({
+    title: '',
+    description: '',
+    trigger_type: 'Pipeline Gap',
+    payout_type: 'Cash',
+    total_budget: '',
+    start_date: '',
+    end_date: '',
+    // 定向设置
+    scope: 'all',
+    target_levels: [] as string[],
+    target_regions: [] as string[],
+    target_industries: [] as string[],
+    // 阶梯设置
+    tier_enabled: false,
+    tiers: [] as any[],
+  });
 
   useEffect(() => {
     loadData();
@@ -212,6 +236,23 @@ const IncentivePolicyManagement: React.FC = () => {
 
       const { data: appsData } = await supabase.from('incentive_applications').select('*').order('submitted_at', { ascending: false }).limit(20);
       if (appsData) setApplications(appsData);
+
+      const { data: alertsData } = await supabase.from('incentive_budget_alerts').select('*').order('created_at', { ascending: false });
+      if (alertsData) setBudgetAlerts(alertsData);
+
+      // 计算ROI数据
+      const totalClaimed = programsData?.reduce((sum, p) => sum + (p.claimed_amount || 0), 0) || 0;
+      const totalBudget = programsData?.reduce((sum, p) => sum + (p.total_budget || 0), 0) || 0;
+      const activePrograms = programsData?.filter(p => p.status === 'Active').length || 0;
+      const avgParticipation = programsData?.length ? Math.round(programsData.reduce((sum, p) => sum + (p.participants_count || 0), 0) / programsData.length) : 0;
+      
+      setRoiData({
+        totalInvestment: totalClaimed,
+        totalBudget: totalBudget,
+        activePrograms: activePrograms,
+        avgParticipation: avgParticipation,
+        estimatedROI: totalClaimed > 0 ? (totalBudget / totalClaimed).toFixed(2) : '0.00',
+      });
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -219,9 +260,52 @@ const IncentivePolicyManagement: React.FC = () => {
     }
   };
 
+  const handleCreatePlan = async () => {
+    if (!newPlan.title || !newPlan.total_budget) return;
+    try {
+      const { error } = await supabase.from('incentive_programs').insert({
+        title: newPlan.title,
+        description: newPlan.description,
+        trigger_type: newPlan.trigger_type,
+        payout_type: newPlan.payout_type,
+        total_budget: Number(newPlan.total_budget),
+        start_date: newPlan.start_date,
+        end_date: newPlan.end_date,
+        status: 'Upcoming',
+        claimed_amount: 0,
+        participants_count: 0,
+      });
+      if (error) throw new Error(error.message);
+      setShowCreateModal(false);
+      setNewPlan({ title: '', description: '', trigger_type: 'Pipeline Gap', payout_type: 'Cash', total_budget: '', start_date: '', end_date: '', scope: 'all', target_levels: [], target_regions: [], target_industries: [], tier_enabled: false, tiers: [] });
+      loadData();
+    } catch (err) {
+      console.error('Failed to create plan:', err);
+    }
+  };
+
+  const handleApprove = async (appId: string) => {
+    try {
+      await supabase.from('incentive_applications').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('id', appId);
+      loadData();
+    } catch (err) {
+      console.error('Failed to approve:', err);
+    }
+  };
+
+  const handleReject = async (appId: string) => {
+    try {
+      await supabase.from('incentive_applications').update({ status: 'rejected' }).eq('id', appId);
+      loadData();
+    } catch (err) {
+      console.error('Failed to reject:', err);
+    }
+  };
+
   const statusVariant = (s: string) => {
     if (s === 'Active') return 'success';
     if (s === 'Upcoming') return 'info';
+    if (s === 'Completed') return 'default';
     return 'default';
   };
 
@@ -242,17 +326,43 @@ const IncentivePolicyManagement: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* 页面标题 */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">政策管理</h2>
+          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">激励政策管理</h1>
           <p className="text-sm text-neutral-500 mt-1">看、管、算全场景管理</p>
         </div>
-        <Button variant="brand" size="sm" onClick={() => setShowCreateModal(true)}>
-          <Plus className="w-4 h-4" />新建计划
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setShowTierModal(true)}>
+            <Zap className="w-4 h-4" />阶梯规则
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowTargetingModal(true)}>
+            <Target className="w-4 h-4" />定向规则
+          </Button>
+          <Button variant="brand" size="sm" onClick={() => setShowCreateModal(true)}>
+            <Plus className="w-4 h-4" />新建计划
+          </Button>
+        </div>
       </div>
 
-      {/* 子Tab切换 */}
+      {/* 预算预警提示 */}
+      {budgetAlerts.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50 dark:bg-amber-900/20">
+          <CardContent className="flex items-center gap-3 py-3">
+            <AlertCircle className="w-5 h-5 text-amber-600" />
+            <div className="flex-1">
+              <p className="text-sm font-medium text-amber-800 dark:text-amber-200">
+                预算预警: {budgetAlerts.length} 个计划接近或超出预算阈值
+              </p>
+            </div>
+            <Button variant="outline" size="sm" className="border-amber-300 text-amber-700 hover:bg-amber-100">
+              <Bell className="w-4 h-4" />查看详情
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tab切换 */}
       <div className="flex gap-2 border-b border-neutral-200 dark:border-neutral-800">
         {[
           { id: 'plans', label: '激励计划', icon: Gift },
@@ -278,178 +388,553 @@ const IncentivePolicyManagement: React.FC = () => {
 
       {/* 内容区域 */}
       {activeTab === 'plans' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {programs.map((p) => {
-            const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
-            return (
-              <Card key={p.id} hover onClick={() => { setSelectedPlan(p); setShowDetailModal(true); }}>
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{p.title}</h3>
-                    <Badge variant={statusVariant(p.status)}>{statusLabel(p.status)}</Badge>
-                  </div>
-                  <p className="text-xs text-neutral-500 line-clamp-2">{p.description}</p>
-                  <div className="flex items-center gap-2 text-xs text-neutral-400">
-                    <Calendar className="w-3 h-3" />
-                    {p.start_date} ~ {p.end_date}
-                  </div>
-                  <div className="space-y-1 pt-2 border-t border-neutral-200 dark:border-neutral-800">
-                    <div className="flex justify-between text-xs">
-                      <span>预算使用</span>
-                      <span className={cn(pct > 90 ? 'text-red-600' : 'text-neutral-600')}>{pct}%</span>
-                    </div>
-                    <div className="w-full h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                      <div className={cn('h-full rounded-full transition-all', pct > 90 ? 'bg-red-500' : 'bg-brand-500')} style={{ width: `${Math.min(pct, 100)}%` }} />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    <div>
-                      <p className="text-[10px] text-neutral-400">总预算</p>
-                      <p className="text-xs font-semibold">{cur(p.total_budget)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-neutral-400">已申领</p>
-                      <p className="text-xs font-semibold">{cur(p.claimed_amount)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-neutral-400">参与伙伴</p>
-                      <p className="text-xs font-semibold">{p.participants_count || 0}</p>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            );
-          })}
-          {programs.length === 0 && (
-            <div className="col-span-full text-center py-12 text-neutral-500">
-              <Gift className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>暂无激励计划</p>
-              <Button variant="brand" size="sm" className="mt-4" onClick={() => setShowCreateModal(true)}>
-                <Plus className="w-4 h-4" />创建第一个计划
-              </Button>
+        <>
+          {/* 策略配置层提示 */}
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-900/20 dark:to-blue-900/20 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
+                <Zap className="w-4 h-4 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-purple-900 dark:text-purple-200">策略配置层</h3>
+                <p className="text-xs text-purple-600 dark:text-purple-400">多维度定向 · 阶梯激励 · 智能模板</p>
+              </div>
             </div>
-          )}
-        </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-white/60 dark:bg-neutral-800/60 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="w-4 h-4 text-blue-600" />
+                  <span className="text-xs font-medium">对象定向</span>
+                </div>
+                <p className="text-xs text-neutral-500">按等级/地域/行业定向发布激励政策</p>
+              </div>
+              <div className="bg-white/60 dark:bg-neutral-800/60 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  <span className="text-xs font-medium">阶梯奖励</span>
+                </div>
+                <p className="text-xs text-neutral-500">设置业绩阈值，对应不同奖励标准</p>
+              </div>
+              <div className="bg-white/60 dark:bg-neutral-800/60 rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Layers className="w-4 h-4 text-amber-600" />
+                  <span className="text-xs font-medium">模板库</span>
+                </div>
+                <p className="text-xs text-neutral-500">15+预设模板，点击即用</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 激励计划列表 */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {programs.map((p) => {
+              const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
+              const isOverBudget = pct >= 90;
+              return (
+                <Card key={p.id} hover onClick={() => { setSelectedPlan(p); setShowDetailModal(true); }}>
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between">
+                      <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{p.title}</h3>
+                      <div className="flex items-center gap-1">
+                        {isOverBudget && <Badge variant="danger" className="text-xs"><AlertCircle className="w-3 h-3 mr-1" />超支</Badge>}
+                        <Badge variant={statusVariant(p.status)}>{statusLabel(p.status)}</Badge>
+                      </div>
+                    </div>
+                    <p className="text-xs text-neutral-500 line-clamp-2">{p.description}</p>
+                    <div className="flex items-center gap-4 text-xs text-neutral-400">
+                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{p.start_date}</span>
+                      <span className="flex items-center gap-1"><ChevronRight className="w-3 h-3" />{p.end_date}</span>
+                    </div>
+                    <div className="space-y-1 pt-2 border-t border-neutral-200 dark:border-neutral-800">
+                      <div className="flex justify-between text-xs">
+                        <span>预算使用</span>
+                        <span className={cn(isOverBudget ? 'text-red-600 font-medium' : 'text-neutral-600')}>{pct}%</span>
+                      </div>
+                      <div className="w-full h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                        <div 
+                          className={cn('h-full rounded-full transition-all', isOverBudget ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-brand-500')}
+                          style={{ width: `${Math.min(pct, 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2 text-center">
+                      <div>
+                        <p className="text-[10px] text-neutral-400">总预算</p>
+                        <p className="text-xs font-semibold">{cur(p.total_budget)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-neutral-400">已申领</p>
+                        <p className="text-xs font-semibold">{cur(p.claimed_amount)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-neutral-400">参与伙伴</p>
+                        <p className="text-xs font-semibold">{p.participants_count || 0}</p>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
+            {programs.length === 0 && (
+              <div className="col-span-full text-center py-12 text-neutral-500">
+                <Gift className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>暂无激励计划</p>
+                <p className="text-xs mt-1">点击上方"新建计划"创建第一个激励政策</p>
+                <Button variant="brand" size="sm" className="mt-4" onClick={() => setShowCreateModal(true)}>
+                  <Plus className="w-4 h-4" />创建第一个计划
+                </Button>
+              </div>
+            )}
+          </div>
+        </>
       )}
 
       {activeTab === 'templates' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {templates.map((t) => (
-            <Card key={t.id} hover>
-              <div className="space-y-3">
-                <div className="flex items-start justify-between">
-                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{t.name}</h3>
-                  <Badge variant="default">{t.category}</Badge>
-                </div>
-                <p className="text-xs text-neutral-500 line-clamp-2">{t.description}</p>
-                <div className="flex items-center gap-2 text-xs text-neutral-400">
-                  <Users className="w-3 h-3" />
-                  已使用 {t.usage_count || 0} 次
-                </div>
-                <Button variant="outline" size="sm" className="w-full">
-                  <Layers className="w-4 h-4" />使用模板
-                </Button>
+        <>
+          {/* 过程管理层提示 */}
+          <div className="bg-gradient-to-r from-blue-50 to-cyan-50 dark:from-blue-900/20 dark:to-cyan-900/20 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center">
+                <Layers className="w-4 h-4 text-blue-600" />
               </div>
-            </Card>
-          ))}
-        </div>
+              <div>
+                <h3 className="text-sm font-semibold text-blue-900 dark:text-blue-200">激励模板库</h3>
+                <p className="text-xs text-blue-600 dark:text-blue-400">15+预设行业模板，快速创建激励计划</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {templates.map((t) => (
+              <Card key={t.id} hover className="cursor-pointer" onClick={() => {
+                setNewPlan({ ...newPlan, title: t.name, description: t.description });
+                setShowCreateModal(true);
+              }}>
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between">
+                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{t.name}</h3>
+                    <Badge variant="default">{t.category}</Badge>
+                  </div>
+                  <p className="text-xs text-neutral-500 line-clamp-2">{t.description}</p>
+                  <div className="flex items-center gap-2 text-xs text-neutral-400">
+                    <Users className="w-3 h-3" />
+                    已使用 {t.usage_count || 0} 次
+                  </div>
+                  <Button variant="outline" size="sm" className="w-full">
+                    <Zap className="w-4 h-4" />使用此模板
+                  </Button>
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
       )}
 
       {activeTab === 'applications' && (
-        <Card>
-          <CardHeader>
-            <CardTitle>激励申请审批</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {applications.length === 0 ? (
-              <div className="text-center py-8 text-neutral-500">
-                <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p>暂无待审批申请</p>
+        <>
+          {/* 审批工作流提示 */}
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-900/20 dark:to-teal-900/20 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/40 flex items-center justify-center">
+                <Shield className="w-4 h-4 text-emerald-600" />
               </div>
-            ) : (
-              <div className="space-y-3">
-                {applications.map((a) => (
-                  <div key={a.id} className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">{a.partner_name}</p>
-                      <p className="text-xs text-neutral-500">{a.metric} - {cur(a.claimed_value)}</p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge variant={a.status === 'approved' ? 'success' : a.status === 'pending' ? 'info' : 'default'}>
-                        {a.status === 'approved' ? '已批准' : a.status === 'pending' ? '待审批' : a.status}
-                      </Badge>
-                      <Button variant="ghost" size="sm">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+              <div>
+                <h3 className="text-sm font-semibold text-emerald-900 dark:text-emerald-200">审批与核销工作流</h3>
+                <p className="text-xs text-emerald-600 dark:text-emerald-400">自动生成待核销记录，管理员在线审批，确保激励发放合规性</p>
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </div>
+          </div>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>激励申请审批</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {applications.length === 0 ? (
+                <div className="text-center py-8 text-neutral-500">
+                  <FileText className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                  <p>暂无待审批申请</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {applications.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between p-4 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/40 flex items-center justify-center">
+                          <Briefcase className="w-5 h-5 text-brand-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium">{a.partner_name || '未知伙伴'}</p>
+                          <p className="text-xs text-neutral-500">{a.metric} - 申请金额: {cur(a.claimed_value || 0)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge variant={a.status === 'approved' ? 'success' : a.status === 'pending' ? 'info' : 'default'}>
+                          {a.status === 'approved' ? '已批准' : a.status === 'pending' ? '待审批' : a.status}
+                        </Badge>
+                        {a.status === 'pending' && (
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="sm" onClick={() => handleApprove(a.id)}>
+                              <ThumbsUp className="w-4 h-4 text-emerald-600" />
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => handleReject(a.id)}>
+                              <X className="w-4 h-4 text-red-600" />
+                            </Button>
+                          </div>
+                        )}
+                        <Button variant="ghost" size="sm">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {activeTab === 'analytics' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>投入产出分析</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-neutral-600">总投入</span>
-                  <span className="text-lg font-semibold">{cur(programs.reduce((sum, p) => sum + (p.claimed_amount || 0), 0))}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-neutral-600">活跃计划</span>
-                  <span className="text-lg font-semibold">{programs.filter(p => p.status === 'Active').length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-neutral-600">平均参与率</span>
-                  <span className="text-lg font-semibold">{programs.length > 0 ? Math.round(programs.reduce((sum, p) => sum + (p.participants_count || 0), 0) / programs.length) : 0}%</span>
-                </div>
+        <>
+          {/* 效果评估层提示 */}
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl p-4">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
+                <PieChart className="w-4 h-4 text-amber-600" />
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader>
-              <CardTitle>预算使用情况</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {programs.slice(0, 5).map((p) => {
-                  const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
-                  return (
-                    <div key={p.id} className="space-y-1">
-                      <div className="flex justify-between text-xs">
-                        <span>{p.title}</span>
-                        <span>{pct}%</span>
+              <div>
+                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">效果评估层</h3>
+                <p className="text-xs text-amber-600 dark:text-amber-400">Pipeline转化看板 · ROI分析 · 伙伴活跃度洞察</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* ROI分析卡片 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" />
+                  投入产出分析
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                    <span className="text-sm text-emerald-700 dark:text-emerald-300">预估ROI</span>
+                    <span className="text-2xl font-bold text-emerald-600">{roiData?.estimatedROI}x</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600">总投入</span>
+                    <span className="text-lg font-semibold">{cur(roiData?.totalInvestment || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600">总预算</span>
+                    <span className="text-lg font-semibold">{cur(roiData?.totalBudget || 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600">活跃计划</span>
+                    <span className="text-lg font-semibold">{roiData?.activePrograms}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-neutral-600">平均参与率</span>
+                    <span className="text-lg font-semibold">{roiData?.avgParticipation}%</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 预算使用情况卡片 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                  预算使用情况
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {programs.slice(0, 5).map((p) => {
+                    const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
+                    const isOverBudget = pct >= 90;
+                    return (
+                      <div key={p.id} className="space-y-1">
+                        <div className="flex justify-between text-xs">
+                          <span className="font-medium">{p.title}</span>
+                          <span className={cn(isOverBudget ? 'text-red-600 font-medium' : 'text-neutral-600')}>
+                            {cur(p.claimed_amount)} / {cur(p.total_budget)} ({pct}%)
+                          </span>
+                        </div>
+                        <div className="w-full h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                          <div 
+                            className={cn('h-full rounded-full', isOverBudget ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-brand-500')}
+                            style={{ width: `${Math.min(pct, 100)}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="w-full h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                        <div className={cn('h-full rounded-full', pct > 90 ? 'bg-red-500' : 'bg-brand-500')} style={{ width: `${Math.min(pct, 100)}%` }} />
-                      </div>
+                    );
+                  })}
+                  {programs.length === 0 && (
+                    <p className="text-sm text-neutral-500 text-center py-4">暂无数据</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Pipeline转化看板 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <TrendingDown className="w-4 h-4 text-blue-600" />
+                  Pipeline转化追踪
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                      <p className="text-xs text-blue-600 mb-1">本月目标</p>
+                      <p className="text-lg font-bold text-blue-700">{programs.length * 10}</p>
+                      <p className="text-[10px] text-blue-500">个商机</p>
                     </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+                    <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                      <p className="text-xs text-emerald-600 mb-1">已报备</p>
+                      <p className="text-lg font-bold text-emerald-700">{programs.reduce((sum, p) => sum + (p.participants_count || 0), 0)}</p>
+                      <p className="text-[10px] text-emerald-500">个商机</p>
+                    </div>
+                    <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                      <p className="text-xs text-amber-600 mb-1">缺口</p>
+                      <p className="text-lg font-bold text-amber-700">
+                        {Math.max(0, programs.length * 10 - programs.reduce((sum, p) => sum + (p.participants_count || 0), 0))}
+                      </p>
+                      <p className="text-[10px] text-amber-500">个商机</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* 伙伴活跃度洞察 */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-purple-600" />
+                  伙伴活跃度洞察
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">活跃伙伴</p>
+                      <p className="text-xs text-neutral-500">本季度参与激励的伙伴数</p>
+                    </div>
+                    <span className="text-2xl font-bold text-purple-600">{programs.reduce((sum, p) => sum + (p.participants_count || 0), 0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <div>
+                      <p className="text-sm font-medium">未参与伙伴</p>
+                      <p className="text-xs text-neutral-500">符合条件但未报备商机的伙伴</p>
+                    </div>
+                    <Button variant="outline" size="sm">
+                      <Download className="w-4 h-4 mr-1" />导出名单
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </>
       )}
 
       {/* 创建计划模态框 */}
       {showCreateModal && (
         <Modal title="新建激励计划" onClose={() => setShowCreateModal(false)} open={showCreateModal}>
-          <div className="space-y-4 p-4">
+          <div className="space-y-4 p-4 max-h-[70vh] overflow-y-auto">
             <div>
-              <label className="text-xs font-semibold text-neutral-500">计划名称</label>
-              <input className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" placeholder="输入计划名称" />
+              <label className="text-xs font-semibold text-neutral-500">计划名称 *</label>
+              <input className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" value={newPlan.title} onChange={e => setNewPlan({...newPlan, title: e.target.value})} placeholder="输入计划名称" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-neutral-500">描述</label>
+              <textarea className="w-full px-3 py-2 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm resize-none" rows={3} value={newPlan.description} onChange={e => setNewPlan({...newPlan, description: e.target.value})} placeholder="输入计划描述" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-neutral-500">触发类型</label>
+                <select className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" value={newPlan.trigger_type} onChange={e => setNewPlan({...newPlan, trigger_type: e.target.value})}>
+                  <option value="Pipeline Gap">Pipeline Gap</option>
+                  <option value="New Product">New Product</option>
+                  <option value="Competitive">Competitive</option>
+                  <option value="Sales Acceleration">Sales Acceleration</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-neutral-500">发放类型</label>
+                <select className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" value={newPlan.payout_type} onChange={e => setNewPlan({...newPlan, payout_type: e.target.value})}>
+                  <option value="Cash">Cash</option>
+                  <option value="Rebate">Rebate</option>
+                  <option value="Points">Points</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-neutral-500">总预算 *</label>
+              <input className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" type="number" value={newPlan.total_budget} onChange={e => setNewPlan({...newPlan, total_budget: e.target.value})} placeholder="0" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-neutral-500">开始日期</label>
+                <input className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" type="date" value={newPlan.start_date} onChange={e => setNewPlan({...newPlan, start_date: e.target.value})} />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-neutral-500">结束日期</label>
+                <input className="w-full h-10 px-3 mt-1 bg-neutral-50 dark:bg-neutral-800 border rounded-lg text-sm" type="date" value={newPlan.end_date} onChange={e => setNewPlan({...newPlan, end_date: e.target.value})} />
+              </div>
+            </div>
+            {/* 定向设置 */}
+            <div className="border-t pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Target className="w-4 h-4 text-blue-600" />
+                <label className="text-xs font-semibold text-neutral-500">对象定向</label>
+              </div>
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={newPlan.scope === 'all'} onChange={() => setNewPlan({...newPlan, scope: 'all'})} />
+                  全员激励
+                </label>
+                <label className="flex items-center gap-2 text-sm">
+                  <input type="radio" checked={newPlan.scope === 'targeted'} onChange={() => setNewPlan({...newPlan, scope: 'targeted'})} />
+                  定向激励
+                </label>
+                {newPlan.scope === 'targeted' && (
+                  <div className="ml-6 space-y-2 p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <div>
+                      <p className="text-xs text-neutral-500 mb-1">合作伙伴等级</p>
+                      <div className="flex gap-2">
+                        {['金牌', '银牌', '铜牌'].map(level => (
+                          <label key={level} className="flex items-center gap-1 text-xs">
+                            <input type="checkbox" /> {level}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            {/* 阶梯设置 */}
+            <div className="border-t pt-4">
+              <div className="flex items-center gap-2 mb-3">
+                <Zap className="w-4 h-4 text-emerald-600" />
+                <label className="text-xs font-semibold text-neutral-500">阶梯奖励</label>
+                <label className="flex items-center gap-1 text-xs">
+                  <input type="checkbox" checked={newPlan.tier_enabled} onChange={e => setNewPlan({...newPlan, tier_enabled: e.target.checked})} />
+                  启用阶梯
+                </label>
+              </div>
+              {newPlan.tier_enabled && (
+                <div className="space-y-2 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                  <div className="grid grid-cols-3 gap-2 text-xs text-neutral-500">
+                    <span>业绩阈值</span>
+                    <span>奖励比例</span>
+                    <span>奖励金额</span>
+                  </div>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} className="grid grid-cols-3 gap-2">
+                      <input className="h-8 px-2 bg-white dark:bg-neutral-800 border rounded text-sm" placeholder={`${i * 5}个商机`} />
+                      <input className="h-8 px-2 bg-white dark:bg-neutral-800 border rounded text-sm" placeholder={`${i * 10}%`} />
+                      <input className="h-8 px-2 bg-white dark:bg-neutral-800 border rounded text-sm" placeholder="金额" />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="secondary" onClick={() => setShowCreateModal(false)}>取消</Button>
-              <Button variant="brand">创建计划</Button>
+              <Button variant="brand" onClick={handleCreatePlan}>创建计划</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 阶梯规则模态框 */}
+      {showTierModal && (
+        <Modal title="阶梯奖励规则配置" onClose={() => setShowTierModal(false)} open={showTierModal}>
+          <div className="space-y-4 p-4">
+            <p className="text-sm text-neutral-500">设置阶梯阈值，让伙伴"跳一跳"够到更高的业绩。</p>
+            <div className="space-y-3">
+              <div className="flex items-center gap-3 p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold">1</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">1-5个商机</p>
+                  <p className="text-xs text-neutral-500">奖励标准: 100元/个</p>
+                </div>
+                <Badge variant="default">基础档</Badge>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-xs font-bold">2</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">6-10个商机</p>
+                  <p className="text-xs text-neutral-500">奖励标准: 150元/个 (+50%)</p>
+                </div>
+                <Badge variant="info">进阶档</Badge>
+              </div>
+              <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                <div className="w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center text-xs font-bold">3</div>
+                <div className="flex-1">
+                  <p className="text-sm font-medium">11+个商机</p>
+                  <p className="text-xs text-neutral-500">奖励标准: 200元/个 (+100%)</p>
+                </div>
+                <Badge variant="warning">高阶档</Badge>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="secondary" onClick={() => setShowTierModal(false)}>关闭</Button>
+              <Button variant="brand"><Check className="w-4 h-4" />保存规则</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* 定向规则模态框 */}
+      {showTargetingModal && (
+        <Modal title="多维度定向规则" onClose={() => setShowTargetingModal(false)} open={showTargetingModal}>
+          <div className="space-y-4 p-4">
+            <p className="text-sm text-neutral-500">支持按合作伙伴等级、地域、行业定向发布激励政策。</p>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-semibold text-neutral-500 mb-2 block">合作伙伴等级</label>
+                <div className="flex gap-2">
+                  {['金牌', '银牌', '铜牌', '普通'].map(level => (
+                    <Badge key={level} variant="outline" className="cursor-pointer hover:bg-neutral-100">{level}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-neutral-500 mb-2 block">地域定向</label>
+                <div className="flex gap-2 flex-wrap">
+                  {['华东区', '华南区', '华北区', '西北区', '西南区', '东北区'].map(region => (
+                    <Badge key={region} variant="outline" className="cursor-pointer hover:bg-neutral-100">{region}</Badge>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-neutral-500 mb-2 block">行业定向</label>
+                <div className="flex gap-2 flex-wrap">
+                  {['医疗', '教育', '政府', '企业', '制造', '金融'].map((industry) => (
+                    <Badge key={industry} variant="outline" className="cursor-pointer hover:bg-neutral-100">{industry}</Badge>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg">
+              <p className="text-xs text-blue-600">💡 提示: 勾选多个维度时，满足任一条件的伙伴都将收到激励通知。</p>
+            </div>
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="secondary" onClick={() => setShowTargetingModal(false)}>关闭</Button>
+              <Button variant="brand"><Check className="w-4 h-4" />保存规则</Button>
             </div>
           </div>
         </Modal>
@@ -459,19 +944,29 @@ const IncentivePolicyManagement: React.FC = () => {
       {showDetailModal && selectedPlan && (
         <Modal title={selectedPlan.title} onClose={() => { setShowDetailModal(false); setSelectedPlan(null); }} open={showDetailModal}>
           <div className="space-y-4 p-4">
+            <div className="flex items-center gap-2">
+              <Badge variant={statusVariant(selectedPlan.status)}>{statusLabel(selectedPlan.status)}</Badge>
+              <Badge variant="outline">{selectedPlan.trigger_type}</Badge>
+              <Badge variant="outline">{selectedPlan.payout_type}</Badge>
+            </div>
+            <p className="text-sm text-neutral-600">{selectedPlan.description}</p>
             <div className="grid grid-cols-3 gap-4">
-              <div>
+              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                 <p className="text-xs text-neutral-500">总预算</p>
                 <p className="text-lg font-semibold">{cur(selectedPlan.total_budget)}</p>
               </div>
-              <div>
+              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                 <p className="text-xs text-neutral-500">已申领</p>
                 <p className="text-lg font-semibold">{cur(selectedPlan.claimed_amount)}</p>
               </div>
-              <div>
+              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                 <p className="text-xs text-neutral-500">参与伙伴</p>
                 <p className="text-lg font-semibold">{selectedPlan.participants_count || 0}</p>
               </div>
+            </div>
+            <div className="border-t pt-4">
+              <p className="text-xs text-neutral-500 mb-2">有效期</p>
+              <p className="text-sm">{selectedPlan.start_date} ~ {selectedPlan.end_date}</p>
             </div>
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="outline"><Edit className="w-4 h-4" />编辑</Button>

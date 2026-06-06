@@ -53,6 +53,8 @@ export interface DealConflict {
   resolvedBy?: string;
   resolvedDate?: string;
   createdDate: string;
+  protectionPeriodDays?: number; // 自动保护期天数
+  firstReportedDealId?: string; // 首报商机ID
 }
 
 export interface DealLifecycleEvent {
@@ -83,13 +85,67 @@ export interface DealSourceInfo {
   initialContactDate?: string;
 }
 
+export interface DealStageProbability {
+  stage: DealLifecycleStage;
+  probability: number; // 0-100
+  avgCycleDays: number; // 该阶段平均停留天数
+}
+
+export interface DealActivity {
+  id: string;
+  dealId: string;
+  type: 'note' | 'call' | 'meeting' | 'email' | 'task' | 'update';
+  content: string;
+  actor: string;
+  createdAt: string;
+  mentions?: string[];
+  replyToId?: string;
+}
+
+export type WinLossReason = 
+  | 'Price'           // 价格因素
+  | 'Product'         // 产品力
+  | 'Service'         // 服务差
+  | 'Competitor'      // 对手强
+  | 'Timing'          // 时机不合适
+  | 'Budget'          // 预算问题
+  | 'Relationship'    // 客户关系
+  | 'Other';          // 其他
+
+export interface WinLossAnalysis {
+  reason: WinLossReason;
+  description?: string;
+  competitor?: string;
+  keyFactors?: string[];
+}
+
+export interface PartnerCapability {
+  id: string;
+  partnerId: string;
+  tags: string[];
+  winRate: number;
+  currentLoad: number;
+  maxCapacity: number;
+}
+
+export interface DealAssignment {
+  dealId: string;
+  partnerId: string;
+  assignedBy: string;
+  assignedAt: string;
+  status: 'Pending' | 'Accepted' | 'Rejected';
+}
+
 export interface Deal {
   id: string;
   title: string;
   customerId?: string;
   customerName: string;
   customerIndustry?: string;
+  customerContact?: string;
+  customerPhone?: string;
   value: number;
+  weightedValue?: number; // 加权金额
   partnerId: string;
   partnerName: string;
   partnerType: PartnerType;
@@ -117,6 +173,11 @@ export interface Deal {
   nextActionDate?: string;
   relatedDeals?: string[];
   parentDealId?: string;
+  activities?: DealActivity[];
+  daysInCurrentStage?: number; // 当前阶段停留天数
+  isStagnant?: boolean; // 是否异常停滞
+  expiresInDays?: number; // 有效期剩余天数
+  winLossAnalysis?: WinLossAnalysis; // 赢单/丢单分析
 }
 
 export interface DealRegistrationStats {

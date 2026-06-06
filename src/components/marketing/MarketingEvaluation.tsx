@@ -75,20 +75,20 @@ export const MarketingEvaluation = ({ activityId, activityName }: MarketingEvalu
   const handleSaveEvaluation = async () => {
     try {
       const calcAttendanceRate = evalFormData.registered_count > 0 
-        ? ((evalFormData.total_attendees / evalFormData.registered_count) * 100).toFixed(1)
+        ? parseFloat(((evalFormData.total_attendees / evalFormData.registered_count) * 100).toFixed(1))
         : 0;
       const calcBudgetRate = evalFormData.budget_total > 0 
-        ? ((evalFormData.budget_actual / evalFormData.budget_total) * 100).toFixed(1)
+        ? parseFloat(((evalFormData.budget_actual / evalFormData.budget_total) * 100).toFixed(1))
         : 0;
       const calcCPL = evalFormData.total_attendees > 0 
-        ? (evalFormData.budget_actual / evalFormData.total_attendees).toFixed(2)
+        ? parseFloat((evalFormData.budget_actual / evalFormData.total_attendees).toFixed(2))
         : 0;
 
       const saveData = {
         ...evalFormData,
-        attendance_rate: parseFloat(calcAttendanceRate),
-        budget_execution_rate: parseFloat(calcBudgetRate),
-        cpl: parseFloat(calcCPL),
+        attendance_rate: calcAttendanceRate,
+        budget_execution_rate: calcBudgetRate,
+        cpl: calcCPL,
         is_completed: true,
         evaluated_at: new Date().toISOString()
       };
@@ -141,15 +141,18 @@ export const MarketingEvaluation = ({ activityId, activityName }: MarketingEvalu
     }
   };
 
-  const handleAddEvaluationLead = async () => {
-    if (!newEvaluationLead.name || !evaluation) return;
+  const handleAddEvaluationLead = async (leadData?: any) => {
+    const dataToUse = leadData || newEvaluationLead;
+    if (!dataToUse.name || !evaluation) return;
     try {
       await supabase.from('marketing_evaluation_leads').insert({
         evaluation_id: evaluation.id,
         activity_id: activityId,
-        ...newEvaluationLead
+        ...dataToUse
       });
-      setNewEvaluationLead({ name: '', company: '', title: '', phone: '', email: '', quality: 'medium', notes: '' });
+      if (!leadData) {
+        setNewEvaluationLead({ name: '', company: '', title: '', phone: '', email: '', quality: 'medium', notes: '' });
+      }
       loadEvaluationData();
     } catch (e) {
       alert('添加商机失败');

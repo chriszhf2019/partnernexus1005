@@ -40,9 +40,22 @@ export const initializeExecutionTables = async () => {
       CREATE INDEX IF NOT EXISTS idx_marketing_phase_attachments_activity ON marketing_phase_attachments(activity_id);
     `;
 
-    // 检查表是否存在并创建
-    const { error: logsError } = await supabase.rpc('exec_sql', { sql: createLogsTable }).catch(() => ({ error: null }));
-    const { error: attachmentsError } = await supabase.rpc('exec_sql', { sql: createAttachmentsTable }).catch(() => ({ error: null }));
+    // 检查表是否存在并创建 - 使用 try-catch 包装每个 RPC 调用
+    try {
+      await supabase.rpc('exec_sql', { sql: createLogsTable });
+    } catch (e) {
+      // 忽略错误，表可能已存在或 RPC 不可用
+    }
+    try {
+      await supabase.rpc('exec_sql', { sql: createAttachmentsTable });
+    } catch (e) {
+      // 忽略错误
+    }
+    try {
+      await supabase.rpc('exec_sql', { sql: createIndexes });
+    } catch (e) {
+      // 忽略错误
+    }
     
     console.log('执行阶段扩展表初始化完成');
   } catch (error) {

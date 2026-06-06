@@ -23,8 +23,8 @@ export const Card = ({ children, className, hover = false, padding = true, onCli
   </div>
 );
 
-export const CardHeader = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={cn('flex items-center justify-between mb-5', className)}>{children}</div>
+export const CardHeader = ({ children, className, onClick }: { children: React.ReactNode; className?: string; onClick?: () => void }) => (
+  <div className={cn('flex items-center justify-between mb-5', onClick && 'cursor-pointer', className)} onClick={onClick}>{children}</div>
 );
 
 export const CardTitle = ({ children, className }: { children: React.ReactNode; className?: string }) => (
