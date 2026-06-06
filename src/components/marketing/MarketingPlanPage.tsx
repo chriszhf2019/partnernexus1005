@@ -547,39 +547,29 @@ export const MarketingPlanPage = () => {
       if (budgetRes.error) console.warn('Failed to load budget config:', budgetRes.error.message);
       if (budgetRes.data) setConfig(budgetRes.data);
 
-      if (planRes.data?.length) setPlan(planRes.data);
-      else setPlan([]);
+      if (planRes.data?.length) {
+        // Auto-backfill executed activities actual data
+        const enriched = planRes.data.map((p: any) => {
+          if (p.execution_status === 'executed' && !p.actual_spend && actRes.data) {
+            const match = actRes.data.find((a: any) =>
+              a.name?.includes(p.category) && a.status === 'Completed' &&
+              new Date(a.event_date).getFullYear() === p.year
+            );
+            if (match) {
+              const updated = { ...p, actual_spend: Number(match.actual_spend || 0), actual_leads: Number(match.leads_generated || 0), actual_opps: Number(match.deals_created || 0) };
+              supabase.from('marketing_plan').update({ actual_spend: updated.actual_spend, actual_leads: updated.actual_leads, actual_opps: updated.actual_opps }).eq('id', p.id).then(() => {});
+              return updated;
+            }
+          }
+          return p;
+        });
+        setPlan(enriched);
+      } else setPlan([]);
 
       if (logRes.data) setChangeLog(logRes.data);
 
       if (actRes.data) {
         setActivities(actRes.data);
-        // Auto-backfill: sync executed activity actuals to plan
-        if (planRes.data?.length) {
-          let needsUpdate = false;
-          const updatedPlans = planRes.data.map((p: any) => {
-            if (p.execution_status !== 'executed' || p.actual_spend > 0) return p;
-            const match = actRes.data.find((a: any) =>
-              a.name?.includes(p.category) && a.status === 'Completed' &&
-              new Date(a.event_date).getFullYear() === p.year &&
-              Math.ceil((new Date(a.event_date).getMonth()+1)/3) === parseInt(p.quarter?.replace('Q',''))
-            );
-            if (match) {
-              needsUpdate = true;
-              return { ...p, actual_spend: match.actual_spend || 0, actual_leads: match.leads_generated || 0, actual_opps: match.deals_created || 0 };
-            }
-            return p;
-          });
-          if (needsUpdate) {
-            setPlan(updatedPlans);
-            // Persist back to DB
-            updatedPlans.filter((p: any) => p.actual_spend > 0).forEach(async (p: any) => {
-              await supabase.from('marketing_plan').update({ actual_spend: p.actual_spend, actual_leads: p.actual_leads, actual_opps: p.actual_opps }).eq('id', p.id);
-            });
-          } else {
-            setPlan(planRes.data);
-          }
-        }
       }
 
       if (partnerRes.data) setPartners(partnerRes.data);
