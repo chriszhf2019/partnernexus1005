@@ -306,43 +306,29 @@ export const MarketingIncentivePage = () => {
         ))}
       </div>
 
-      {/* 功能快捷入口 */}
+      {/* 功能快捷入口 — 精简为 6 个核心功能 */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium text-neutral-500 mr-2">功能快捷入口:</span>
-        <Button variant="secondary" size="sm" onClick={() => setShowMDFClaims(true)}>
-          <Receipt className="w-3.5 h-3.5 mr-1" />MDF 核销
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowROIPanel(true)}>
-          <Target className="w-3.5 h-3.5 mr-1" />ROI 追踪
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowAssetLibrary(true)}>
-          <Package className="w-3.5 h-3.5 mr-1" />资料库
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowCalendar(true)}>
-          <Calendar className="w-3.5 h-3.5 mr-1" />年度规划
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowLeadNurturing(true)}>
-          <UserCheck className="w-3.5 h-3.5 mr-1" />线索培育
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowResourceMarket(true)}>
-          <Wrench className="w-3.5 h-3.5 mr-1" />资源市场
-        </Button>
-        <div className="w-px h-5 bg-neutral-300 dark:bg-neutral-700" />
-        <Button variant="secondary" size="sm" onClick={() => setShowCheckin(true)}>
-          <QrCode className="w-3.5 h-3.5 mr-1" />实时签到
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowSOP(true)}>
-          <CheckSquare className="w-3.5 h-3.5 mr-1" />SOP清单
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowAutoReport(true)}>
-          <FileText className="w-3.5 h-3.5 mr-1" />结项报告
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowBenchmark(true)}>
-          <Trophy className="w-3.5 h-3.5 mr-1" />标杆案例
-        </Button>
-        <Button variant="secondary" size="sm" onClick={() => setShowKPIIncentive(true)}>
-          <Zap className="w-3.5 h-3.5 mr-1" />对赌激励
-        </Button>
+        <span className="text-xs font-medium text-neutral-500">核心功能:</span>
+        <div className="flex bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1 gap-0.5">
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowMDFClaims(true)}>
+            <Receipt className="w-3.5 h-3.5 mr-1" />MDF 核销
+          </Button>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowROIPanel(true)}>
+            <Target className="w-3.5 h-3.5 mr-1" />ROI 追踪
+          </Button>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowAssetLibrary(true)}>
+            <Package className="w-3.5 h-3.5 mr-1" />资料库
+          </Button>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => { setShowSOP(true); }}>
+            <CheckSquare className="w-3.5 h-3.5 mr-1" />执行SOP
+          </Button>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowBenchmark(true)}>
+            <Trophy className="w-3.5 h-3.5 mr-1" />标杆 & 激励
+          </Button>
+          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => { setShowResourceMarket(true); }}>
+            <Wrench className="w-3.5 h-3.5 mr-1" />资源预约
+          </Button>
+        </div>
       </div>
 
       {/* Budget Trend Chart */}
