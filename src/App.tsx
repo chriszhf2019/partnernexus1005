@@ -42,7 +42,6 @@ const CampaignManagementPage = retryableLazy(() => import('./components/marketin
 const CampaignDetailPage = retryableLazy(() => import('./components/marketing/CampaignDetailPage').then(m => ({ default: m.CampaignDetailPage })));
 const BudgetManagementPage = retryableLazy(() => import('./components/marketing/BudgetManagementPage').then(m => ({ default: m.BudgetManagementPage })));
 const ChannelCampaignPage = retryableLazy(() => import('./components/marketing/ChannelCampaignPage').then(m => ({ default: m.ChannelCampaignPage })));
-const IncentivePolicyPage = retryableLazy(() => import('./components/marketing/IncentivePolicyPage').then(m => ({ default: m.IncentivePolicyPage })));
 const MarketingActivityDetail = retryableLazy(() => import('./components/marketing/MarketingActivityDetail').then(m => ({ default: m.MarketingActivityDetail })));
 
 function EcosystemRoute() {
@@ -329,7 +328,7 @@ function AppLayout() {
               <Route path="/marketing/budget" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
               <Route path="/marketing/budget/:year" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
               <Route path="/marketing/channel-campaigns" element={<Suspense fallback={<PageLoader />}><ChannelCampaignPage /></Suspense>} />
-              <Route path="/marketing/incentive-policy" element={<Suspense fallback={<PageLoader />}><IncentivePolicyPage /></Suspense>} />
+              <Route path="/marketing/incentive-policy" element={<Navigate to="/incentives" replace />} />
               <Route path="/incentives" element={<IncentivesRoute />} />
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />
