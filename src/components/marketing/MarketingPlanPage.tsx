@@ -286,12 +286,17 @@ const QuarterlyPlanCard = memo(({
   const lineTotal = useMemo(() => items.reduce((s, p) => s + Number(p.total_budget || 0), 0), [items]);
   const approvedTotal = useMemo(() => items.reduce((s, p) => s + Number(p.approved_amount || 0), 0), [items]);
   const remaining = qBudget - approvedTotal;
-  const planStatus = items.length > 0 ? (items[0].plan_status || 'draft') : 'draft';
+  const planStatus = useMemo(() => {
+    if (items.length === 0) return 'draft';
+    if (items.every(p => p.plan_status === 'approved')) return 'approved';
+    if (items.some(p => p.plan_status === 'submitted')) return 'submitted';
+    return 'draft';
+  }, [items]);
   const pmdfCount = useMemo(() => items.filter(p => p.activity_type === 'PMDF').length, [items]);
   const totalAttendees = useMemo(() => items.reduce((s, p) => s + Number(p.expected_attendees || 0), 0), [items]);
 
-  const planStatusColors: Record<string, string> = { draft: 'text-neutral-400 bg-neutral-100', submitted: 'text-neutral-400 bg-neutral-100', approved: 'text-blue-600 bg-blue-50' };
-  const planStatusLabels: Record<string, string> = { draft: '草稿', submitted: '草稿', approved: '已批复' };
+  const planStatusColors: Record<string, string> = { draft: 'text-neutral-400 bg-neutral-100', submitted: 'text-amber-600 bg-amber-50', approved: 'text-emerald-600 bg-emerald-50' };
+  const planStatusLabels: Record<string, string> = { draft: '草稿', submitted: '已提交·待批复', approved: '已批复' };
 
   const categoryBreakdown = useMemo(() => {
     const catMap: Record<string, { count: number; budget: number; approved: number; attendees: number }> = {};
@@ -349,8 +354,10 @@ const QuarterlyPlanCard = memo(({
         <div className="flex items-center gap-1">
           <Button variant="secondary" size="sm" onClick={onAddRow} disabled={saving}><Plus className="w-3.5 h-3.5" />添加</Button>
           <Button variant="secondary" size="sm" onClick={() => onSaveRows('draft')} disabled={saving} loading={saving}>保存</Button>
-          <Button variant="brand" size="sm" onClick={() => onSaveRows('submitted')} disabled={saving} loading={saving}>提交</Button>
-          {items.length > 0 && planStatus === 'submitted' && (
+          {planStatus === 'draft' && (
+            <Button variant="brand" size="sm" onClick={() => onSaveRows('submitted')} disabled={saving} loading={saving}>提交审批</Button>
+          )}
+          {planStatus === 'submitted' && (
             <Button variant="brand" size="sm" onClick={onApproveAll} disabled={saving} loading={saving}>批复通过</Button>
           )}
         </div>
@@ -839,7 +846,11 @@ export const MarketingPlanPage = () => {
       );
       const successCount = results.filter(r => r.success).length;
       if (successCount === items.length) {
-        toast('success', `${quarter} 季度全部批复通过`);
+        // Create baseline snapshot for approved items
+        for (const p of items) {
+          await supabase.from('plan_baselines').insert({ year: currentYear, quarter, activity_id: p.id, field_name: 'plan_approved', planned_value: JSON.stringify({ budget: p.total_budget, approved: p.approved_amount, leads: p.expected_output, attendees: p.expected_attendees }), status: 'active' }).then(() => {});
+        }
+        toast('success', `${quarter} 季度全部批复通过 · 已创建基线快照`);
         setPlan(prev => prev.map(p => {
           if (normalizeQuarter(p.quarter) === quarter) {
             return { ...p, plan_status: 'approved' };
