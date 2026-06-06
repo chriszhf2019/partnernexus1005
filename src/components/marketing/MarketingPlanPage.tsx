@@ -371,8 +371,9 @@ const QuarterlyPlanCard = memo(({
                   <th className="text-left py-2 px-2">时间</th>
                   <th className="text-right py-2 px-2">总预算</th>
                   <th className="text-right py-2 px-2">批复</th>
+                  <th className="text-right py-2 px-2">实际支出</th>
                   <th className="text-right py-2 px-2">参加人数</th>
-                  <th className="text-left py-2 px-2">产出</th>
+                  <th className="text-left py-2 px-2">产出(计划/实际)</th>
                   <th className="text-left py-2 px-2">负责人</th>
                   <th className="text-center py-2 px-2">状态</th>
                   <th className="w-8" />
@@ -426,21 +427,27 @@ const QuarterlyPlanCard = memo(({
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.total_budget || ''} onChange={e => onUpdateRow(p.id, 'total_budget', e.target.value)} />
-                        {(p as any).actual_spend > 0 && (
-                          <span className={`text-[9px] block ${(p as any).actual_spend > p.total_budget ? 'text-red-500' : 'text-emerald-500'}`}>
-                            实: {fmt((p as any).actual_spend)} {((p as any).actual_spend - p.total_budget)/p.total_budget > 0.2 ? '🔴' : '🟢'}
-                          </span>
-                        )}
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.approved_amount || ''} onChange={e => onUpdateRow(p.id, 'approved_amount', e.target.value)} />
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        {execStatus === 'executed' && (p as any).actual_spend > 0 ? (
+                          <span className={`text-[11px] font-medium ${(p as any).actual_spend > p.total_budget ? 'text-red-500' : 'text-emerald-600'}`}>
+                            {fmt((p as any).actual_spend)}
+                            <span className="text-[9px] ml-0.5">({Math.round((p as any).actual_spend / p.total_budget * 100)}%)</span>
+                            {(p as any).actual_spend > p.total_budget && <span className="text-[9px] ml-0.5">🔴超支</span>}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-neutral-400">{execStatus === 'executed' ? '—' : '待执行'}</span>
+                        )}
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-12 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.expected_attendees || ''} onChange={e => onUpdateRow(p.id, 'expected_attendees', e.target.value)} />
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.expected_output || ''} onChange={e => onUpdateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
-                        {(p as any).actual_leads > 0 && (
+                        {execStatus === 'executed' && (p as any).actual_leads > 0 && (
                           <button onClick={() => navigate('/deals')} className="text-[9px] block text-blue-500 hover:underline">
                             实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机 →
                           </button>
@@ -545,7 +552,35 @@ export const MarketingPlanPage = () => {
 
       if (logRes.data) setChangeLog(logRes.data);
 
-      if (actRes.data) setActivities(actRes.data);
+      if (actRes.data) {
+        setActivities(actRes.data);
+        // Auto-backfill: sync executed activity actuals to plan
+        if (planRes.data?.length) {
+          let needsUpdate = false;
+          const updatedPlans = planRes.data.map((p: any) => {
+            if (p.execution_status !== 'executed' || p.actual_spend > 0) return p;
+            const match = actRes.data.find((a: any) =>
+              a.name?.includes(p.category) && a.status === 'Completed' &&
+              new Date(a.event_date).getFullYear() === p.year &&
+              Math.ceil((new Date(a.event_date).getMonth()+1)/3) === parseInt(p.quarter?.replace('Q',''))
+            );
+            if (match) {
+              needsUpdate = true;
+              return { ...p, actual_spend: match.actual_spend || 0, actual_leads: match.leads_generated || 0, actual_opps: match.deals_created || 0 };
+            }
+            return p;
+          });
+          if (needsUpdate) {
+            setPlan(updatedPlans);
+            // Persist back to DB
+            updatedPlans.filter((p: any) => p.actual_spend > 0).forEach(async (p: any) => {
+              await supabase.from('marketing_plan').update({ actual_spend: p.actual_spend, actual_leads: p.actual_leads, actual_opps: p.actual_opps }).eq('id', p.id);
+            });
+          } else {
+            setPlan(planRes.data);
+          }
+        }
+      }
 
       if (partnerRes.data) setPartners(partnerRes.data);
 
