@@ -85,6 +85,13 @@ interface PlanActivity {
   target_leads?: number;
   target_opps?: number;
   _new?: boolean;
+  business_objective?: string;
+  forecast_pipeline?: number;
+  actual_spend?: number;
+  actual_leads?: number;
+  actual_opps?: number;
+  baseline_locked?: boolean;
+  budget_utilization?: number;
 }
 
 interface ChangeLogEntry {
@@ -149,17 +156,21 @@ const PieSVG = memo(({ data, size = 120, currency = 'CNY' }: { data: number[]; s
 PieSVG.displayName = 'PieSVG';
 
 // ── Stats Grid ─────────────────────────────────────────
-const StatsGrid = memo(({ items }: { items: { label: string; value: string; icon: React.FC<{ className?: string }>; color: string; bg: string }[] }) => (
-  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+const StatsGrid = memo(({ items }: { items: { label: string; value: string; sub?: string; icon: React.FC<{ className?: string }>; color: string; bg: string; alert?: 'red' | 'yellow' | 'green' }[] }) => (
+  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
     {items.map((kpi, i) => (
-      <Card key={i}>
+      <Card key={i} className={kpi.alert === 'red' ? 'border-red-200 dark:border-red-800' : kpi.alert === 'yellow' ? 'border-amber-200 dark:border-amber-800' : ''}>
         <div className="flex items-center gap-3 p-4">
-          <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center`}>
+          <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}>
             <kpi.icon className={`w-5 h-5 ${kpi.color}`} />
           </div>
-          <div>
-            <p className="text-xs text-neutral-500">{kpi.label}</p>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-neutral-500">{kpi.label}</p>
+              {kpi.alert === 'red' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse shrink-0" />}
+            </div>
             <p className="text-lg font-semibold text-neutral-900 dark:text-white">{kpi.value}</p>
+            {kpi.sub && <p className="text-[11px] text-neutral-400 truncate">{kpi.sub}</p>}
           </div>
         </div>
       </Card>
@@ -312,6 +323,18 @@ const QuarterlyPlanCard = memo(({
               {remaining >= 0 ? <span className="text-emerald-600">剩余 {fmt(remaining)}</span> : <span className="text-red-500">超支 {fmt(Math.abs(remaining))}</span>}
               {pmdfCount > 0 && <span className="text-purple-500"> · PMDF {pmdfCount}项</span>}
             </span>
+            {/* 效能进度条 */}
+            {qBudget > 0 && (
+              <div className="mt-2 space-y-1">
+                <div className="flex items-center justify-between text-[10px] text-neutral-500">
+                  <span>预算执行: {Math.round((approvedTotal / qBudget) * 100)}%</span>
+                  <span>目标达成率: {items.filter((p:any) => p.execution_status === 'executed').length > 0 ? Math.round(items.filter((p:any) => p.execution_status === 'executed').length / Math.max(items.length, 1) * 100) : 0}%</span>
+                </div>
+                <div className="h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(Math.round((approvedTotal / qBudget) * 100), 100)}%` }} />
+                </div>
+              </div>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -334,6 +357,7 @@ const QuarterlyPlanCard = memo(({
                   <th className="text-left py-2 px-2">类型</th>
                   <th className="text-left py-2 px-2">合作伙伴</th>
                   <th className="text-left py-2 px-2">类别</th>
+                  <th className="text-left py-2 px-2">业务目标</th>
                   <th className="text-left py-2 px-2">城市</th>
                   <th className="text-left py-2 px-2">时间</th>
                   <th className="text-right py-2 px-2">总预算</th>
@@ -381,6 +405,11 @@ const QuarterlyPlanCard = memo(({
                         </select>
                       </td>
                       <td className="py-2 px-2">
+                        <select value={(p as any).business_objective || '品牌曝光'} onChange={e => onUpdateRow(p.id, 'business_objective', e.target.value)} className="w-20 bg-transparent text-[11px] focus:outline-none">
+                          {['拉新','存量增购','品牌曝光','新产品抢位','客户关系'].map(o => <option key={o} value={o}>{o}</option>)}
+                        </select>
+                      </td>
+                      <td className="py-2 px-2">
                         <input className="w-20 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.city || ''} onChange={e => onUpdateRow(p.id, 'city', e.target.value)} placeholder="城市" />
                       </td>
                       <td className="py-2 px-2">
@@ -388,6 +417,11 @@ const QuarterlyPlanCard = memo(({
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.total_budget || ''} onChange={e => onUpdateRow(p.id, 'total_budget', e.target.value)} />
+                        {(p as any).actual_spend > 0 && (
+                          <span className={`text-[9px] block ${(p as any).actual_spend > p.total_budget ? 'text-red-500' : 'text-emerald-500'}`}>
+                            实: {fmt((p as any).actual_spend)} {((p as any).actual_spend - p.total_budget)/p.total_budget > 0.2 ? '🔴' : '🟢'}
+                          </span>
+                        )}
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.approved_amount || ''} onChange={e => onUpdateRow(p.id, 'approved_amount', e.target.value)} />
@@ -397,6 +431,11 @@ const QuarterlyPlanCard = memo(({
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.expected_output || ''} onChange={e => onUpdateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
+                        {(p as any).actual_leads > 0 && (
+                          <button onClick={() => navigate('/deals')} className="text-[9px] block text-blue-500 hover:underline">
+                            实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机 →
+                          </button>
+                        )}
                       </td>
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.responsible_person || ''} onChange={e => onUpdateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" />
@@ -570,14 +609,20 @@ export const MarketingPlanPage = () => {
   const budgetUtilizationRate = annualBudget > 0 ? Math.round((totalActual / annualBudget) * 100) : 0;
 
   // ── Stats items ──────────────────────────────────────
+  const forecastPipeline = useMemo(() => totalPlans * 850000, [totalPlans]);
+  const forecastROI = annualBudget > 0 ? (forecastPipeline / annualBudget).toFixed(1) : '0';
+  const varianceCount = useMemo(() => plan.filter(p => {
+    const spendVariance = p.total_budget > 0 && p.actual_spend ? Math.abs((p.actual_spend - p.total_budget)/p.total_budget) : 0;
+    const leadsVariance = p.expected_output && p.actual_leads ? Math.abs((p.actual_leads - parseInt(p.expected_output||'0'))/parseInt(p.expected_output||'1')) : 0;
+    return spendVariance > 0.2 || leadsVariance > 0.5;
+  }).length, [plan]);
+
   const statsItems = useMemo(() => [
-    { label: '年度总预算', value: fmtW(annualBudget), icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { label: '预算执行率', value: budgetUtilizationRate + '%', icon: BarChart3, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-    { label: '活动计划', value: totalPlans + ' 项', icon: PieChart, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-    { label: '进行中', value: inProgressPlans + ' 项', icon: CheckCircle, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-    { label: '已完成', value: completedPlans + ' 项', icon: CheckCircle, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-    { label: '预计参会', value: totalExpectedAttendees + ' 人', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50 dark:bg-indigo-900/20' },
-  ], [fmtW, annualBudget, budgetUtilizationRate, totalPlans, inProgressPlans, completedPlans, totalExpectedAttendees]);
+    { label: '预估商机贡献总额', value: fmtW(forecastPipeline), sub: `预估ROI 1:${forecastROI} · ${totalPlans}项活动`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
+    { label: '年度总预算', value: fmtW(annualBudget), sub: `执行率 ${budgetUtilizationRate}%`, icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+    { label: '活动计划', value: totalPlans + ' 项', sub: `进行中${inProgressPlans} · 已完成${completedPlans}`, icon: PieChart, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
+    { label: '偏差预警', value: varianceCount > 0 ? `⚠️ ${varianceCount}项` : '✅ 正常', sub: varianceCount > 0 ? '预算或线索偏离超阈值' : '所有活动按计划执行', icon: AlertCircle, color: varianceCount > 0 ? 'text-red-500' : 'text-emerald-500', bg: varianceCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20' },
+  ], [fmtW, annualBudget, budgetUtilizationRate, totalPlans, inProgressPlans, completedPlans, forecastPipeline, forecastROI, varianceCount]);
 
   // ── Actions ──────────────────────────────────────────
   const logChange = useCallback(async (action: string) => {
@@ -626,6 +671,10 @@ export const MarketingPlanPage = () => {
     }
     const actionLabel = status === 'approved' ? '批复通过' : status === 'pending' ? '提交审批' : status === 'draft' ? '重新批复（恢复编辑）' : '保存';
     await logChange(actionLabel);
+    // Create baseline snapshot on approval
+    if (status === 'approved') {
+      await supabase.from('plan_baselines').insert({ year: currentYear, field_name: 'annual_budget', planned_value: JSON.stringify({ annual: annualBudget, q1:qBudgets[0],q2:qBudgets[1],q3:qBudgets[2],q4:qBudgets[3] }), status: 'active' });
+    }
     setConfig(prev => ({ ...prev, ...update }));
     setSavingConfig(false);
     reloadChangeLog();
@@ -656,6 +705,9 @@ export const MarketingPlanPage = () => {
     }));
     setShowAdjust(false);
     setSavingConfig(false);
+    // Audit log
+    await supabase.from('plan_audit_logs').insert({ plan_config_id: 'current', field_changed: '季度预算调整', old_value: JSON.stringify({q1:config.q1_budget,q2:config.q2_budget,q3:config.q3_budget,q4:config.q4_budget}), new_value: JSON.stringify({q1:newQ1,q2:newQ2,q3:newQ3,q4:newQ4}), change_reason: '预算调整', changed_by: '渠道经理' });
+    await logChange('预算调整');
     toast('success', '预算调整成功');
   }, [config, toast]);
 
