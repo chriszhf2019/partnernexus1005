@@ -1,13 +1,17 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import {
-  FileText, Plus, Search, Filter, ChevronRight, CheckCircle2, Clock,
+import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   XCircle, AlertCircle, Calendar, User, MapPin, MoreHorizontal,
   ArrowRight, Zap, TrendingUp, DollarSign, Target, BarChart3,
   Layers, ArrowUpRight, ArrowDownRight, Download, ExternalLink, GitBranch,
+  Eye, Edit2, Trash2, Copy, Bell, BellRing, ChevronDown, ChevronUp,
+  MessageSquare, Users, CalendarDays, Flag, Timer, AlertTriangle,
+  Phone, Mail, ListTodo, RefreshCw, Send, Share2, Star, Bookmark,
+  Filter, Layout, ChevronLeft, Award, Clock8, Handshake, Sparkles,
+  BarChart2, PieChart, Settings
 } from 'lucide-react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { Deal, DealRegistrationStats, DealStatus, DealLifecycleStage, DealSource, DealConflict } from '../../types';
+import { Deal, DealRegistrationStats, DealStatus, DealLifecycleStage, DealSource, DealConflict, DealStageProbability, WinLossReason } from '../../types';
 import { DEAL_CONFLICTS } from '../../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -21,12 +25,48 @@ import { Select } from '../ui/Select';
 import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
 
+interface SavedView {
+  id: string;
+  name: string;
+  filters: {
+    region: string;
+    stage: string;
+    productType: string;
+    partnerType: string;
+    source: string;
+    search: string;
+  };
+}
+
+interface PartnerRecommendation {
+  id: string;
+  name: string;
+  tier: string;
+  winRate: number;
+  currentLoad: number;
+  matchScore: number;
+  capabilities: string[];
+}
+
+
 interface DealRegistrationPageProps {
   stats: DealRegistrationStats;
   deals: Deal[];
   onNewDeal: () => void;
   onDealUpdate?: (updatedDeal: Deal) => void;
+  onDealDelete?: (dealId: string) => void;
 }
+
+// 阶段概率配置 - 每个阶段的成交概率和平均周期
+const STAGE_PROBABILITIES: Record<DealLifecycleStage, DealStageProbability> = {
+  'Registered':    { stage: 'Registered', probability: 10, avgCycleDays: 3 },
+  'UnderReview':  { stage: 'UnderReview', probability: 20, avgCycleDays: 5 },
+  'Approved':     { stage: 'Approved', probability: 35, avgCycleDays: 7 },
+  'Solution':     { stage: 'Solution', probability: 50, avgCycleDays: 14 },
+  'Commercial':   { stage: 'Commercial', probability: 80, avgCycleDays: 21 },
+  'ClosedWon':    { stage: 'ClosedWon', probability: 100, avgCycleDays: 0 },
+  'ClosedLost':   { stage: 'ClosedLost', probability: 0, avgCycleDays: 0 },
+};
 
 const STAGE_CONFIG: Record<DealLifecycleStage, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   'Registered':    { label: '已报备', color: 'text-neutral-700', bgColor: 'bg-neutral-100 dark:bg-neutral-800', icon: FileText },
@@ -67,7 +107,7 @@ const CONFLICT_TYPE_LABELS: Record<string, string> = {
   'MultiPartnerSameDeal': '多伙伴同一商机',
 };
 
-export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: DealRegistrationPageProps) => {
+export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, onDealDelete }: DealRegistrationPageProps) => {
   const { t } = useLanguage();
   const { config } = useConfig();
   const navigate = useNavigate();
@@ -77,6 +117,45 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<DealConflict | null>(null);
   const [filters, setFilters] = useState({ region: 'All', stage: 'All' as string, productType: 'All' as string, partnerType: 'All' as string, source: 'All' as string });
+  const [selectedStageFilter, setSelectedStageFilter] = useState<string>('All');
+  const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
+  const [editingDealId, setEditingDealId] = useState<string | null>(null);
+  const [editField, setEditField] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
+  const [hoveredDeal, setHoveredDeal] = useState<Deal | null>(null);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [showActivityDrawer, setShowActivityDrawer] = useState(false);
+  const [newActivityContent, setNewActivityContent] = useState('');
+  
+  const [showWinLossModal, setShowWinLossModal] = useState(false);
+  const [winLossReason, setWinLossReason] = useState<WinLossReason>('Other');
+  const [winLossDescription, setWinLossDescription] = useState('');
+  const [winLossCompetitor, setWinLossCompetitor] = useState('');
+  
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigningDeal, setAssigningDeal] = useState<Deal | null>(null);
+  const [selectedPartners, setSelectedPartners] = useState<string[]>([]);
+  
+  const [showExtendModal, setShowExtendModal] = useState(false);
+  const [extendingDeal, setExtendingDeal] = useState<Deal | null>(null);
+  const [extendReason, setExtendReason] = useState('');
+  
+  const [savedViews, setSavedViews] = useState<SavedView[]>([
+    { id: 'v1', name: '本周待审批', filters: { region: 'All', stage: 'UnderReview', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+    { id: 'v2', name: '逾期未更新', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+    { id: 'v3', name: '金额大于100万', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+  ]);
+  const [showViewManager, setShowViewManager] = useState(false);
+  const [currentViewName, setCurrentViewName] = useState('');
+  
+  const [showPreviewPopover, setShowPreviewPopover] = useState(false);
+  const [previewPosition, setPreviewPosition] = useState({ x: 0, y: 0 });
+
+  // 计算加权管线金额
+  const calculateWeightedValue = (deal: Deal): number => {
+    const probability = STAGE_PROBABILITIES[deal.stage]?.probability || 0;
+    return Math.round(deal.value * probability / 100);
+  };
 
   const filteredDeals = useMemo(() => deals.filter((deal) => {
     const s = searchQuery.toLowerCase();
@@ -87,12 +166,15 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
     const matchesProduct = filters.productType === 'All' || deal.productType === filters.productType;
     const matchesPartnerType = filters.partnerType === 'All' || deal.partnerType === filters.partnerType;
     const matchesSource = filters.source === 'All' || (deal.sourceInfo && deal.sourceInfo.source === filters.source);
-    return matchesSearch && matchesTab && matchesRegion && matchesStage && matchesProduct && matchesPartnerType && matchesSource;
-  }), [deals, searchQuery, activeTab, filters]);
+    const matchesStageFilter = selectedStageFilter === 'All' || deal.stage === selectedStageFilter;
+    return matchesSearch && matchesTab && matchesRegion && matchesStage && matchesProduct && matchesPartnerType && matchesSource && matchesStageFilter;
+  }), [deals, searchQuery, activeTab, filters, selectedStageFilter]);
 
   const pipelineValue = useMemo(() => deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + d.value, 0), [deals]);
+  const weightedPipelineValue = useMemo(() => deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + calculateWeightedValue(d), 0), [deals]);
   const wonValue = useMemo(() => deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0), [deals]);
   const conflictDeals = useMemo(() => deals.filter(d => d.hasConflict), [deals]);
+  const stagnantDeals = useMemo(() => deals.filter(d => d.isStagnant), [deals]);
   const STATUS_CONFIG = getStatusConfig(t);
 
   const stageFunnel = useMemo(() => {
@@ -100,10 +182,28 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
     return stages.map(stage => ({
       stage,
       ...STAGE_CONFIG[stage],
+      probability: STAGE_PROBABILITIES[stage].probability,
+      avgCycleDays: STAGE_PROBABILITIES[stage].avgCycleDays,
       count: deals.filter(d => d.stage === stage).length,
       value: deals.filter(d => d.stage === stage).reduce((s, d) => s + d.value, 0),
+      weightedValue: deals.filter(d => d.stage === stage).reduce((s, d) => s + calculateWeightedValue(d), 0),
     }));
   }, [deals]);
+
+  // 计算转化率
+  const funnelConversionRates = useMemo(() => {
+    const rates: number[] = [];
+    for (let i = 0; i < stageFunnel.length - 1; i++) {
+      const current = stageFunnel[i];
+      const next = stageFunnel[i + 1];
+      if (current.count > 0) {
+        rates.push(Math.round((next.count / current.count) * 100));
+      } else {
+        rates.push(0);
+      }
+    }
+    return rates;
+  }, [stageFunnel]);
 
   const sourceDistribution = useMemo(() => {
     const dist: Record<string, { count: number; value: number }> = {};
@@ -116,6 +216,47 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
     });
     return dist;
   }, [deals]);
+
+  // 处理批量选择
+  const toggleSelectDeal = (dealId: string) => {
+    setSelectedDeals(prev => 
+      prev.includes(dealId) ? prev.filter(id => id !== dealId) : [...prev, dealId]
+    );
+  };
+
+  const selectAllDeals = () => {
+    if (selectedDeals.length === filteredDeals.length) {
+      setSelectedDeals([]);
+    } else {
+      setSelectedDeals(filteredDeals.map(d => d.id));
+    }
+  };
+
+  // 处理快速编辑
+  const startQuickEdit = (dealId: string, field: string, currentValue: string | number) => {
+    setEditingDealId(dealId);
+    setEditField(field);
+    setEditValue(String(currentValue));
+  };
+
+  const saveQuickEdit = () => {
+    if (!editingDealId || !editField || !onDealUpdate) return;
+    const deal = deals.find(d => d.id === editingDealId);
+    if (deal) {
+      const updatedDeal = {
+        ...deal,
+        [editField]: editField === 'value' ? parseFloat(editValue) || deal.value : editValue
+      };
+      onDealUpdate(updatedDeal);
+    }
+    cancelQuickEdit();
+  };
+
+  const cancelQuickEdit = () => {
+    setEditingDealId(null);
+    setEditField(null);
+    setEditValue('');
+  };
 
   const cycleMetrics = useMemo(() => {
     const wonDeals = deals.filter(d => d.stage === 'ClosedWon' && d.conversionMetrics);
@@ -143,6 +284,115 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
     { label: '商机来源', field: 'source' as const, options: ['All', '销售自建', '渠道报备', '市场来源'] },
   ];
 
+  const WIN_LOSS_REASONS: Record<WinLossReason, string> = {
+    Price: '价格因素',
+    Product: '产品力',
+    Service: '服务差',
+    Competitor: '对手强',
+    Timing: '时机不合适',
+    Budget: '预算问题',
+    Relationship: '客户关系',
+    Other: '其他',
+  };
+
+  const handleMarkWon = () => {
+    if (!selectedDeal || !onDealUpdate) return;
+    if (selectedDeal.winLossAnalysis) {
+      completeDeal('ClosedWon');
+    } else {
+      setShowWinLossModal(true);
+    }
+  };
+
+  const handleMarkLost = () => {
+    if (!selectedDeal) return;
+    setShowWinLossModal(true);
+  };
+
+  const completeDeal = (stage: 'ClosedWon' | 'ClosedLost') => {
+    if (!selectedDeal || !onDealUpdate) return;
+    const winLoss = stage === 'ClosedWon' 
+      ? selectedDeal.winLossAnalysis || { reason: 'Product', description: '项目成功签约' }
+      : { reason: winLossReason, description: winLossDescription, competitor: winLossCompetitor || undefined };
+    
+    onDealUpdate({
+      ...selectedDeal,
+      stage,
+      status: stage === 'ClosedWon' ? 'Closed Won' : 'Closed Lost',
+      actualCloseDate: new Date().toISOString().split('T')[0],
+      lifecycle: [...selectedDeal.lifecycle, { stage, date: new Date().toISOString().split('T')[0], description: stage === 'ClosedWon' ? '项目赢单' : '项目丢单', actor: '系统', durationDays: 0 }],
+      winLossAnalysis: winLoss,
+    });
+    setShowWinLossModal(false);
+    setSelectedDeal(null);
+    setWinLossReason('Other');
+    setWinLossDescription('');
+    setWinLossCompetitor('');
+  };
+
+  const getPartnerRecommendations = (deal: Deal): PartnerRecommendation[] => {
+    const partners: PartnerRecommendation[] = [
+      { id: 'p1', name: '华东医卫云科技术有限公司', tier: 'Diamond', winRate: 75, currentLoad: 3, matchScore: 92, capabilities: ['医疗', '云原生', '大数据'] },
+      { id: 'p2', name: '上海智医科技', tier: 'Platinum', winRate: 68, currentLoad: 5, matchScore: 85, capabilities: ['医疗', 'AI', '数据'] },
+      { id: 'p3', name: '华南智慧科技', tier: 'Gold', winRate: 62, currentLoad: 2, matchScore: 78, capabilities: ['政府', '云平台'] },
+    ];
+    return partners.sort((a, b) => b.matchScore - a.matchScore);
+  };
+
+  const handleAssignDeal = () => {
+    if (!assigningDeal || !onDealUpdate) return;
+    onDealUpdate({
+      ...assigningDeal,
+      partnerId: selectedPartners[0] || assigningDeal.partnerId,
+    });
+    setShowAssignModal(false);
+    setAssigningDeal(null);
+    setSelectedPartners([]);
+  };
+
+  const handleExtendRequest = () => {
+    if (!extendingDeal || !onDealUpdate) return;
+    onDealUpdate({
+      ...extendingDeal,
+      expiresInDays: (extendingDeal.expiresInDays || 0) + 30,
+    });
+    setShowExtendModal(false);
+    setExtendingDeal(null);
+    setExtendReason('');
+  };
+
+  const saveCurrentView = () => {
+    const newView: SavedView = {
+      id: `v${Date.now()}`,
+      name: currentViewName || '未命名视图',
+      filters: { ...filters, search: searchQuery },
+    };
+    setSavedViews([...savedViews, newView]);
+    setShowViewManager(false);
+    setCurrentViewName('');
+  };
+
+  const loadView = (view: SavedView) => {
+    setFilters(view.filters);
+    setSearchQuery(view.filters.search);
+    setShowViewManager(false);
+  };
+
+  const deleteView = (viewId: string) => {
+    setSavedViews(savedViews.filter(v => v.id !== viewId));
+  };
+
+  const handleDealHover = (deal: Deal, event: React.MouseEvent) => {
+    setHoveredDeal(deal);
+    setPreviewPosition({ x: event.clientX, y: event.clientY });
+    setShowPreviewPopover(true);
+  };
+
+  const handleDealLeave = () => {
+    setShowPreviewPopover(false);
+    setHoveredDeal(null);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -156,22 +406,31 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
           { label: t('deals.yearNew'), value: stats.yearNew, icon: Calendar, color: 'text-neutral-700' },
           { label: t('deals.quarterNew'), value: stats.quarterNew, icon: TrendingUp, color: 'text-blue-600' },
-          { label: t('deals.pipelineTotal'), value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600' },
+          { label: '管线总额', value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600', sublabel: '加权:' },
+          { label: '加权金额', value: formatCurrency(weightedPipelineValue), icon: Target, color: 'text-amber-600', highlight: true },
           { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600' },
-          { label: t('deals.conflictDeals'), value: conflictDeals.length, icon: AlertCircle, color: 'text-red-500' },
+          { label: '异常停滞', value: stagnantDeals.length, icon: AlertTriangle, color: stagnantDeals.length > 0 ? 'text-red-500' : 'text-neutral-400', alert: stagnantDeals.length > 0 },
         ].map((s) => (
-          <Card key={s.label}>
+          <Card key={s.label} className={s.alert ? 'border-red-200 dark:border-red-900' : ''}>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+              <div className={cn(
+                'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
+                s.alert ? 'bg-red-100 dark:bg-red-900/30' : 'bg-neutral-100 dark:bg-neutral-800'
+              )}>
                 <s.icon className={s.color} />
               </div>
               <div>
                 <p className="text-xs text-neutral-500">{s.label}</p>
-                <p className="text-xl font-semibold text-neutral-900 dark:text-white">{s.value}</p>
+                <p className={cn('text-xl font-semibold', s.highlight ? 'text-amber-600' : 'text-neutral-900 dark:text-white')}>
+                  {s.value}
+                </p>
+                {s.sublabel && (
+                  <p className="text-xs text-neutral-400">{s.sublabel} {formatCurrency(weightedPipelineValue)}</p>
+                )}
               </div>
             </div>
           </Card>
@@ -182,34 +441,86 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
         <div className="lg:col-span-8 space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>{t('deals.lifecycleFunnel')}</CardTitle>
+              <CardTitle className="flex items-center gap-2">
+                <Layers className="w-4 h-4" />
+                {t('deals.lifecycleFunnel')}
+              </CardTitle>
+              <div className="text-xs text-neutral-400">
+                点击阶段过滤商机 · 加权概率已计算
+              </div>
             </CardHeader>
             <CardContent>
-              <div className="flex items-end gap-2 h-48">
-                {stageFunnel.map((s, i) => (
-                  <div key={s.stage} className="flex-1 flex flex-col items-center">
-                    <div className="w-full flex flex-col items-center justify-end h-36">
-                      <div
-                        className={cn('w-full rounded-t-lg transition-all hover:opacity-80 cursor-pointer', s.bgColor)}
-                        style={{ height: `${Math.max(10, (s.count / Math.max(...stageFunnel.map(x => x.count))) * 100)}%` }}
-                        title={`${s.label}: ${s.count}个 (${formatCurrency(s.value)})`}
+              <div className="flex items-center justify-center gap-1 h-64">
+                {stageFunnel.map((s, i) => {
+                  const maxCount = Math.max(...stageFunnel.map(x => x.count));
+                  const widthPercent = 100 - i * 12; // 漏斗宽度递减
+                  const heightPercent = Math.max(15, (s.count / maxCount) * 100);
+                  const isSelected = selectedStageFilter === s.stage;
+                  
+                  return (
+                    <div key={s.stage} className="flex flex-col items-center relative">
+                      {/* 漏斗层级 */}
+                      <button
+                        onClick={() => setSelectedStageFilter(selectedStageFilter === s.stage ? 'All' : s.stage)}
+                        className={cn(
+                          'relative transition-all duration-200 rounded-lg overflow-hidden',
+                          'hover:scale-105 hover:shadow-lg',
+                          isSelected ? 'ring-2 ring-brand ring-offset-2' : ''
+                        )}
+                        style={{ width: `${widthPercent}%`, minWidth: '60px' }}
                       >
-                        <div className="h-full flex flex-col items-center justify-center text-white">
-                          <span className="text-lg font-bold">{s.count}</span>
+                        <div
+                          className={cn('p-3', s.bgColor)}
+                          style={{ 
+                            height: `${heightPercent}%`,
+                            minHeight: '40px',
+                            background: `linear-gradient(180deg, ${s.bgColor.replace('bg-', '#').replace('-50', '200').replace('-100', '300')} 0%, ${s.bgColor.replace('bg-', '#').replace('-50', '100').replace('-100', '200')} 100%)`
+                          }}
+                        >
+                          <div className="text-center">
+                            <div className="text-xl font-bold" style={{ color: s.color.replace('text-', '') }}>
+                              {s.count}
+                            </div>
+                            <div className="text-xs opacity-70" style={{ color: s.color.replace('text-', '') }}>
+                              {formatCurrency(s.weightedValue)}
+                            </div>
+                            <div className="text-[10px] mt-1" style={{ color: s.color.replace('text-', '') }}>
+                              概率: {s.probability}%
+                            </div>
+                          </div>
                         </div>
+                      </button>
+                      
+                      {/* 阶段标签 */}
+                      <div className="mt-2 text-center">
+                        <p className={cn('text-xs font-medium', s.color)}>{s.label}</p>
+                        <p className="text-[10px] text-neutral-400">{formatCurrency(s.value)}</p>
                       </div>
+                      
+                      {/* 转化率箭头 */}
+                      {i < stageFunnel.length - 1 && (
+                        <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                          <ArrowDownRight className="w-3 h-3 text-neutral-300" />
+                          <span className="text-[10px] font-medium text-emerald-600 mt-0.5">
+                            {funnelConversionRates[i]}%
+                          </span>
+                        </div>
+                      )}
                     </div>
-                    <div className="mt-2 text-center">
-                      <p className={cn('text-xs font-medium', s.color)}>{s.label}</p>
-                      <p className="text-[10px] text-neutral-400">{formatCurrency(s.value)}</p>
-                    </div>
-                    {i < stageFunnel.length - 1 && stageFunnel[i + 1].count > 0 && (
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-1/2 z-10">
-                        <ArrowRight className="w-3 h-3 text-neutral-300" />
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
+              </div>
+              
+              {/* 图例说明 */}
+              <div className="mt-6 flex flex-wrap items-center justify-center gap-4 text-xs text-neutral-500">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded bg-amber-100"></div>
+                  <span>加权金额 = 金额 × 阶段概率</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <ArrowDownRight className="w-3 h-3 text-neutral-400" />
+                  <span>转化率 = 下一阶段数量 / 当前阶段数量</span>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -311,6 +622,43 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
       </div>
 
       <Card padding={false}>
+        {/* 批量操作栏 */}
+        {selectedDeals.length > 0 && (
+          <div className="px-6 py-3 bg-brand-50 dark:bg-brand-900/20 border-b border-brand-200 dark:border-brand-800">
+            <div className="flex items-center gap-4">
+              <span className="text-sm font-medium text-brand-700 dark:text-brand-400">
+                已选择 {selectedDeals.length} 个商机
+              </span>
+              <div className="flex items-center gap-2">
+                <Button variant="secondary" size="sm" onClick={() => {
+                  // 批量审批
+                  selectedDeals.forEach(id => {
+                    const deal = deals.find(d => d.id === id);
+                    if (deal && deal.stage === 'UnderReview' && onDealUpdate) {
+                      onDealUpdate({ ...deal, stage: 'Approved' });
+                    }
+                  });
+                  setSelectedDeals([]);
+                }}>
+                  <CheckCircle2 className="w-4 h-4" />
+                  批量审批通过
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => {
+                  // 批量删除
+                  selectedDeals.forEach(id => onDealDelete?.(id));
+                  setSelectedDeals([]);
+                }}>
+                  <Trash2 className="w-4 h-4" />
+                  批量删除
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setSelectedDeals([])}>
+                  取消选择
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="flex bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5">
@@ -335,6 +683,10 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={() => setShowViewManager(true)}>
+              <Layout className="w-4 h-4 mr-1" />
+              视图管理
+            </Button>
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <input
@@ -371,13 +723,24 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
             <table className="w-full">
               <thead>
                 <tr className="border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/30">
+                  <th className="px-3 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider w-12">
+                    <button onClick={selectAllDeals} className="hover:text-neutral-700 transition-colors">
+                      <div className="w-4 h-4 rounded border border-neutral-300 dark:border-neutral-600 flex items-center justify-center">
+                        {selectedDeals.length === filteredDeals.length && (
+                          <CheckCircle2 className="w-3 h-3 text-neutral-700" />
+                        )}
+                      </div>
+                    </button>
+                  </th>
                   <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colProject')}</th>
                   <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colCustomer')}</th>
                   <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colPartner')}</th>
                   <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">来源</th>
                   <th className="px-6 py-3.5 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colValue')}</th>
+                  <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">停留天数</th>
                   <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colStage')}</th>
                   <th className="px-6 py-3.5 text-center text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('deals.colPriority')}</th>
+                  <th className="px-6 py-3.5 text-left text-xs font-semibold text-neutral-500 uppercase tracking-wider">最新动态</th>
                   <th className="px-6 py-3.5 text-right text-xs font-semibold text-neutral-500 uppercase tracking-wider">{t('common.actions')}</th>
                 </tr>
               </thead>
@@ -386,65 +749,205 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
                   const stageCfg = STAGE_CONFIG[deal.stage];
                   const StageIcon = stageCfg.icon;
                   const sourceCfg = deal.sourceInfo ? SOURCE_CONFIG[deal.sourceInfo.source] : null;
+                  const isSelected = selectedDeals.includes(deal.id);
+                  const isStagnant = deal.isStagnant;
+                  const daysInStage = deal.daysInCurrentStage || 0;
+                  const avgDays = STAGE_PROBABILITIES[deal.stage]?.avgCycleDays || 0;
+                  const isOverdue = daysInStage > avgDays;
+                  
                   return (
-                    <tr
-                      key={deal.id}
-                      className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors group cursor-pointer"
-                      onClick={() => navigate(`/deals/${deal.id}`)}
-                    >
-                      <td className="px-6 py-4">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <p className="text-sm font-medium text-neutral-900 dark:text-white group-hover:text-brand transition-colors">{deal.title}</p>
-                            {deal.hasConflict && <Badge variant="danger" size="sm">{t('deals.conflict')}</Badge>}
-                          </div>
-                          <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
-                            <MapPin className="w-3 h-3" /> {deal.region} · {deal.city}
-                          </p>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{deal.customerName}</p>
-                        <p className="text-xs text-neutral-400">{deal.customerIndustry}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{deal.partnerName}</p>
-                        <Badge variant="default" size="sm">{deal.partnerType}</Badge>
-                      </td>
-                      <td className="px-6 py-4">
-                        {sourceCfg && (
-                          <div className="flex items-center gap-2">
-                            <sourceCfg.icon className="w-4 h-4 text-neutral-400" />
-                            <span className="text-xs text-neutral-500">{sourceCfg.label}</span>
-                          </div>
+                      <tr
+                        className={cn(
+                          'hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors group cursor-pointer',
+                          isStagnant && 'bg-amber-50/50 dark:bg-amber-900/10'
                         )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <p className="text-sm font-semibold text-neutral-900 dark:text-white">{formatCurrency(deal.value)}</p>
-                        <p className="text-xs text-neutral-400">{deal.expectedCloseDate}</p>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        <div className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium', stageCfg.bgColor, stageCfg.color)}>
-                          <StageIcon className="w-3.5 h-3.5" />
-                          {stageCfg.label}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 text-center">
-                        {deal.isPriority ? (
-                          <Badge variant="warning" size="sm">{t('deals.priority')}</Badge>
-                        ) : (
-                          <span className="text-xs text-neutral-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); navigate(`/deals/${deal.id}`); }}
-                          className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-brand transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <ChevronRight className="w-4 h-4" />
-                        </button>
-                      </td>
-                    </tr>
+                        onClick={() => navigate(`/deals/${deal.id}`)}
+                        onMouseEnter={(e) => handleDealHover(deal, e)}
+                        onMouseLeave={handleDealLeave}
+                      >
+                        {/* 多选框 */}
+                        <td className="px-3 py-4">
+                          <button 
+                            onClick={(e) => { e.stopPropagation(); toggleSelectDeal(deal.id); }}
+                            className="hover:text-neutral-700 transition-colors"
+                          >
+                            <div className={cn(
+                              'w-4 h-4 rounded border flex items-center justify-center',
+                              isSelected 
+                                ? 'bg-brand border-brand' 
+                                : 'border-neutral-300 dark:border-neutral-600'
+                            )}>
+                              {isSelected && (
+                                <CheckCircle2 className="w-3 h-3 text-white" />
+                              )}
+                            </div>
+                          </button>
+                        </td>
+                        
+                        {/* 项目名称 */}
+                        <td className="px-6 py-4">
+                          <div className="relative">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-neutral-900 dark:text-white group-hover:text-brand transition-colors">{deal.title}</p>
+                              {deal.hasConflict && <Badge variant="danger" size="sm">{t('deals.conflict')}</Badge>}
+                              {isStagnant && <Badge variant="warning" size="sm"><AlertTriangle className="w-3 h-3" /> 停滞</Badge>}
+                            </div>
+                            <p className="text-xs text-neutral-400 mt-0.5 flex items-center gap-1.5">
+                              <MapPin className="w-3 h-3" /> {deal.region} · {deal.city}
+                            </p>
+                          </div>
+                        </td>
+                        
+                        {/* 客户信息 */}
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{deal.customerName}</p>
+                          <p className="text-xs text-neutral-400">{deal.customerIndustry}</p>
+                        </td>
+                        
+                        {/* 伙伴信息 */}
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{deal.partnerName}</p>
+                          <Badge variant="default" size="sm">{deal.partnerType}</Badge>
+                        </td>
+                        
+                        {/* 来源 */}
+                        <td className="px-6 py-4">
+                          {sourceCfg && (
+                            <div className="flex items-center gap-2">
+                              <sourceCfg.icon className="w-4 h-4 text-neutral-400" />
+                              <span className="text-xs text-neutral-500">{sourceCfg.label}</span>
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* 金额 - 支持快速编辑 */}
+                        <td className="px-6 py-4 text-right">
+                          {editingDealId === deal.id && editField === 'value' ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <input
+                                type="number"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-24 px-2 py-1 text-sm border border-brand rounded focus:outline-none focus:ring-1 focus:ring-brand"
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') saveQuickEdit();
+                                  if (e.key === 'Escape') cancelQuickEdit();
+                                }}
+                                autoFocus
+                              />
+                              <button onClick={saveQuickEdit} className="p-1 hover:bg-neutral-100 rounded">
+                                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                              </button>
+                              <button onClick={cancelQuickEdit} className="p-1 hover:bg-neutral-100 rounded">
+                                <XCircle className="w-4 h-4 text-neutral-500" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div>
+                              <p 
+                                className="text-sm font-semibold text-neutral-900 dark:text-white cursor-pointer hover:text-brand"
+                                onClick={(e) => { e.stopPropagation(); startQuickEdit(deal.id, 'value', deal.value); }}
+                              >
+                                {formatCurrency(deal.value)}
+                                <Edit2 className="w-3 h-3 inline ml-1 opacity-0 hover:opacity-100 transition-opacity" />
+                              </p>
+                              <p 
+                                className="text-xs text-neutral-400 cursor-pointer hover:text-brand"
+                                onClick={(e) => { e.stopPropagation(); startQuickEdit(deal.id, 'expectedCloseDate', deal.expectedCloseDate); }}
+                              >
+                                {deal.expectedCloseDate}
+                              </p>
+                            </div>
+                          )}
+                        </td>
+                        
+                        {/* 停留天数 */}
+                        <td className="px-6 py-4 text-center">
+                          <div className={cn(
+                            'inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium',
+                            isOverdue 
+                              ? isStagnant 
+                                ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                : 'bg-amber-100 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400'
+                              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400'
+                          )}>
+                            <Timer className="w-3 h-3" />
+                            {daysInStage}天
+                            {isOverdue && (
+                              <span className="ml-1">超出{daysInStage - avgDays}天</span>
+                            )}
+                          </div>
+                        </td>
+                        
+                        {/* 阶段 */}
+                        <td className="px-6 py-4 text-center">
+                          <div className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium', stageCfg.bgColor, stageCfg.color)}>
+                            <StageIcon className="w-3.5 h-3.5" />
+                            {stageCfg.label}
+                          </div>
+                        </td>
+                        
+                        {/* 优先级 */}
+                        <td className="px-6 py-4 text-center">
+                          {deal.isPriority ? (
+                            <Badge variant="warning" size="sm">{t('deals.priority')}</Badge>
+                          ) : (
+                            <span className="text-xs text-neutral-400">-</span>
+                          )}
+                        </td>
+                        
+                        {/* 最新动态 */}
+                        <td className="px-6 py-4">
+                          {deal.activities && deal.activities.length > 0 ? (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSelectedDeal(deal); setShowActivityDrawer(true); }}
+                              className="flex items-center gap-2 text-left hover:text-brand transition-colors"
+                            >
+                              <MessageSquare className="w-4 h-4 text-neutral-400" />
+                              <div className="max-w-[180px]">
+                                <p className="text-xs text-neutral-600 dark:text-neutral-300 truncate">
+                                  {deal.activities[0].content}
+                                </p>
+                                <p className="text-xs text-neutral-400 mt-0.5">
+                                  {deal.activities[0].actor} · {deal.activities[0].createdAt}
+                                </p>
+                              </div>
+                            </button>
+                          ) : (
+                            <span className="text-xs text-neutral-400 flex items-center gap-1">
+                              <MessageSquare className="w-4 h-4" />
+                              暂无动态
+                            </span>
+                          )}
+                        </td>
+                        
+                        {/* 操作 */}
+                        <td className="px-6 py-4 text-right">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setAssigningDeal(deal); setShowAssignModal(true); }}
+                              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
+                              title="智能分配"
+                            >
+                              <Handshake className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSelectedDeal(deal); setShowActivityDrawer(true); }}
+                              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-green-500 transition-colors opacity-0 group-hover:opacity-100"
+                              title="跟进动态"
+                            >
+                              <MessageSquare className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); navigate(`/deals/${deal.id}`); }}
+                              className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-brand transition-colors opacity-0 group-hover:opacity-100"
+                              title="查看详情"
+                            >
+                              <ChevronRight className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                   );
                 })}
               </tbody>
@@ -565,14 +1068,20 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
                     {selectedDeal.stage === 'Commercial' && (
                       <>
                         <Button variant="brand" size="sm" className="w-full"
-                          onClick={() => onDealUpdate?.({ ...selectedDeal, stage: 'ClosedWon', status: 'Closed Won', actualCloseDate: new Date().toISOString().split('T')[0], lifecycle: [...selectedDeal.lifecycle, { stage: 'ClosedWon', date: new Date().toISOString().split('T')[0], description: '项目赢单', actor: '系统', durationDays: 0 }] })}>
+                          onClick={handleMarkWon}>
                           <TrendingUp className="w-4 h-4" /> {t('deals.markWon')}
                         </Button>
                         <Button variant="danger" size="sm" className="w-full"
-                          onClick={() => onDealUpdate?.({ ...selectedDeal, stage: 'ClosedLost', status: 'Closed Lost', lifecycle: [...selectedDeal.lifecycle, { stage: 'ClosedLost', date: new Date().toISOString().split('T')[0], description: '项目丢单', actor: '系统', durationDays: 0 }] })}>
+                          onClick={handleMarkLost}>
                           <XCircle className="w-4 h-4" /> {t('deals.markLost')}
                         </Button>
                       </>
+                    )}
+                    {(selectedDeal.stage !== 'ClosedWon' && selectedDeal.stage !== 'ClosedLost') && (
+                      <Button variant="outline" size="sm" className="w-full"
+                        onClick={() => { setExtendingDeal(selectedDeal); setShowExtendModal(true); }}>
+                        <Clock8 className="w-4 h-4" /> 申请延期
+                      </Button>
                     )}
                     <Button variant="secondary" size="sm" className="w-full mt-2">{t('deals.editDeal')}</Button>
                   </div>
@@ -621,40 +1130,100 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
         )}
       </Modal>
 
-      <Modal open={showConflictModal && !!selectedConflict} onClose={() => { setShowConflictModal(false); setSelectedConflict(null); }} size="lg" title={t('deals.conflictManagement')}>
+      <Modal open={showConflictModal && !!selectedConflict} onClose={() => { setShowConflictModal(false); setSelectedConflict(null); }} size="xl" title={t('deals.conflictManagement')}>
         {selectedConflict && (
           <div className="space-y-4">
             <div className="p-4 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertCircle className="w-5 h-5 text-red-500" />
-                <span className="text-sm font-semibold text-red-700 dark:text-red-400">
-                  {CONFLICT_TYPE_LABELS[selectedConflict.type] || selectedConflict.type}
-                </span>
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-red-500" />
+                  <span className="text-sm font-semibold text-red-700 dark:text-red-400">
+                    {CONFLICT_TYPE_LABELS[selectedConflict.type] || selectedConflict.type}
+                  </span>
+                </div>
+                <Badge variant={selectedConflict.status === 'Resolved' ? 'success' : selectedConflict.status === 'Escalated' ? 'warning' : 'danger'} size="sm">
+                  {selectedConflict.status === 'Resolved' ? '已解决' : selectedConflict.status === 'Escalated' ? '已升级' : '待处理'}
+                </Badge>
               </div>
               <p className="text-sm text-red-600 dark:text-red-300">{selectedConflict.description}</p>
+              {selectedConflict.protectionPeriodDays && (
+                <div className="mt-2 flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-amber-500" />
+                  <span className="text-xs text-amber-600">首报保护期: {selectedConflict.protectionPeriodDays}天</span>
+                </div>
+              )}
             </div>
 
-            <div>
-              <h4 className="text-sm font-semibold text-neutral-900 dark:text-white mb-3">{t('deals.relatedDeals')}</h4>
-              <div className="space-y-2">
-                {selectedConflict.dealIds.map((dealId) => {
-                  const deal = deals.find(d => d.id === dealId);
-                  if (!deal) return null;
-                  return (
-                    <div key={dealId} className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-medium text-neutral-900 dark:text-white">{deal.title}</p>
-                          <p className="text-xs text-neutral-500">{deal.customerName} · {deal.partnerName}</p>
-                        </div>
-                        <Badge variant={deal.stage === 'ClosedLost' ? 'danger' : 'success'} size="sm">
-                          {STAGE_CONFIG[deal.stage]?.label}
-                        </Badge>
+            <div className="grid grid-cols-2 gap-4">
+              {selectedConflict.dealIds.map((dealId, index) => {
+                const deal = deals.find(d => d.id === dealId);
+                if (!deal) return null;
+                const isFirstReported = selectedConflict.firstReportedDealId === dealId;
+                const stageCfg = STAGE_CONFIG[deal.stage];
+                const StageIcon = stageCfg.icon;
+                
+                return (
+                  <div key={dealId} className={cn(
+                    'p-4 rounded-lg border-2',
+                    isFirstReported 
+                      ? 'border-emerald-300 bg-emerald-50/50 dark:bg-emerald-900/10' 
+                      : 'border-neutral-200 bg-neutral-50 dark:bg-neutral-800/50'
+                  )}>
+                    {isFirstReported && (
+                      <div className="flex items-center gap-1 mb-3">
+                        <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-0.5 rounded-full font-medium">
+                          首报者
+                        </span>
+                      </div>
+                    )}
+                    
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <p className="text-sm font-semibold text-neutral-900 dark:text-white">{deal.title}</p>
+                        <p className="text-xs text-neutral-500 mt-0.5">{deal.customerName}</p>
+                      </div>
+                      <div className={cn('px-2 py-1 rounded-lg text-xs font-medium', stageCfg.bgColor, stageCfg.color)}>
+                        <StageIcon className="w-3 h-3 inline mr-1" />
+                        {stageCfg.label}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
+
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <User className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-neutral-600 dark:text-neutral-400">伙伴: {deal.partnerName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <MapPin className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-neutral-600 dark:text-neutral-400">{deal.region} · {deal.city}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <DollarSign className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-neutral-600 dark:text-neutral-400">{formatCurrency(deal.value)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-neutral-600 dark:text-neutral-400">报备: {deal.createdDate}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-neutral-400" />
+                        <span className="text-neutral-600 dark:text-neutral-400">预计结单: {deal.expectedCloseDate}</span>
+                      </div>
+                    </div>
+
+                    {deal.activities && deal.activities.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-neutral-200 dark:border-neutral-700">
+                        <p className="text-xs font-medium text-neutral-500 mb-2">最近跟进</p>
+                        {deal.activities.slice(0, 2).map((activity) => (
+                          <div key={activity.id} className="text-xs text-neutral-600 dark:text-neutral-400 mb-1">
+                            {activity.content} · {activity.createdAt}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {selectedConflict.status === 'Resolved' && (
@@ -675,14 +1244,497 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate }: 
                 {t('common.close')}
               </Button>
               {selectedConflict.status === 'Pending' && (
-                <Button variant="brand" size="sm">
-                  {t('deals.markResolved')}
-                </Button>
+                <>
+                  <Button variant="outline" size="sm">
+                    转入公海
+                  </Button>
+                  <Button variant="brand" size="sm">
+                    {t('deals.markResolved')}
+                  </Button>
+                </>
               )}
             </div>
           </div>
         )}
       </Modal>
+
+      {/* 活动动态抽屉 */}
+      <AnimatePresence>
+        {showActivityDrawer && selectedDeal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 z-50 flex justify-end"
+            onClick={() => { setShowActivityDrawer(false); setSelectedDeal(null); }}
+          >
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+              className="w-full max-w-md bg-white dark:bg-neutral-900 h-full overflow-y-auto shadow-xl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 px-4 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="font-semibold text-neutral-900 dark:text-white">{selectedDeal.title}</h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">{selectedDeal.customerName}</p>
+                  </div>
+                  <button
+                    onClick={() => { setShowActivityDrawer(false); setSelectedDeal(null); }}
+                    className="p-2 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"
+                  >
+                    <XCircle className="w-5 h-5 text-neutral-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-4 space-y-4">
+                {/* 活动列表 */}
+                <div className="space-y-3">
+                  {selectedDeal.activities && selectedDeal.activities.length > 0 ? (
+                    selectedDeal.activities.map((activity) => (
+                      <div key={activity.id} className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                        <div className="flex items-start gap-3">
+                          <div className={cn(
+                            'w-8 h-8 rounded-full flex items-center justify-center shrink-0',
+                            activity.type === 'meeting' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600' :
+                            activity.type === 'call' ? 'bg-green-100 dark:bg-green-900/30 text-green-600' :
+                            activity.type === 'email' ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600' :
+                            activity.type === 'task' ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600' :
+                            'bg-neutral-200 dark:bg-neutral-700 text-neutral-600 dark:text-neutral-300'
+                          )}>
+                            {activity.type === 'meeting' && <Calendar className="w-4 h-4" />}
+                            {activity.type === 'call' && <Phone className="w-4 h-4" />}
+                            {activity.type === 'email' && <Mail className="w-4 h-4" />}
+                            {activity.type === 'task' && <ListTodo className="w-4 h-4" />}
+                            {activity.type === 'note' && <FileText className="w-4 h-4" />}
+                            {activity.type === 'update' && <RefreshCw className="w-4 h-4" />}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-neutral-900 dark:text-white">
+                              {activity.content}
+                            </p>
+                            <p className="text-xs text-neutral-400 mt-1">
+                              {activity.actor} · {activity.createdAt}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <MessageSquare className="w-12 h-12 text-neutral-300 mx-auto mb-2" />
+                      <p className="text-sm text-neutral-500">暂无跟进记录</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* 评论输入 */}
+                <div className="pt-4 border-t border-neutral-200 dark:border-neutral-800">
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newActivityContent}
+                      onChange={(e) => setNewActivityContent(e.target.value)}
+                      placeholder="添加评论，支持 @提及"
+                      className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && newActivityContent.trim()) {
+                          // 提交评论
+                          setNewActivityContent('');
+                        }
+                      }}
+                    />
+                    <Button size="sm" disabled={!newActivityContent.trim()}>
+                      <Send className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-neutral-400 mt-2">支持 @提及功能，输入 @ 后可选择用户</p>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 赢单/丢单分析模态框 */}
+      <Modal 
+        open={showWinLossModal} 
+        onClose={() => { setShowWinLossModal(false); setWinLossReason('Other'); setWinLossDescription(''); setWinLossCompetitor(''); }} 
+        size="lg" 
+        title={selectedDeal?.stage === 'Commercial' ? '确认结单' : '丢单原因分析'}
+      >
+        <div className="space-y-4">
+          <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+              <span className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                {selectedDeal?.stage === 'Commercial' ? '请填写赢单分析信息' : '请分析丢单原因，这将帮助我们改进业务'}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">主要原因</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {Object.entries(WIN_LOSS_REASONS).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setWinLossReason(key as WinLossReason)}
+                  className={cn(
+                    'px-3 py-2 rounded-lg text-sm font-medium transition-all',
+                    winLossReason === key
+                      ? 'bg-brand text-white'
+                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">详细说明</label>
+            <textarea
+              value={winLossDescription}
+              onChange={(e) => setWinLossDescription(e.target.value)}
+              placeholder="请描述具体原因和情况..."
+              rows={3}
+              className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 resize-none"
+            />
+          </div>
+
+          {winLossReason === 'Competitor' && (
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">竞争厂商</label>
+              <input
+                type="text"
+                value={winLossCompetitor}
+                onChange={(e) => setWinLossCompetitor(e.target.value)}
+                placeholder="请输入竞争厂商名称"
+                className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20"
+              />
+            </div>
+          )}
+
+          <div className="flex justify-end gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+            <Button variant="secondary" size="sm" onClick={() => { setShowWinLossModal(false); setWinLossReason('Other'); setWinLossDescription(''); setWinLossCompetitor(''); }}>
+              取消
+            </Button>
+            <Button 
+              variant={selectedDeal?.stage === 'Commercial' ? 'brand' : 'danger'} 
+              size="sm" 
+              onClick={() => completeDeal(selectedDeal?.stage === 'Commercial' ? 'ClosedWon' : 'ClosedLost')}
+              disabled={!winLossDescription.trim()}
+            >
+              {selectedDeal?.stage === 'Commercial' ? '确认赢单' : '确认丢单'}
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 公海商机智能分配模态框 */}
+      <Modal 
+        open={showAssignModal} 
+        onClose={() => { setShowAssignModal(false); setAssigningDeal(null); setSelectedPartners([]); }} 
+        size="xl" 
+        title="智能分配商机"
+      >
+        {assigningDeal && (
+          <div className="space-y-4">
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900 dark:text-white">{assigningDeal.title}</p>
+                  <p className="text-xs text-neutral-500 mt-1">{assigningDeal.customerName} · {formatCurrency(assigningDeal.value)}</p>
+                </div>
+                <Sparkles className="w-8 h-8 text-blue-500" />
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300">推荐合作伙伴</h4>
+                <span className="text-xs text-neutral-500">系统根据能力匹配度排序</span>
+              </div>
+              <div className="space-y-3">
+                {getPartnerRecommendations(assigningDeal).map((partner) => (
+                  <div 
+                    key={partner.id} 
+                    className={cn(
+                      'p-4 rounded-lg border-2 transition-all cursor-pointer',
+                      selectedPartners.includes(partner.id)
+                        ? 'border-brand bg-brand/5'
+                        : 'border-neutral-200 dark:border-neutral-700 hover:border-neutral-300 dark:hover:border-neutral-600'
+                    )}
+                    onClick={() => setSelectedPartners(selectedPartners.includes(partner.id) 
+                      ? selectedPartners.filter(id => id !== partner.id)
+                      : [...selectedPartners, partner.id])}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-blue-400 to-purple-500 flex items-center justify-center">
+                          <User className="w-5 h-5 text-white" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-semibold text-neutral-900 dark:text-white">{partner.name}</p>
+                            <Badge variant={partner.tier === 'Diamond' ? 'brand' : partner.tier === 'Platinum' ? 'success' : 'default'} size="sm">
+                              {partner.tier}
+                            </Badge>
+                          </div>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {partner.capabilities.map((cap, idx) => (
+                              <span key={idx} className="text-xs px-2 py-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-full text-neutral-600 dark:text-neutral-400">
+                                {cap}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Star className="w-4 h-4 text-amber-500 fill-amber-500" />
+                          <span className="text-sm font-semibold text-neutral-900 dark:text-white">{partner.matchScore}%</span>
+                        </div>
+                        <div className="text-xs text-neutral-500">
+                          胜率: {partner.winRate}% · 负载: {partner.currentLoad}
+                        </div>
+                      </div>
+                    </div>
+                    {selectedPartners.includes(partner.id) && (
+                      <div className="mt-3 flex items-center gap-2 text-brand">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span className="text-xs font-medium">已选择</span>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+              <Button variant="secondary" size="sm" onClick={() => { setShowAssignModal(false); setAssigningDeal(null); setSelectedPartners([]); }}>
+                取消
+              </Button>
+              <Button 
+                variant="brand" 
+                size="sm" 
+                onClick={handleAssignDeal}
+                disabled={selectedPartners.length === 0}
+              >
+                <Handshake className="w-4 h-4 mr-1" />
+                分配给选中伙伴
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 报备有效期延期申请模态框 */}
+      <Modal 
+        open={showExtendModal} 
+        onClose={() => { setShowExtendModal(false); setExtendingDeal(null); setExtendReason(''); }} 
+        size="lg" 
+        title="申请延期"
+      >
+        {extendingDeal && (
+          <div className="space-y-4">
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+              <div className="flex items-center gap-3">
+                <Clock8 className="w-6 h-6 text-amber-600" />
+                <div>
+                  <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">商机即将过期</p>
+                  <p className="text-xs text-amber-700 dark:text-amber-400 mt-0.5">
+                    当前有效期剩余 {extendingDeal.expiresInDays} 天，申请延期将延长30天
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">延期原因</label>
+              <textarea
+                value={extendReason}
+                onChange={(e) => setExtendReason(e.target.value)}
+                placeholder="请说明需要延期的原因，例如：客户预算审批延迟、技术方案需要调整等..."
+                rows={3}
+                className="w-full px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20 resize-none"
+              />
+            </div>
+
+            <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-neutral-500">当前有效期</span>
+                <span className="font-medium text-neutral-700 dark:text-neutral-300">{extendingDeal.expiresInDays} 天</span>
+              </div>
+              <div className="flex items-center justify-between text-xs mt-2">
+                <span className="text-neutral-500">延期后有效期</span>
+                <span className="font-medium text-emerald-600">{extendingDeal.expiresInDays + 30} 天</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4 border-t border-neutral-200 dark:border-neutral-800">
+              <Button variant="secondary" size="sm" onClick={() => { setShowExtendModal(false); setExtendingDeal(null); setExtendReason(''); }}>
+                取消
+              </Button>
+              <Button 
+                variant="brand" 
+                size="sm" 
+                onClick={handleExtendRequest}
+                disabled={!extendReason.trim()}
+              >
+                <Send className="w-4 h-4 mr-1" />
+                提交申请
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* 自定义视图管理模态框 */}
+      <Modal 
+        open={showViewManager} 
+        onClose={() => { setShowViewManager(false); setCurrentViewName(''); }} 
+        size="lg" 
+        title="视图管理"
+      >
+        <div className="space-y-4">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={currentViewName}
+              onChange={(e) => setCurrentViewName(e.target.value)}
+              placeholder="输入视图名称"
+              className="flex-1 px-3 py-2 bg-neutral-100 dark:bg-neutral-800 border-0 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/20"
+            />
+            <Button variant="brand" size="sm" onClick={saveCurrentView}>
+              <Plus className="w-4 h-4" />
+              保存视图
+            </Button>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold text-neutral-700 dark:text-neutral-300 mb-3">已保存的视图</h4>
+            <div className="space-y-2">
+              {savedViews.map((view) => (
+                <div 
+                  key={view.id} 
+                  className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"
+                >
+                  <button 
+                    onClick={() => loadView(view)}
+                    className="flex items-center gap-2 text-left hover:text-brand transition-colors"
+                  >
+                    <Layout className="w-4 h-4 text-neutral-400" />
+                    <span className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{view.name}</span>
+                  </button>
+                  <button 
+                    onClick={() => deleteView(view.id)}
+                    className="p-1 hover:bg-neutral-200 dark:hover:bg-neutral-700 rounded transition-colors"
+                  >
+                    <XCircle className="w-4 h-4 text-neutral-400 hover:text-red-500" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Modal>
+
+      {/* 侧边预览浮窗 */}
+      <AnimatePresence>
+        {showPreviewPopover && hoveredDeal && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 10 }}
+            className="fixed z-50 pointer-events-none"
+            style={{ 
+              left: Math.min(previewPosition.x - 200, window.innerWidth - 420), 
+              top: Math.min(previewPosition.y + 20, window.innerHeight - 400) 
+            }}
+          >
+            <div className="w-80 bg-white dark:bg-neutral-900 rounded-xl shadow-2xl border border-neutral-200 dark:border-neutral-700 p-4 pointer-events-auto">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate max-w-[200px]">{hoveredDeal.title}</p>
+                  <p className="text-xs text-neutral-500 mt-0.5">{hoveredDeal.customerName}</p>
+                </div>
+                <button 
+                  onClick={handleDealLeave}
+                  className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded"
+                >
+                  <XCircle className="w-4 h-4 text-neutral-400" />
+                </button>
+              </div>
+
+              <div className="space-y-2 mb-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <DollarSign className="w-3 h-3" />
+                    金额
+                  </span>
+                  <span className="font-semibold text-neutral-900 dark:text-white">{formatCurrency(hoveredDeal.value)}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <User className="w-3 h-3" />
+                    伙伴
+                  </span>
+                  <span className="text-neutral-700 dark:text-neutral-300">{hoveredDeal.partnerName}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    区域
+                  </span>
+                  <span className="text-neutral-700 dark:text-neutral-300">{hoveredDeal.region} · {hoveredDeal.city}</span>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-neutral-500 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    预计结单
+                  </span>
+                  <span className="text-neutral-700 dark:text-neutral-300">{hoveredDeal.expectedCloseDate}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mb-3">
+                <Badge variant={hoveredDeal.isPriority ? 'warning' : 'default'} size="sm">
+                  {hoveredDeal.isPriority ? '重点' : '普通'}
+                </Badge>
+                <Badge className={STAGE_CONFIG[hoveredDeal.stage].bgColor + ' ' + STAGE_CONFIG[hoveredDeal.stage].color} size="sm">
+                  {STAGE_CONFIG[hoveredDeal.stage].label}
+                </Badge>
+              </div>
+
+              {hoveredDeal.daysInCurrentStage !== undefined && (
+                <div className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                  <div className="flex items-center justify-between text-xs">
+                    <span className="text-neutral-500">当前阶段停留</span>
+                    <span className={hoveredDeal.isStagnant ? 'text-red-500' : 'text-neutral-700 dark:text-neutral-300'}>
+                      {hoveredDeal.daysInCurrentStage} 天
+                      {hoveredDeal.isStagnant && ' (异常)'}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={() => { navigate(`/deals/${hoveredDeal.id}`); handleDealLeave(); }}
+                className="w-full mt-3 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:bg-brand/90 transition-colors"
+              >
+                查看详情
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
