@@ -17,6 +17,11 @@ import { MarketingAssetLibrary } from './MarketingAssetLibrary';
 import { MarketingCalendarPanel } from './MarketingCalendarPanel';
 import { LeadNurturingPanel } from './LeadNurturingPanel';
 import { ResourceMarketplace } from './ResourceMarketplace';
+import { DigitalCheckinDashboard } from './DigitalCheckinDashboard';
+import { SOPTaskChecklist } from './SOPTaskChecklist';
+import { AutoReportGenerator } from './AutoReportGenerator';
+import { BenchmarkSquare } from './BenchmarkSquare';
+import { KPIIncentivePanel } from './KPIIncentivePanel';
 
 export const MarketingIncentivePage = () => {
   const { t } = useLanguage();
@@ -77,6 +82,11 @@ export const MarketingIncentivePage = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showLeadNurturing, setShowLeadNurturing] = useState(false);
   const [showResourceMarket, setShowResourceMarket] = useState(false);
+  const [showCheckin, setShowCheckin] = useState(false);
+  const [showSOP, setShowSOP] = useState(false);
+  const [showAutoReport, setShowAutoReport] = useState(false);
+  const [showBenchmark, setShowBenchmark] = useState(false);
+  const [showKPIIncentive, setShowKPIIncentive] = useState(false);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -312,6 +322,22 @@ export const MarketingIncentivePage = () => {
         </Button>
         <Button variant="secondary" size="sm" onClick={() => setShowResourceMarket(true)}>
           <Wrench className="w-3.5 h-3.5 mr-1" />资源市场
+        </Button>
+        <div className="w-px h-5 bg-neutral-300 dark:bg-neutral-700" />
+        <Button variant="secondary" size="sm" onClick={() => setShowCheckin(true)}>
+          <QrCode className="w-3.5 h-3.5 mr-1" />实时签到
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowSOP(true)}>
+          <CheckSquare className="w-3.5 h-3.5 mr-1" />SOP清单
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowAutoReport(true)}>
+          <FileText className="w-3.5 h-3.5 mr-1" />结项报告
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowBenchmark(true)}>
+          <Trophy className="w-3.5 h-3.5 mr-1" />标杆案例
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => setShowKPIIncentive(true)}>
+          <Zap className="w-3.5 h-3.5 mr-1" />对赌激励
         </Button>
       </div>
 
@@ -1227,6 +1253,11 @@ export const MarketingIncentivePage = () => {
       <MarketingCalendarPanel open={showCalendar} onClose={() => setShowCalendar(false)} />
       <LeadNurturingPanel open={showLeadNurturing} onClose={() => setShowLeadNurturing(false)} />
       <ResourceMarketplace open={showResourceMarket} onClose={() => setShowResourceMarket(false)} />
+      <DigitalCheckinDashboard open={showCheckin} onClose={() => setShowCheckin(false)} />
+      <SOPTaskChecklist open={showSOP} onClose={() => setShowSOP(false)} />
+      <AutoReportGenerator open={showAutoReport} onClose={() => setShowAutoReport(false)} />
+      <BenchmarkSquare open={showBenchmark} onClose={() => setShowBenchmark(false)} />
+      <KPIIncentivePanel open={showKPIIncentive} onClose={() => setShowKPIIncentive(false)} />
     </div>
   );
 };
