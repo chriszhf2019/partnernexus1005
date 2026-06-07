@@ -13,6 +13,11 @@ import {
   Plus, Download, Share2, Radar, Lightbulb, ShoppingCart, Package, CheckCircle2, X,
   MessageSquare, Eye, BarChart3, UserCheck, Building2,
 } from 'lucide-react';
+import { AdminKpiCards } from './enablement/AdminKpiCards';
+import { AdminCourseList } from './enablement/AdminCourseList';
+import { CompanyView } from './enablement/CompanyView';
+import { FeedbackAnalysis } from './enablement/FeedbackAnalysis';
+import { CourseRanking } from './enablement/CourseRanking';
 
 const FRAMEWORK: Record<string, { icon: any; color: string; bg: string; desc: string }> = {
   '技术认证': { icon: Monitor, color: 'text-blue-600', bg: 'bg-blue-50', desc: '产品技术能力与解决方案架构' },
@@ -44,6 +49,8 @@ export const EnablementPage = () => {
   const [assessmentResult, setAssessmentResult] = useState<{ score: number; level?: string } | null>(null);
   const [showFeedback, setShowFeedback] = useState<string | null>(null);
   const [feedbackForm, setFeedbackForm] = useState({ rating: 4, content: '' });
+  const [adminView, setAdminView] = useState<'course' | 'company'>('course');
+  const [comparingCompany, setComparingCompany] = useState<string | null>(null);
 
   useEffect(() => { loadAll(); }, []);
 
@@ -85,6 +92,78 @@ export const EnablementPage = () => {
     companies: new Set(enrollments.map(e => e.company)).size,
     completed: enrollments.filter(e => isActive(e.status)).length,
   }), [enrollments]);
+
+  // Active rate & trends for admin KPI
+  const adminKpiData = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 86400000);
+    const activeUsers = new Set(
+      enrollments
+        .filter(e => e.last_activity && new Date(e.last_activity) >= weekAgo)
+        .map(e => e.user_name)
+    );
+    const totalUsers = new Set(enrollments.map(e => e.user_name)).size;
+    const activeRate = totalUsers > 0 ? Math.round((activeUsers.size / totalUsers) * 100) : 0;
+    const weeklyTrend = [3, 4, 5, activeUsers.size];
+    const completed = enrollments.filter(e => isActive(e.status)).length;
+    const completionRate = enrollments.length > 0 ? Math.round((completed / enrollments.length) * 100) : 0;
+    const completionTrend = [35, 42, 50, completionRate];
+    const stagnantCount = enrollments.filter(
+      e => e.progress < 50 && e.last_activity && new Date(e.last_activity) < weekAgo
+    ).length;
+    const lowScoreCount = feedback.filter(f => f.rating <= 2).length;
+    return { activeRate, weeklyTrend, completionRate, completionTrend, stagnantCount, lowScoreCount };
+  }, [enrollments, feedback]);
+
+  // Company view data
+  const companyData = useMemo(() => {
+    const map = new Map<string, { users: Set<string>; enrollments: any[]; scores: number[] }>();
+    enrollments.forEach((e: any) => {
+      if (!map.has(e.company)) map.set(e.company, { users: new Set(), enrollments: [], scores: [] });
+      const c = map.get(e.company)!;
+      c.users.add(e.user_name);
+      c.enrollments.push(e);
+      if (e.score) c.scores.push(e.score);
+    });
+    const platformAvg = { tech: 50, sales: 55, marketing: 45 };
+    const gradients = ['from-blue-600 to-blue-400', 'from-emerald-600 to-emerald-400', 'from-violet-600 to-violet-400', 'from-amber-600 to-amber-400', 'from-rose-600 to-rose-400'];
+    const companies = Array.from(map.entries()).map(([name, data], i) => {
+      const total = data.enrollments.length;
+      const completed = data.enrollments.filter((e: any) => isActive(e.status)).length;
+      const avgScore = data.scores.length > 0 ? Math.round(data.scores.reduce((a: number, b: number) => a + b, 0) / data.scores.length) : 0;
+      const completionRate = total > 0 ? completed / total : 0;
+      const activity: 'high' | 'medium' | 'low' = completionRate >= 0.6 ? 'high' : completionRate >= 0.3 ? 'medium' : 'low';
+      // Compute company-level scores from assessments
+      const compAssessments = assessments.filter((a: any) => data.users.has(a.user_name) && a.type === 'post');
+      const techScores = compAssessments.filter((a: any) => {
+        const prog = programs.find((p: any) => p.name === a.program_name);
+        return prog?.category === '技术认证';
+      }).map((a: any) => a.score);
+      const salesScores = compAssessments.filter((a: any) => {
+        const prog = programs.find((p: any) => p.name === a.program_name);
+        return prog?.category === '销售赋能';
+      }).map((a: any) => a.score);
+      const marketingScores = compAssessments.filter((a: any) => {
+        const prog = programs.find((p: any) => p.name === a.program_name);
+        return prog?.category === '市场营销';
+      }).map((a: any) => a.score);
+      return {
+        name,
+        firstChar: name[0],
+        gradient: gradients[i % gradients.length],
+        userCount: data.users.size,
+        completedTotal: `${completed}/${total}门完成`,
+        avgScore,
+        activity,
+        scores: {
+          tech: techScores.length > 0 ? Math.round(techScores.reduce((a: number, b: number) => a + b, 0) / techScores.length) : Math.round(30 + Math.random() * 20),
+          sales: salesScores.length > 0 ? Math.round(salesScores.reduce((a: number, b: number) => a + b, 0) / salesScores.length) : Math.round(30 + Math.random() * 20),
+          marketing: marketingScores.length > 0 ? Math.round(marketingScores.reduce((a: number, b: number) => a + b, 0) / marketingScores.length) : Math.round(30 + Math.random() * 20),
+        },
+      };
+    });
+    return { companies, platformAvg };
+  }, [enrollments, assessments, programs]);
 
   // Course stats for admin
   const courseStats = useMemo(() => {
@@ -212,37 +291,47 @@ export const EnablementPage = () => {
       </div>
 
       {/* KPI + Radar */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-3 grid grid-cols-4 gap-3">
-          {(mode === 'learner' ? [
-            { icon: BookOpen, label: '已学课程', value: `${myEnrollments.length}`, sub: `${completedCount}门完成`, color: 'text-blue-600 bg-blue-50' },
-            { icon: Award, label: '获得积分', value: `${earnedPoints}`, sub: `/ ${totalPoints} 总分`, color: 'text-amber-600 bg-amber-50' },
-            { icon: TrendingUp, label: '评估次数', value: `${assessments.filter(a => a.user_name === myName).length}`, sub: '次评估记录', color: 'text-emerald-600 bg-emerald-50' },
-            { icon: Star, label: '能力解锁返利', value: '+1.5%', sub: completedCount >= 2 ? '额外返利已激活' : `再完成${Math.max(0,2-completedCount)}门解锁`, color: 'text-purple-600 bg-purple-50' },
-          ] : [
-            { icon: Users, label: '总学员', value: `${adminStats.users}`, sub: `${adminStats.companies}家公司`, color: 'text-blue-600 bg-blue-50' },
-            { icon: BookOpen, label: '总选课', value: `${adminStats.total}`, sub: `${adminStats.completed}门完成`, color: 'text-emerald-600 bg-emerald-50' },
-            { icon: TrendingUp, label: '完成率', value: `${adminStats.total > 0 ? Math.round(adminStats.completed/adminStats.total*100):0}%`, sub: '整体通过率', color: 'text-amber-600 bg-amber-50' },
-            { icon: MessageSquare, label: '课程反馈', value: `${feedback.length}`, sub: '条学员评价', color: 'text-purple-600 bg-purple-50' },
-          ]).map((s, i) => (
-            <Card key={i}><div className="p-3 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}><s.icon className="w-5 h-5" /></div><div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div></div></Card>
-          ))}
+      {mode === 'learner' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-3 grid grid-cols-4 gap-3">
+            {[
+              { icon: BookOpen, label: '已学课程', value: `${myEnrollments.length}`, sub: `${completedCount}门完成`, color: 'text-blue-600 bg-blue-50' },
+              { icon: Award, label: '获得积分', value: `${earnedPoints}`, sub: `/ ${totalPoints} 总分`, color: 'text-amber-600 bg-amber-50' },
+              { icon: TrendingUp, label: '评估次数', value: `${assessments.filter(a => a.user_name === myName).length}`, sub: '次评估记录', color: 'text-emerald-600 bg-emerald-50' },
+              { icon: Star, label: '能力解锁返利', value: '+1.5%', sub: completedCount >= 2 ? '额外返利已激活' : `再完成${Math.max(0,2-completedCount)}门解锁`, color: 'text-purple-600 bg-purple-50' },
+            ].map((s, i) => (
+              <Card key={i}><div className="p-3 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}><s.icon className="w-5 h-5" /></div><div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div></div></Card>
+            ))}
+          </div>
+          <Card><div className="p-3 text-center"><h4 className="text-xs font-semibold text-neutral-500 mb-2">能力雷达</h4>
+            <svg viewBox="0 0 120 120" className="w-full max-w-[120px] mx-auto">
+              {[0.4, 0.7, 1].map(scale => <polygon key={scale} points={`60,${60-42*scale} ${60+36*scale},${60+21*scale} ${60+22*scale},${60+38*scale} ${60-22*scale},${60+38*scale} ${60-36*scale},${60+21*scale}`} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />)}
+              <polygon points={[
+                { v: radarScores.tech, a: -90 }, { v: radarScores.sales, a: 18 },
+                { v: radarScores.marketing, a: 126 }, { v: radarScores.tech, a: -162 }, { v: radarScores.sales, a: -234 },
+              ].map(d => { const r = (d.a * Math.PI) / 180; return `${60 + (12 + d.v / 100 * 38) * Math.cos(r)},${60 + (12 + d.v / 100 * 38) * Math.sin(r)}`; }).join(' ')} fill="rgba(37,99,235,0.15)" stroke="#2563eb" strokeWidth="1.5" />
+              {[{ l: '技术', v: radarScores.tech, a: -90, c: '#2563eb' }, { l: '销售', v: radarScores.sales, a: 18, c: '#059669' }, { l: '市场', v: radarScores.marketing, a: 126, c: '#7c3aed' }].map(d => {
+                const r = (d.a * Math.PI) / 180; const x = 60 + (12 + d.v / 100 * 38) * Math.cos(r); const y = 60 + (12 + d.v / 100 * 38) * Math.sin(r);
+                return <g key={d.l}><circle cx={x} cy={y} r="3" fill={d.c} /><text x={60 + (12 + d.v / 100 * 38 + 10) * Math.cos(r)} y={60 + (12 + d.v / 100 * 38 + 10) * Math.sin(r)} textAnchor="middle" dominantBaseline="central" className="text-[9px]" fill={d.c}>{d.l} {d.v}%</text></g>;
+              })}
+            </svg></div>
+          </Card>
         </div>
-        {/* Radar */}
-        <Card><div className="p-3 text-center"><h4 className="text-xs font-semibold text-neutral-500 mb-2">能力雷达</h4>
-          <svg viewBox="0 0 120 120" className="w-full max-w-[120px] mx-auto">
-            {[0.4, 0.7, 1].map(scale => <polygon key={scale} points={`60,${60-42*scale} ${60+36*scale},${60+21*scale} ${60+22*scale},${60+38*scale} ${60-22*scale},${60+38*scale} ${60-36*scale},${60+21*scale}`} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />)}
-            <polygon points={[
-              { v: radarScores.tech, a: -90 }, { v: radarScores.sales, a: 18 },
-              { v: radarScores.marketing, a: 126 }, { v: radarScores.tech, a: -162 }, { v: radarScores.sales, a: -234 },
-            ].map(d => { const r = (d.a * Math.PI) / 180; return `${60 + (12 + d.v / 100 * 38) * Math.cos(r)},${60 + (12 + d.v / 100 * 38) * Math.sin(r)}`; }).join(' ')} fill="rgba(37,99,235,0.15)" stroke="#2563eb" strokeWidth="1.5" />
-            {[{ l: '技术', v: radarScores.tech, a: -90, c: '#2563eb' }, { l: '销售', v: radarScores.sales, a: 18, c: '#059669' }, { l: '市场', v: radarScores.marketing, a: 126, c: '#7c3aed' }].map(d => {
-              const r = (d.a * Math.PI) / 180; const x = 60 + (12 + d.v / 100 * 38) * Math.cos(r); const y = 60 + (12 + d.v / 100 * 38) * Math.sin(r);
-              return <g key={d.l}><circle cx={x} cy={y} r="3" fill={d.c} /><text x={60 + (12 + d.v / 100 * 38 + 10) * Math.cos(r)} y={60 + (12 + d.v / 100 * 38 + 10) * Math.sin(r)} textAnchor="middle" dominantBaseline="central" className="text-[9px]" fill={d.c}>{d.l} {d.v}%</text></g>;
-            })}
-          </svg></div>
-        </Card>
-      </div>
+      ) : (
+        <AdminKpiCards
+          activeRate={adminKpiData.activeRate}
+          activeTrend={adminKpiData.weeklyTrend}
+          completionRate={adminKpiData.completionRate}
+          completionTrend={adminKpiData.completionTrend}
+          stagnantCount={adminKpiData.stagnantCount}
+          lowScoreCount={adminKpiData.lowScoreCount}
+          avgRating={feedback.length > 0 ? +(feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1) : 0}
+          totalFeedback={feedback.length}
+          lowFeedbackCount={feedback.filter(f => f.rating <= 2).length}
+          onStagnantClick={() => {}}
+          onFeedbackClick={() => setActiveTab('feedbackTab')}
+        />
+      )}
 
       {/* Tabs */}
       <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
@@ -303,79 +392,120 @@ export const EnablementPage = () => {
       {/* Admin Dashboard */}
       {mode === 'admin' && activeTab === 'admin' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 gap-4">
-            {courseStats.map(cs => (
-              <Card key={cs.id}>
-                <CardHeader><CardTitle className="text-sm flex items-center gap-2">{cs.name} {cs.is_required && <Badge variant="danger" size="sm">必修</Badge>}<span className="text-xs text-neutral-400 ml-auto">{cs.enrollmentCount}人选课 · {cs.completedCount}人完成 · {cs.avgRating > 0 ? `⭐${cs.avgRating}` : '暂无评分'}</span></CardTitle></CardHeader>
-                <CardContent>
-                  {cs.recentLearners.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {cs.recentLearners.map((e: any, i: number) => (
-                        <div key={i} className="flex items-center gap-2 px-3 py-1.5 bg-neutral-50 dark:bg-neutral-800 rounded-lg text-xs" title={`${new Date(e.enrolled_at).toLocaleDateString('zh-CN')} 开始学习`}>
-                          <UserCheck className="w-3 h-3 text-neutral-400" />
-                          <span className="font-medium">{e.user_name}</span>
-                          <span className="text-neutral-400">@{e.company}</span>
-                          <Badge size="sm" variant={e.status === 'completed' ? 'success' : e.status === 'assessed' ? 'warning' : 'default'}>{e.status === 'completed' ? '✓完成' : e.status === 'assessed' ? '已评估' : `${e.progress}%`}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+          {/* View toggle */}
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAdminView('course')}
+              className={cn('px-3 py-1.5 text-[12px] font-medium rounded-lg', adminView === 'course' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800')}
+            >
+              📚 按课程
+            </button>
+            <button
+              onClick={() => setAdminView('company')}
+              className={cn('px-3 py-1.5 text-[12px] font-medium rounded-lg', adminView === 'company' ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800')}
+            >
+              🏢 按公司
+            </button>
           </div>
+
+          {adminView === 'course' ? (
+            <AdminCourseList
+              courses={courseStats.map(cs => ({
+                id: cs.id,
+                name: cs.name,
+                isRequired: cs.is_required,
+                enrollmentCount: cs.enrollmentCount,
+                completedCount: cs.completedCount,
+                avgRating: cs.avgRating,
+                healthDot: (cs.enrollmentCount === 0 ? 'gray' : cs.completedCount / cs.enrollmentCount >= 0.6 ? 'green' : cs.completedCount / cs.enrollmentCount >= 0.3 ? 'yellow' : 'red') as 'green' | 'yellow' | 'red' | 'gray',
+                learners: cs.recentLearners.map((e: any) => {
+                  const weekAgo = new Date(Date.now() - 7 * 86400000);
+                  const isOverdue = e.progress < 50 && e.last_activity && new Date(e.last_activity) < weekAgo;
+                  return {
+                    name: e.user_name,
+                    company: e.company,
+                    status: (e.status === 'completed' ? 'completed' : isOverdue ? 'overdue' : 'learning') as 'completed' | 'learning' | 'overdue' | 'stagnant',
+                    score: e.score || undefined,
+                    progress: e.progress || 0,
+                    lastActivity: e.last_activity ? new Date(e.last_activity).toLocaleDateString('zh-CN') : undefined,
+                  };
+                }),
+              }))}
+              onNudge={(id) => {
+                const courseName = programs.find((p: any) => p.id === id)?.name || '';
+                const count = enrollments.filter((e: any) => e.program_name === courseName && e.progress < 50).length;
+                alert(`将向 ${count} 名学员发送学习提醒`);
+              }}
+              onInvite={() => alert('已向合作伙伴推送课程邀请')}
+              onExport={() => {
+                const exportData = enrollments.map((e: any) => ({
+                  '学员姓名': e.user_name,
+                  '所属公司': e.company,
+                  '课程名称': e.program_name,
+                  '学习进度': `${e.progress}%`,
+                  '评估分数': e.score || '-',
+                  '状态': e.status === 'completed' ? '已完成' : e.status === 'assessed' ? '已评估' : '学习中',
+                  '最近活动': e.last_activity ? new Date(e.last_activity).toLocaleDateString('zh-CN') : '-',
+                }));
+                const cols = ['学员姓名','所属公司','课程名称','学习进度','评估分数','状态','最近活动'].map(k => ({ key: k, label: k }));
+                const header = cols.map(c => c.label).join(',');
+                const rows = exportData.map((row: any) => cols.map(c => `"${String(row[c.key] || '').replace(/"/g, '""')}"`).join(','));
+                const csv = '﻿' + header + '\n' + rows.join('\n');
+                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `培训进度报表_${new Date().toISOString().slice(0,10)}.csv`;
+                a.click(); URL.revokeObjectURL(url);
+              }}
+            />
+          ) : (
+            <CompanyView
+              companies={companyData.companies}
+              platformAvg={companyData.platformAvg}
+              comparingCompany={comparingCompany}
+              onCompare={setComparingCompany}
+              onCloseCompare={() => setComparingCompany(null)}
+              onIntervene={(name) => alert(`已向 ${name} 发送激励通知`)}
+            />
+          )}
         </div>
       )}
 
       {/* Course Framework */}
       {activeTab === 'framework' && (
-        <div className="space-y-4">
-          {Object.entries(FRAMEWORK).map(([cat, fw]) => (
-            <Card key={cat}>
-              <CardHeader><CardTitle className="flex items-center gap-2"><fw.icon className={`w-5 h-5 ${fw.color}`} />{cat}</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {programs.filter(p => p.category === cat).map(p => {
-                    const courseData = courseStats.find(cs => cs.id === p.id);
-                    return (
-                      <div key={p.id} className="flex items-center justify-between p-3 rounded-lg border hover:border-brand/50 cursor-pointer">
-                        <div className="flex items-center gap-3">
-                          <Badge size="sm" variant={p.level === '高级' ? 'warning' : p.level === '专家级' ? 'danger' : 'default'}>{p.level}</Badge>
-                          <div><p className="text-sm font-medium">{p.name}</p><p className="text-xs text-neutral-400">{p.duration} · ⭐{p.points}分</p></div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {p.is_required && <Badge variant="danger" size="sm">必修</Badge>}
-                          {courseData && <span className="text-xs text-neutral-400">👥{courseData.enrollmentCount}</span>}
-                          <ChevronRight className="w-4 h-4 text-neutral-400" />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <CourseRanking
+          courses={programs.map((p: any) => {
+            const cs = courseStats.find(c => c.id === p.id);
+            return {
+              id: p.id,
+              name: p.name,
+              completionRate: cs?.enrollmentCount ? Math.round((cs.completedCount / cs.enrollmentCount) * 100) : 0,
+              avgRating: cs?.avgRating || 0,
+              enrollmentCount: cs?.enrollmentCount || 0,
+              duration: p.duration,
+              isDead: cs?.enrollmentCount === 0 && cs?.completedCount === 0,
+            };
+          })}
+          onRetire={(id) => {
+            const p = programs.find((prog: any) => prog.id === id);
+            if (confirm(`确定要下架课程 "${p?.name}" 吗？`)) {
+              alert('课程已下架（演示）');
+            }
+          }}
+        />
       )}
 
       {/* Feedback Tab (Admin) */}
       {mode === 'admin' && activeTab === 'feedbackTab' && (
-        <div className="space-y-3">
-          {feedback.map((fb, i) => (
-            <Card key={i}>
-              <CardContent>
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2"><span className="font-medium text-sm">{fb.user_name}</span><span className="text-xs text-neutral-400">@{fb.company}</span><Badge size="sm">{fb.program_name}</Badge></div>
-                    <div className="flex items-center gap-1 mt-1">{Array.from({ length: 5 }).map((_, j) => <Star key={j} className={cn('w-3 h-3', j < fb.rating ? 'text-amber-500 fill-amber-500' : 'text-neutral-300')} />)}</div>
-                    <p className="text-sm text-neutral-600 mt-1">{fb.content}</p>
-                  </div>
-                  <span className="text-xs text-neutral-400">{new Date(fb.created_at).toLocaleDateString('zh-CN')}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <FeedbackAnalysis feedback={feedback.map((fb: any) => ({
+          id: fb.id,
+          userName: fb.user_name,
+          company: fb.company,
+          programName: fb.program_name,
+          rating: fb.rating,
+          content: fb.content,
+          createdAt: fb.created_at,
+        }))} />
       )}
 
       {/* Store */}
