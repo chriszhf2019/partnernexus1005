@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Building2, ArrowLeft } from 'lucide-react';
+import { Users, Building2, ChevronRight } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PartnerStaffList } from './PartnerStaffList';
 import { PartnerStaffDetail } from './PartnerStaffDetail';
@@ -198,9 +198,13 @@ export const PartnerStaffPage = () => {
     return (
       <div className="space-y-5">
         <div className="flex items-center gap-4">
-          <button onClick={() => navigate('/partners')} className="flex items-center gap-2 text-neutral-500 hover:text-neutral-900 dark:hover:text-white transition-colors">
-            <ArrowLeft className="w-4 h-4" /> 返回合作伙伴列表
-          </button>
+          <div className="flex items-center gap-2 text-sm text-neutral-400">
+            <a href="/partners" className="hover:text-blue-600 transition-colors">合作伙伴管理中心</a>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <a href={`/partners/${params.partnerId}`} className="hover:text-blue-600 transition-colors">{staffList[0]?.partnerName || '合作伙伴'}</a>
+            <ChevronRight className="w-3.5 h-3.5" />
+            <span className="text-neutral-700 dark:text-neutral-300 font-medium">人员管理</span>
+          </div>
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">
             <Users className="w-5 h-5 inline-block mr-2" /> 合作伙伴人员管理
           </h1>
