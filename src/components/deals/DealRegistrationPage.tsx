@@ -868,7 +868,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                         
                         {/* 客户信息 */}
                         <td className="px-6 py-4">
-                          <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300">{deal.customerName}</p>
+                          <p className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer" onClick={(e) => { e.stopPropagation(); navigate(`/customer/${encodeURIComponent(deal.customerName)}/analysis`); }}>{deal.customerName}</p>
                           <p className="text-xs text-neutral-400">{deal.customerIndustry}</p>
                         </td>
                         

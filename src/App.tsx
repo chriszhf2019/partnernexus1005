@@ -34,6 +34,7 @@ const DealDetailPage = retryableLazy(() => import('./components/deals/DealDetail
 const SettingsPage = retryableLazy(() => import('./components/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const IncentivesPage = retryableLazy(() => import('./components/marketing/IncentivesPage').then(m => ({ default: m.IncentivesPage })));
 const IncentiveClosingDashboard = retryableLazy(() => import('./components/marketing/IncentiveClosingDashboard').then(m => ({ default: m.IncentiveClosingDashboard })));
+const CustomerAnalysis = retryableLazy(() => import('./components/deals/CustomerAnalysis').then(m => ({ default: m.CustomerAnalysis })));
 const EnablementPage = retryableLazy(() => import('./components/marketing/EnablementPage').then(m => ({ default: m.EnablementPage })));
 const AnalyticsPage = retryableLazy(() => import('./components/marketing/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const ChannelDashboard = retryableLazy(() => import('./components/marketing/ChannelDashboard').then(m => ({ default: m.ChannelDashboard })));
@@ -335,6 +336,7 @@ function AppLayout() {
               <Route path="/deals/new" element={<NewDealRoute />} />
               <Route path="/deals/:id" element={<Suspense fallback={<PageLoader />}><DealDetailPage /></Suspense>} />
               <Route path="/deals/:id/edit" element={<Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense>} />
+              <Route path="/customer/:name/analysis" element={<Suspense fallback={<PageLoader />}><CustomerAnalysis /></Suspense>} />
               <Route path="/marketing" element={<MarketingRoute />} />
               <Route path="/marketing/activity/:id" element={<Suspense fallback={<PageLoader />}><MarketingActivityDetail /></Suspense>} />
               <Route path="/marketing/plan" element={<Suspense fallback={<PageLoader />}><MarketingPlanPage /></Suspense>} />
