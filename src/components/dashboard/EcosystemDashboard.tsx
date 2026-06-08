@@ -60,20 +60,6 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
   const pipelineOverview = pipeline?.reporting_overview;
   const currency = config?.currency || 'CNY';
 
-  if (cockpitLoading) {
-    return (
-      <div className="space-y-6 animate-pulse">
-        <div className="grid grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />)}
-        </div>
-        <div className="grid grid-cols-3 gap-6">
-          <div className="lg:col-span-2 h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
-          <div className="h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
-        </div>
-      </div>
-    );
-  }
-
   const kpis = useMemo(() => [
     { label: '季度营收', value: formatCurrency(revenue?.achievements?.quarterly?.current ?? 0, currency), target: formatCurrency(revenue?.achievements?.quarterly?.target ?? 0, currency), rate: revenue?.achievements?.quarterly?.rate ?? 0, change: revenue?.qoq ?? 0, spark: revenue?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#18181b', diagnosis: (revenue?.qoq ?? 0) >= 0 ? '华东区贡献42%增长，华南新伙伴发力明显' : '华北制造业需求放缓拖累整体，需重点关注' },
     { label: '活跃伙伴数', value: Math.round(activePartners?.current_value ?? 0).toLocaleString(), target: Math.round(activePartners?.achievements?.quarterly?.target ?? 0).toLocaleString(), rate: activePartners?.achievements?.quarterly?.rate ?? 0, change: activePartners?.qoq ?? 0, spark: activePartners?.monthly_data?.map((d) => Math.round(d.value)) ?? [], color: '#2563eb', diagnosis: activePartners?.active_split ? `下单率${Math.round(activePartners.active_split.order_placing.rate)}%，报备率${Math.round(activePartners.active_split.leads_reporting.rate)}%——报备活跃但下单转化有瓶颈` : '伙伴基数增长稳定，但活跃质量需提升' },
@@ -100,6 +86,20 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
     if (detailDim === 'partner_tier') return { finding: '腰部力量薄弱', detail: 'Top 20%伙伴贡献78%业绩，大量银牌伙伴活跃度仅55%——存在"躺平"现象。', action: '启动末位激活与晋升激励', actionTarget: 'incentives' };
     return { finding: `${top?.name}主导，${bottom?.name}待开发`, detail: `${top?.name}贡献显著，${bottom?.name}存在不均衡。`, action: '加大资源投放', actionTarget: 'marketing' };
   }, [dimData, detailDim]);
+
+  if (cockpitLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="grid grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />)}
+        </div>
+        <div className="grid grid-cols-3 gap-6">
+          <div className="lg:col-span-2 h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
+          <div className="h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-12 pb-24">
