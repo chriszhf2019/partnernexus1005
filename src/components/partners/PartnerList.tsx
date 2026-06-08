@@ -83,7 +83,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const [showMap, setShowMap] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showAdvFilter, setShowAdvFilter] = useState(false);
-  const [segmentFilter, setSegmentFilter] = useState('all');
+  const [segmentFilter, setSegmentFilter] = 'all';
 
   // ── Sort state ───────────────────────────────────
   const [sortField, setSortField] = useState<SortField>('name');
@@ -177,7 +177,6 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
         );
       }
       if (statusFilter !== 'All') result = result.filter((p) => p.status === statusFilter);
-      // Segment filter
       if (segmentFilter === 'champion') result = result.filter(p => (p.winRate||0) > 50 && p.status === 'Cooperating');
       if (segmentFilter === 'dormant') result = result.filter(p => p.status === 'Cooperating' && (p.winRate||0) === 0);
       if (segmentFilter === 'newcomer') result = result.filter(p => p.status === 'Prospective');
@@ -297,14 +296,13 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   return (
     <div className="space-y-4">
       {/* ═══════════ Page Header ═══════════ */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
-          <p className="text-sm text-neutral-500 mt-1">生态健康度诊断 · 覆盖/活跃/能效三位一体</p>
-        </div>
-      </div>
+          <p className="text-sm text-neutral-500 mt-1">
+            管理合作伙伴生态 · 点击KPI卡片查看明细 · 点击伙伴名称预览画像 · 使用自动分层快速筛选
 
-      {/* ═══════════ Health Scorecard ═══════════ */}
+      {/* Health Scorecard */}
       <PartnerHealthBar
         partners={partners}
         pendingCount={pendingCount}
@@ -339,7 +337,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
         </div>
       </div>
 
-      {/* ═══════════ Dynamic Segment Filter ═══════════ */}
+      {/* ═══════════ Segment Filter ═══════════ */}
       <div className="flex items-center gap-2 flex-wrap">
         {[
           { key: 'all', label: '全部', count: partners.length },
@@ -350,9 +348,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
         ].map(seg => (
           <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }}
             className={cn('px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all',
-              segmentFilter === seg.key
-                ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900 dark:border-white'
-                : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-400')}>
+              segmentFilter === seg.key ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900' : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-400')}>
             {seg.label} <span className="ml-0.5 opacity-60">{seg.count}</span>
           </button>
         ))}
