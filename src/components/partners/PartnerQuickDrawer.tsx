@@ -64,30 +64,41 @@ export const PartnerQuickDrawer: React.FC<PartnerQuickDrawerProps> = ({ open, on
           </div>
 
           <div className="p-5 space-y-4">
-            {/* Performance Brief */}
-            <Card>
+            {/* Performance Brief — clickable */}
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { onClose(); navigate(`/partners/${partner.id}`); }}>
               <div className="p-4 space-y-2">
-                <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">业绩简报</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">业绩简报</h4>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                </div>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { label: '今年成交', value: formatCurrency(metrics.won || 0), icon: DollarSign, color: 'text-emerald-600', tip: '该伙伴今年已签约的商机总金额（ClosedWon）' },
-                    { label: 'Pipeline', value: formatCurrency(metrics.pipeline || 0), icon: TrendingUp, color: 'text-blue-600', tip: '当前在手商机总额（不含已关闭）' },
-                    { label: '商机数', value: `${metrics.dealCount || 0}个`, icon: Target, color: 'text-purple-600', tip: '该伙伴名下所有商机数量' },
-                    { label: '赢单率', value: `${partner.winRate || 0}%`, icon: Award, color: 'text-amber-600', tip: '历史赢单数/总报备数的比率。行业均值45%' },
+                    { label: '今年成交', value: formatCurrency(metrics.won || 0), icon: DollarSign, color: 'text-emerald-600' },
+                    { label: 'Pipeline', value: formatCurrency(metrics.pipeline || 0), icon: TrendingUp, color: 'text-blue-600' },
+                    { label: '商机数', value: `${metrics.dealCount || 0}个`, icon: Target, color: 'text-purple-600' },
+                    { label: '赢单率', value: `${partner.winRate || 0}%`, icon: Award, color: 'text-amber-600' },
                   ].map(m => (
-                    <div key={m.label} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg" title={m.tip}>
+                    <div key={m.label} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors">
                       <p className="text-xs text-neutral-500">{m.label}</p>
                       <p className={cn('text-sm font-semibold', m.color)}>{m.value}</p>
                     </div>
                   ))}
                 </div>
+                {metrics.dealCount > 0 && (
+                  <button onClick={(e) => { e.stopPropagation(); onClose(); navigate(`/deals?partner=${partner.id}`); }} className="w-full text-[11px] text-blue-500 hover:text-blue-700 text-center mt-1">
+                    查看全部 {metrics.dealCount} 笔商机 →
+                  </button>
+                )}
               </div>
             </Card>
 
-            {/* Tier Progression */}
-            <Card>
+            {/* Tier Progression — clickable */}
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { onClose(); navigate(`/partners/${partner.id}`); }}>
               <div className="p-4 space-y-2">
-                <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">等级晋升进度</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">等级晋升进度</h4>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                </div>
                 {(() => {
                   const tierOrder = ['Registered','Silver','Gold','Platinum','Diamond'];
                   const currentIdx = tierOrder.indexOf(partner.tier);
@@ -114,10 +125,13 @@ export const PartnerQuickDrawer: React.FC<PartnerQuickDrawerProps> = ({ open, on
               </div>
             </Card>
 
-            {/* MDF & Marketing */}
-            <Card>
+            {/* MDF & Marketing — clickable */}
+            <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { onClose(); navigate(`/marketing?partner=${partner.id}`); }}>
               <div className="p-4 space-y-2">
-                <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">营销表现</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">营销表现</h4>
+                  <ChevronRight className="w-4 h-4 text-neutral-300" />
+                </div>
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { label: 'MDF总额', value: formatCurrency(metrics.mdfTotal || 0), tip: '市场发展基金累计分配金额' },
@@ -133,11 +147,14 @@ export const PartnerQuickDrawer: React.FC<PartnerQuickDrawerProps> = ({ open, on
               </div>
             </Card>
 
-            {/* Contact */}
+            {/* Contact — clickable */}
             {primaryContact && (
-              <Card>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={() => { onClose(); navigate(`/partners/${partner.id}`); }}>
                 <div className="p-4 space-y-2">
-                  <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">关键联系人</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-semibold text-neutral-500 uppercase tracking-wider">关键联系人</h4>
+                    <ChevronRight className="w-4 h-4 text-neutral-300" />
+                  </div>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2 text-sm">
                       <User className="w-4 h-4 text-neutral-400" />
@@ -145,14 +162,16 @@ export const PartnerQuickDrawer: React.FC<PartnerQuickDrawerProps> = ({ open, on
                       <span className="text-neutral-400">·</span>
                       <span className="text-neutral-500">{primaryContact.title}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-sm">
+                    <a href={`tel:${primaryContact.phone || primaryContact.mobile}`} onClick={e => e.stopPropagation()} className="flex items-center gap-2 text-sm hover:bg-blue-50 rounded px-1 py-0.5 transition-colors">
                       <Phone className="w-4 h-4 text-neutral-400" />
-                      <span className="text-blue-600">{primaryContact.phone || primaryContact.mobile}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm">
-                      <Mail className="w-4 h-4 text-neutral-400" />
-                      <span className="text-blue-600">{primaryContact.email}</span>
-                    </div>
+                      <span className="text-blue-600">{primaryContact.phone || primaryContact.mobile || '—'}</span>
+                    </a>
+                    {primaryContact.email && (
+                      <a href={`mailto:${primaryContact.email}`} onClick={e => e.stopPropagation()} className="flex items-center gap-2 text-sm hover:bg-blue-50 rounded px-1 py-0.5 transition-colors">
+                        <Mail className="w-4 h-4 text-neutral-400" />
+                        <span className="text-blue-600">{primaryContact.email}</span>
+                      </a>
+                    )}
                   </div>
                 </div>
               </Card>
