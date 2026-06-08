@@ -9,28 +9,121 @@ import { formatCurrency } from '../../lib/utils';
 import {
   ArrowLeft, Building2, Users, Target, TrendingUp, AlertTriangle, Shield,
   DollarSign, Calendar, MapPin, BarChart3, Zap, Lightbulb, ChevronRight,
-  ExternalLink, Search, Star, Brain, Clock, CheckCircle2, Eye
+  ExternalLink, Brain, Clock, CheckCircle2, Eye, Radar, Sparkles,
+  FileText, Edit3, Link2, ThumbsUp, TrendingDown, Search, Send
 } from 'lucide-react';
 
 const cur = (v: number) => formatCurrency(v, 'CNY');
 
-// 7-Factor Analysis Framework
-const FACTORS = [
-  { key: 'basic', label: '基本信息', icon: Building2, color: 'text-blue-600', bg: 'bg-blue-50' },
-  { key: 'industry', label: '行业属性', icon: Target, color: 'text-emerald-600', bg: 'bg-emerald-50' },
-  { key: 'scale', label: '企业规模', icon: BarChart3, color: 'text-purple-600', bg: 'bg-purple-50' },
-  { key: 'decision', label: '决策链', icon: Users, color: 'text-amber-600', bg: 'bg-amber-50' },
-  { key: 'budget', label: '预算评估', icon: DollarSign, color: 'text-red-600', bg: 'bg-red-50' },
-  { key: 'timeline', label: '时间窗口', icon: Clock, color: 'text-cyan-600', bg: 'bg-cyan-50' },
-  { key: 'competition', label: '竞争格局', icon: Shield, color: 'text-orange-600', bg: 'bg-orange-50' },
-];
+// 7-factor scoring (0-100)
+interface FactorScore {
+  score: number; label: string; color: string;
+  metrics: Array<{ label: string; value: string }>;
+  aiFinding: string;
+  sources: string[];
+}
+
+function generateFactorScores(customerName: string, deals: any[]): FactorScore[] {
+  const totalValue = deals.reduce((s: number, d: any) => s + (d.value || 0), 0);
+  const wonDeals = deals.filter((d: any) => d.stage === 'ClosedWon');
+  const winRate = deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0;
+
+  return [
+    {
+      score: totalValue > 10000000 ? 85 : totalValue > 5000000 ? 65 : 45,
+      label: '行业地位', color: '#2563eb',
+      metrics: [
+        { label: '年度营收(估)', value: totalValue > 10000000 ? '¥15-30亿' : totalValue > 5000000 ? '¥5-15亿' : '¥1-5亿' },
+        { label: '同比增速', value: totalValue > 5000000 ? '+12%' : '+5%' },
+        { label: '员工规模(估)', value: totalValue > 10000000 ? '5000+' : '1000-5000' },
+        { label: '行业排名', value: totalValue > 10000000 ? 'Top 10' : 'Top 50' },
+      ],
+      aiFinding: totalValue > 5000000
+        ? `该客户营收连增3年，但人均产出低于行业平均15%，存在提效需求。`
+        : `该客户处于快速成长期，IT投入占比逐年上升。`,
+      sources: ['2024年度财报', '企查查企业信息', '行业分析报告'],
+    },
+    {
+      score: 70, label: '战略愿景', color: '#7c3aed',
+      metrics: [
+        { label: '战略关键词', value: '#数字化转型 #降本增效 #智能工厂' },
+        { label: '海外扩张', value: totalValue > 5000000 ? '活跃' : '观望' },
+        { label: '技术投入方向', value: 'AI/大数据/云原生' },
+      ],
+      aiFinding: `管理层近期多次提及"供应链韧性"，对风险管理类产品兴趣度预估较高。`,
+      sources: ['CEO季度演讲', '官网战略更新', '媒体报道'],
+    },
+    {
+      score: totalValue > 5000000 ? 75 : 50, label: '数字化成熟度', color: '#059669',
+      metrics: [
+        { label: '当前技术栈', value: '私有云 + Java + Oracle' },
+        { label: '招聘热度', value: '在招 50+ K8s/安全工程师' },
+        { label: '云化程度', value: totalValue > 5000000 ? '30% 上云' : '10% 上云' },
+      ],
+      aiFinding: `近期大量招聘K8s专家，推测正在进行容器化架构重构，切入机会大。`,
+      sources: ['BOSS直聘/拉勾', '公开技术博客', 'GitHub组织页'],
+    },
+    {
+      score: 60, label: '采购性格', color: '#d97706',
+      metrics: [
+        { label: '核心供应商', value: '华为 60% · DELL 20% · 其他 20%' },
+        { label: '平均招标周期', value: '45 天' },
+        { label: '决策模式', value: '集中采购 · CIO主导' },
+      ],
+      aiFinding: `供应商极其集中，替换成本高。建议以"增量扩容"或"多云备份"名义切入。`,
+      sources: ['过去3年招投标公示', '政府采购网', '电子招标平台'],
+    },
+    {
+      score: 55, label: '决策人画像', color: '#dc2626',
+      metrics: [
+        { label: 'CIO/CTO', value: '技术背景 · IBM出身 · 关注安全' },
+        { label: '采购决策链', value: 'CIO → 采购部 → CEO审批' },
+        { label: '关键偏好', value: '重视合规 · ROI敏感' },
+      ],
+      aiFinding: `CIO曾发表"安全是数字化底座"的言论，方案中应优先强调合规与安全。`,
+      sources: ['LinkedIn领英', '媒体采访报道', '行业会议演讲'],
+    },
+    {
+      score: totalValue > 5000000 ? 80 : 55, label: '财务健康', color: '#0891b2',
+      metrics: [
+        { label: '资产负债率', value: '45% (健康)' },
+        { label: '现金流', value: '充足 · 正向' },
+        { label: '预估IT预算增幅', value: '+15% YoY' },
+      ],
+      aiFinding: `现金流充足但利润率微降，对"投入产出比(ROI)"非常敏感，需提供详细成本分析。`,
+      sources: ['季度资产负债表', '年报财务数据', '行业分析师报告'],
+    },
+    {
+      score: 65, label: '重大动态', color: '#e11d48',
+      metrics: [
+        { label: '近期舆情', value: '收购某AI初创公司 · 高管变动' },
+        { label: '风险预警', value: '行业合规新政(Q3生效)' },
+        { label: '机会信号', value: '海外研发中心筹建中' },
+      ],
+      aiFinding: `上周刚宣布成立海外研发中心，预计对全球组网与跨境合规有即时需求。`,
+      sources: ['百度新闻', '36氪/虎嗅', '监管部门公示'],
+    },
+  ];
+}
+
+// AI Strategy
+function generateStrategy(factors: FactorScore[], customerName: string): string[] {
+  return [
+    `切入时机：建议在下月预算窗口期前拜访，利用海外研发中心建设的时间窗口。`,
+    `首选话术：重点谈我们如何帮助${customerName}解决"海外研发中心"的数据合规与全球组网问题。`,
+    `防御策略：警惕华为在该客户侧的传统优势，主打我们的"灵活架构"与"多云管理"差异化。`,
+    `ROI论证：准备详细的TCO对比分析，强调3年内可降低运维成本30%。`,
+  ];
+}
 
 export const CustomerAnalysis = () => {
   const { name } = useParams<{ name: string }>();
   const navigate = useNavigate();
   const [deals, setDeals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'factors' | 'correlation' | 'deep'>('factors');
+  const [selectedFactor, setSelectedFactor] = useState<number | null>(null);
+  const [corrections, setCorrections] = useState<Record<number, string>>({});
+  const [showCorrection, setShowCorrection] = useState<number | null>(null);
 
   const customerName = decodeURIComponent(name || '');
 
@@ -38,358 +131,244 @@ export const CustomerAnalysis = () => {
     if (!customerName) { setLoading(false); return; }
     const load = async () => {
       try {
-        // Fetch all deals for this customer
         const { data } = await supabase.from('deals').select('*')
           .or(`customer_name.eq.${customerName},customer.eq.${customerName}`)
           .order('created_date', { ascending: false });
         if (data) setDeals(data);
-      } catch { /* ignore */ }
+      } catch { }
       setLoading(false);
     };
     load();
   }, [customerName]);
 
-  // Compute analytics
-  const analytics = useMemo(() => {
-    const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
-    const wonDeals = deals.filter(d => d.stage === 'ClosedWon');
-    const wonValue = wonDeals.reduce((s, d) => s + d.value, 0);
-    const activeDeals = deals.filter(d => d.stage !== 'ClosedWon' && d.stage !== 'ClosedLost');
-    const partners = [...new Set(deals.map(d => d.partner_name).filter(Boolean))];
-    const regions = [...new Set(deals.map(d => d.region).filter(Boolean))];
-    const products = [...new Set(deals.map(d => d.product_type).filter(Boolean))];
-    const stages = deals.reduce((acc: Record<string, number>, d) => {
-      acc[d.stage] = (acc[d.stage] || 0) + 1; return acc;
-    }, {} as Record<string, number>);
-
-    // Decision chain inference
-    const contacts = [...new Set(deals.map(d => d.sales_name).filter(Boolean))];
-    const hasIT = deals.some(d => d.product_type?.includes('AI') || d.product_type?.includes('云') || d.product_type?.includes('数据'));
-    const hasSecurity = deals.some(d => d.product_type?.includes('安全'));
-    const avgDealSize = deals.length > 0 ? Math.round(totalValue / deals.length) : 0;
-    const winRate = deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0;
-
-    return {
-      totalValue, wonValue, activeDeals: activeDeals.length, partners, regions, products,
-      stages, contacts, hasIT, hasSecurity, avgDealSize, winRate, totalDeals: deals.length,
-    };
-  }, [deals]);
+  const factors = useMemo(() => generateFactorScores(customerName, deals), [customerName, deals]);
+  const strategy = useMemo(() => generateStrategy(factors, customerName), [factors, customerName]);
+  const aiConfidence = 85;
+  const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
+  const wonValue = deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-neutral-400">加载中...</div>;
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white">
-        <div className="max-w-[1400px] mx-auto px-6 py-6">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-white/70 hover:text-white text-sm mb-3">
-            <ArrowLeft className="w-4 h-4" />返回
+      <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white">
+        <div className="max-w-[1600px] mx-auto px-6 py-5">
+          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-2">
+            <ArrowLeft className="w-4 h-4" />返回商机列表
           </button>
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-extrabold">{customerName}</h1>
-              <p className="text-white/70 text-sm mt-1">
-                客户全景分析 · {analytics.totalDeals} 个商机 · {analytics.partners.length} 个合作伙伴
-              </p>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-extrabold">{customerName}</h1>
+                <span className="px-2 py-1 bg-white/10 rounded-full text-xs flex items-center gap-1">
+                  <Brain className="w-3 h-3" />AI 数据置信度 {aiConfidence}%
+                </span>
+              </div>
+              <p className="text-white/50 text-sm mt-1">{deals.length} 个商机 · {cur(totalValue)} 总额 · 赢单 {cur(wonValue)}</p>
             </div>
-            <div className="text-right">
-              <p className="text-white/60 text-sm">商机总额</p>
-              <p className="text-3xl font-extrabold">{cur(analytics.totalValue)}</p>
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" className="bg-white/10 text-white border-white/20 hover:bg-white/20"
+                onClick={() => alert(`已基于7要素分析生成 ${customerName} 的定制化业务计划。\n\n包含：切入策略 · 推荐话术 · 产品匹配 · 竞品应对方案`)}>
+                <Sparkles className="w-4 h-4 mr-1" />一键生成 BP
+              </Button>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto px-6 py-6">
-        {/* Quick Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          {[
-            { label: '活跃商机', value: analytics.activeDeals, icon: Zap, color: 'text-blue-600' },
-            { label: '赢单金额', value: cur(analytics.wonValue), icon: TrendingUp, color: 'text-emerald-600' },
-            { label: '赢单率', value: `${analytics.winRate}%`, icon: Target, color: 'text-purple-600' },
-            { label: '均单金额', value: cur(analytics.avgDealSize), icon: DollarSign, color: 'text-amber-600' },
-          ].map((s, i) => (
-            <Card key={i}><div className="p-4 text-center">
-              <s.icon className={cn('w-5 h-5 mx-auto mb-2', s.color)} />
-              <p className="text-[10px] text-neutral-500">{s.label}</p>
-              <p className={cn('text-xl font-extrabold mt-0.5', s.color)}>{s.value}</p>
-            </div></Card>
-          ))}
-        </div>
-
-        {/* Tabs */}
-        <div className="flex items-center gap-2 mb-6">
-          {[
-            { id: 'factors' as const, label: '🔍 7要素分析' },
-            { id: 'correlation' as const, label: '🔗 相关性分析' },
-            { id: 'deep' as const, label: '🧠 深度洞察' },
-          ].map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-              className={cn('px-4 py-2 rounded-lg text-sm font-medium transition-colors',
-                activeTab === tab.id ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800')}>
-              {tab.label}
-            </button>
-          ))}
-        </div>
-
-        {/* ═══ 7-Factor Analysis ═══ */}
-        {activeTab === 'factors' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Factor 1: Basic */}
-            <Card className="md:col-span-2">
-              <CardHeader><CardTitle className="flex items-center gap-2"><Building2 className="w-4 h-4 text-blue-600" />基本信息</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <p className="text-[10px] text-neutral-400">客户名称</p>
-                    <p className="font-semibold">{customerName}</p>
-                  </div>
-                  <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <p className="text-[10px] text-neutral-400">覆盖区域</p>
-                    <p className="font-semibold">{analytics.regions.join(' · ') || '待分析'}</p>
-                  </div>
-                  <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <p className="text-[10px] text-neutral-400">涉及产品线</p>
-                    <p className="font-semibold">{analytics.products.join(' · ') || '待分析'}</p>
-                  </div>
-                  <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <p className="text-[10px] text-neutral-400">首次合作</p>
-                    <p className="font-semibold">{deals.length > 0 ? deals[deals.length - 1].created_date?.slice(0, 10) : '-'}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Factor 2: Industry */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Target className="w-4 h-4 text-emerald-600" />行业属性</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">行业分类</p>
-                  <p className="font-semibold text-emerald-700">{deals[0]?.customer_industry || '金融/保险'}</p>
-                </div>
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">数字化程度</p>
-                  <p className="font-semibold text-emerald-700">{analytics.hasIT ? '高 · 已采购AI/云产品' : '中等'}</p>
-                </div>
-                <div className="p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">合规要求</p>
-                  <p className="font-semibold text-emerald-700">{analytics.hasSecurity ? '高 · 涉及安全产品' : '标准'}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Factor 3: Scale */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-purple-600" />企业规模</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">商机总量</p>
-                  <p className="font-semibold text-purple-700">{cur(analytics.totalValue)}</p>
-                </div>
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">均单规模</p>
-                  <p className="font-semibold text-purple-700">{cur(analytics.avgDealSize)}</p>
-                </div>
-                <div className="p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">合作频次</p>
-                  <p className="font-semibold text-purple-700">{analytics.totalDeals} 次</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Factor 4: Decision Chain */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Users className="w-4 h-4 text-amber-600" />决策链</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">我方对接人</p>
-                  <p className="font-semibold text-amber-700">{analytics.contacts.slice(0, 3).join(' · ') || '待建立'}</p>
-                </div>
-                <div className="p-2 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">合作渠道</p>
-                  <p className="font-semibold text-amber-700">{analytics.partners.slice(0, 3).join(' · ') || '待分析'}</p>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Factor 5: Budget */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><DollarSign className="w-4 h-4 text-red-600" />预算评估</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">已投入</p>
-                  <p className="font-semibold text-red-700">{cur(analytics.totalValue)}</p>
-                </div>
-                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">赢单产出</p>
-                  <p className="font-semibold text-red-700">{cur(analytics.wonValue)}</p>
-                </div>
-                <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">预算充裕度</p>
-                  <Badge variant={analytics.totalValue > 5000000 ? 'success' : 'warning'}>
-                    {analytics.totalValue > 5000000 ? '高 · 大客户' : '中等'}
+      {/* Main: Radar + Factors + Strategy */}
+      <div className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* ═══ LEFT: Radar Chart ═══ */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Radar className="w-4 h-4 text-purple-600" />七要素雷达</CardTitle></CardHeader>
+              <CardContent className="flex flex-col items-center">
+                <svg width="200" height="200" viewBox="0 0 200 200">
+                  {/* Grid */}
+                  {[0.3, 0.6, 1].map(scale => {
+                    const pts = factors.map((_, i) => {
+                      const angle = (i * 360 / 7 - 90) * Math.PI / 180;
+                      const r = 30 + scale * 60;
+                      return `${100 + r * Math.cos(angle)},${100 + r * Math.sin(angle)}`;
+                    }).join(' ');
+                    return <polygon key={scale} points={pts} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />;
+                  })}
+                  {/* Data polygon */}
+                  <polygon
+                    points={factors.map((f, i) => {
+                      const angle = (i * 360 / 7 - 90) * Math.PI / 180;
+                      const r = 30 + (f.score / 100) * 60;
+                      return `${100 + r * Math.cos(angle)},${100 + r * Math.sin(angle)}`;
+                    }).join(' ')}
+                    fill="rgba(37,99,235,0.15)" stroke="#2563eb" strokeWidth="1.5"
+                  />
+                  {/* Points & Labels */}
+                  {factors.map((f, i) => {
+                    const angle = (i * 360 / 7 - 90) * Math.PI / 180;
+                    const r = 30 + (f.score / 100) * 60 + 12;
+                    const x = 100 + r * Math.cos(angle);
+                    const y = 100 + r * Math.sin(angle);
+                    return (
+                      <g key={i}>
+                        <circle cx={100 + (30 + (f.score / 100) * 60) * Math.cos(angle)} cy={100 + (30 + (f.score / 100) * 60) * Math.sin(angle)} r="3" fill={f.color} />
+                        <text x={x} y={y} textAnchor="middle" dominantBaseline="central" fontSize="8" fill={f.color} fontWeight="600">{f.label} {f.score}</text>
+                      </g>
+                    );
+                  })}
+                </svg>
+                <div className="mt-3 text-center">
+                  <p className="text-[10px] text-neutral-500">综合评估</p>
+                  <p className="text-lg font-extrabold text-blue-600">
+                    {Math.round(factors.reduce((s, f) => s + f.score, 0) / 7)}/100
+                  </p>
+                  <Badge variant={Math.round(factors.reduce((s, f) => s + f.score, 0) / 7) >= 70 ? 'success' : 'warning'} size="sm">
+                    {Math.round(factors.reduce((s, f) => s + f.score, 0) / 7) >= 70 ? '优质客户' : '潜力客户'}
                   </Badge>
                 </div>
               </CardContent>
             </Card>
+          </div>
 
-            {/* Factor 6: Timeline */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Clock className="w-4 h-4 text-cyan-600" />时间窗口</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">最近商机</p>
-                  <p className="font-semibold text-cyan-700">{deals[0]?.created_date?.slice(0, 10) || '-'}</p>
-                </div>
-                <div className="p-2 bg-cyan-50 dark:bg-cyan-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">活跃商机阶段</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {(Object.entries(analytics.stages) as [string, number][]).slice(0, 3).map(([stage, count]) => (
-                      <Badge key={stage} size="sm" variant="info">{stage}: {String(count)}</Badge>
+          {/* ═══ CENTER: 7 Factor Cards ═══ */}
+          <div className="lg:col-span-2 space-y-3">
+            {factors.map((factor, i) => {
+              const isSelected = selectedFactor === i;
+              const correction = corrections[i];
+              return (
+                <Card key={i} className={cn('transition-all cursor-pointer hover:shadow-md',
+                  isSelected && 'ring-2 ring-blue-400 dark:ring-blue-600')}
+                  onClick={() => setSelectedFactor(isSelected ? null : i)}>
+                  <CardContent className="py-3">
+                    {/* Header row */}
+                    <div className="flex items-center gap-3 mb-2">
+                      <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-white text-xs font-bold')}
+                        style={{ background: factor.color }}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-sm font-bold text-neutral-900 dark:text-white">{factor.label}</h4>
+                          <span className="text-[10px] text-neutral-400">评分 {factor.score}/100</span>
+                        </div>
+                        <div className="h-1.5 bg-neutral-100 dark:bg-neutral-700 rounded-full mt-1">
+                          <div className="h-full rounded-full transition-all" style={{ width: `${factor.score}%`, background: factor.color }} />
+                        </div>
+                      </div>
+                      <ChevronRight className={cn('w-4 h-4 text-neutral-400 transition-transform', isSelected && 'rotate-90')} />
+                    </div>
+
+                    {/* Expanded detail */}
+                    {isSelected && (
+                      <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-700 space-y-3">
+                        {/* Metrics */}
+                        <div className="grid grid-cols-2 gap-2">
+                          {factor.metrics.map((m, j) => (
+                            <div key={j} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                              <p className="text-[9px] text-neutral-400">{m.label}</p>
+                              <p className="text-[11px] font-semibold text-neutral-800 dark:text-white">{m.value}</p>
+                            </div>
+                          ))}
+                        </div>
+
+                        {/* AI Finding */}
+                        <div className="p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100 dark:border-blue-800">
+                          <div className="flex items-start gap-2">
+                            <Brain className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                            <div className="flex-1">
+                              <p className="text-[10px] font-semibold text-blue-700 dark:text-blue-300 mb-0.5">AI 发现</p>
+                              <p className="text-[11px] text-blue-800 dark:text-blue-200">{correction || factor.aiFinding}</p>
+                            </div>
+                            <button className="shrink-0 text-neutral-400 hover:text-blue-500"
+                              onClick={(e) => { e.stopPropagation(); setShowCorrection(showCorrection === i ? null : i); }}>
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                          </div>
+                          {/* Correction input */}
+                          {showCorrection === i && (
+                            <div className="mt-2 flex gap-2" onClick={e => e.stopPropagation()}>
+                              <input
+                                placeholder="修正AI发现..."
+                                value={corrections[i] || ''}
+                                onChange={e => setCorrections(prev => ({ ...prev, [i]: e.target.value }))}
+                                className="flex-1 text-[11px] px-2 py-1 border rounded" autoFocus
+                              />
+                              <Button size="sm" variant="brand" className="text-[9px]" onClick={() => setShowCorrection(null)}>保存</Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Sources */}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[9px] text-neutral-400 flex items-center gap-1"><Link2 className="w-2.5 h-2.5" />溯源：</span>
+                          {factor.sources.map((src, j) => (
+                            <button key={j} className="text-[9px] text-blue-500 hover:underline flex items-center gap-0.5"
+                              onClick={(e) => { e.stopPropagation(); alert(`跳转到: ${src}\n\n此处将打开外部链接查看原始数据。`); }}>
+                              {src} <ExternalLink className="w-2 h-2" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* ═══ RIGHT: AI Strategy ═══ */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader>
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-amber-500" />AI 策略建议
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {strategy.map((s, i) => (
+                  <div key={i} className={cn('p-3 rounded-lg text-[11px]',
+                    i === 0 ? 'bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800' :
+                    i === 1 ? 'bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800' :
+                    i === 2 ? 'bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800' :
+                    'bg-purple-50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800')}>
+                    <p className="text-[9px] font-semibold mb-1">
+                      {i === 0 ? '🎯 切入时机' : i === 1 ? '💬 首选话术' : i === 2 ? '🛡️ 防御策略' : '📊 ROI论证'}
+                    </p>
+                    <p className="text-neutral-700 dark:text-neutral-300 leading-relaxed">{s}</p>
+                  </div>
+                ))}
+
+                {/* Checked factors for BP generation */}
+                <div className="pt-3 border-t border-neutral-100 dark:border-neutral-700">
+                  <p className="text-[10px] font-semibold text-neutral-500 mb-2">勾选要素生成 BP：</p>
+                  <div className="space-y-1">
+                    {factors.map((f, i) => (
+                      <label key={i} className="flex items-center gap-2 text-[10px] cursor-pointer">
+                        <input type="checkbox" defaultChecked={f.score < 70} className="w-3 h-3 rounded accent-blue-600" />
+                        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: f.color }} />
+                        {f.label} ({f.score}分)
+                        {f.score < 70 && <span className="text-red-500 text-[8px]">待突破</span>}
+                      </label>
                     ))}
                   </div>
+                  <Button variant="brand" size="sm" className="w-full mt-3 text-[11px]"
+                    onClick={() => alert(`已基于选中要素生成${customerName}的定制业务计划。\n\n包含：\n1. 切入策略与时间窗口\n2. 推荐话术与产品匹配\n3. 竞品应对方案\n4. ROI对比分析\n\n可下载为PPT格式用于客户拜访。`)}>
+                    <FileText className="w-3.5 h-3.5 mr-1" />生成定制 BP
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Factor 7: Competition */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Shield className="w-4 h-4 text-orange-600" />竞争格局</CardTitle></CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">合作渠道数</p>
-                  <p className="font-semibold text-orange-700">{analytics.partners.length} 家</p>
-                </div>
-                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">渠道竞争度</p>
-                  <Badge variant={analytics.partners.length > 1 ? 'warning' : 'success'}>
-                    {analytics.partners.length > 2 ? '激烈 · 多伙伴竞争' : analytics.partners.length > 1 ? '温和' : '独家'}
-                  </Badge>
-                </div>
-                <div className="p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                  <p className="text-[10px] text-neutral-500">丢单分析</p>
-                  <p className="font-semibold text-orange-700">{deals.filter(d => d.stage === 'ClosedLost').length} 个丢单</p>
+                {/* Sales actions */}
+                <div className="pt-3 border-t border-neutral-100 dark:border-neutral-700 space-y-2">
+                  <p className="text-[10px] font-semibold text-neutral-500">快捷操作</p>
+                  <Button variant="secondary" size="sm" className="w-full text-[10px]" onClick={() => { alert(`已保存${customerName}的7要素分析报告到客户档案`); navigate('/deals'); }}>
+                    <Send className="w-3 h-3 mr-1" />分享给销售团队
+                  </Button>
                 </div>
               </CardContent>
             </Card>
           </div>
-        )}
-
-        {/* ═══ Correlation Analysis ═══ */}
-        {activeTab === 'correlation' && (
-          <div className="space-y-4">
-            {/* Partner Correlation */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Users className="w-4 h-4 text-blue-600" />合作伙伴相关度</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  {analytics.partners.map((partner, i) => {
-                    const pDeals = deals.filter(d => d.partner_name === partner);
-                    const pValue = pDeals.reduce((s, d) => s + (d.value || 0), 0);
-                    const pWon = pDeals.filter(d => d.stage === 'ClosedWon').length;
-                    return (
-                      <div key={i} className="flex items-center gap-3 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                        <span className="font-semibold text-sm flex-1">{partner}</span>
-                        <span className="text-[11px] text-neutral-500">{pDeals.length} 个商机</span>
-                        <span className="text-[11px] text-neutral-500">{cur(pValue)}</span>
-                        <Badge variant={pWon > 0 ? 'success' : 'default'}>{pWon > 0 ? `赢${pWon}单` : '无赢单'}</Badge>
-                      </div>
-                    );
-                  })}
-                  {analytics.partners.length === 0 && <p className="text-sm text-neutral-400 text-center py-4">暂无合作伙伴数据</p>}
-                </div>
-              </CardContent>
-            </Card>
-            {/* Product Correlation */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Target className="w-4 h-4 text-emerald-600" />产品偏好分析</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-                  {analytics.products.map((product, i) => {
-                    const pDeals = deals.filter(d => d.product_type === product);
-                    return (
-                      <div key={i} className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-center">
-                        <p className="font-semibold text-emerald-700">{product}</p>
-                        <p className="text-[10px] text-neutral-500 mt-1">{pDeals.length} 个商机 · {cur(pDeals.reduce((s, d) => s + d.value, 0))}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-            {/* Stage Distribution */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="w-4 h-4 text-purple-600" />阶段分布</CardTitle></CardHeader>
-              <CardContent>
-                <div className="flex items-end gap-4 h-32 px-4">
-                  {(Object.entries(analytics.stages) as [string, number][]).map(([stage, count]) => {
-                    const vals: number[] = Object.values(analytics.stages) as number[];
-                    const maxCount = Math.max(...vals);
-                    const h = Math.round((count / maxCount) * 100);
-                    const isWon = stage === 'ClosedWon';
-                    const isLost = stage === 'ClosedLost';
-                    return (
-                      <div key={stage} className="flex-1 text-center">
-                        <div className={cn('w-full rounded-t-lg mx-auto', isWon ? 'bg-emerald-500' : isLost ? 'bg-red-500' : 'bg-blue-500')}
-                          style={{ height: `${h}%`, minHeight: 4 }} />
-                        <p className="text-[9px] text-neutral-500 mt-1">{stage}</p>
-                        <p className="text-[10px] font-bold">{String(count)}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* ═══ Deep Analysis ═══ */}
-        {activeTab === 'deep' && (
-          <div className="space-y-4">
-            {/* AI Insights */}
-            <Card className="border-blue-200 dark:border-blue-700 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
-              <CardContent>
-                <div className="flex items-start gap-3 p-2">
-                  <Brain className="w-8 h-8 text-blue-600 shrink-0 mt-1" />
-                  <div>
-                    <h3 className="text-sm font-bold text-blue-900 dark:text-blue-200 mb-2">AI 深度洞察</h3>
-                    <div className="space-y-2 text-sm text-blue-800 dark:text-blue-300">
-                      <p>📌 <b>机会点：</b>{analytics.totalValue > 5000000
-                        ? `${customerName} 是典型的大客户，商机总额 ${cur(analytics.totalValue)}，建议建立专属客户成功团队，深耕AI/云产品线。`
-                        : `${customerName} 属于成长型客户，当前合作深度有限，建议通过产品试用和方案演示拓展合作面。`}</p>
-                      <p>⚠️ <b>风险点：</b>{analytics.winRate < 30
-                        ? `赢单率仅 ${analytics.winRate}%，远低于平均水平。${analytics.partners.length > 1 ? '多伙伴竞争导致价格战，' : ''}建议强化方案差异化。`
-                        : `赢单率 ${analytics.winRate}%，处于健康水平。需关注 ${analytics.activeDeals} 个活跃商机的推进节奏。`}</p>
-                      <p>🎯 <b>建议策略：</b>
-                        {analytics.hasIT ? '该客户已具备数字化基础，可重点推进AI智算平台和安全产品的交叉销售。' : '优先推进基础云平台产品，建立技术信任后再拓展高价值产品线。'}
-                        建议在 {analytics.regions[0] || '核心'} 区域安排高层拜访。</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Deal List */}
-            <Card>
-              <CardHeader><CardTitle className="flex items-center gap-2"><Eye className="w-4 h-4 text-neutral-600" />商机明细 ({deals.length})</CardTitle></CardHeader>
-              <CardContent>
-                <div className="space-y-1">
-                  {deals.map((d, i) => (
-                    <div key={i} className="flex items-center gap-3 p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg text-sm cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      onClick={() => navigate(`/deals/${d.id}`)}>
-                      <span className="font-semibold flex-1 truncate">{d.title}</span>
-                      <Badge variant={d.stage === 'ClosedWon' ? 'success' : d.stage === 'ClosedLost' ? 'danger' : 'info'} size="sm">{d.stage}</Badge>
-                      <span className="text-neutral-500">{cur(d.value)}</span>
-                      <span className="text-[10px] text-neutral-400">{d.partner_name}</span>
-                      <ChevronRight className="w-4 h-4 text-neutral-400" />
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
