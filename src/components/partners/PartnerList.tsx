@@ -83,7 +83,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const [showMap, setShowMap] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showAdvFilter, setShowAdvFilter] = useState(false);
-  const [segmentFilter, setSegmentFilter] = 'all';
+  const [segmentFilter, setSegmentFilter] = useState('all');
 
   // ── Sort state ───────────────────────────────────
   const [sortField, setSortField] = useState<SortField>('name');
