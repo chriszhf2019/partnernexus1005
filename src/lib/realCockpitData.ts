@@ -1,6 +1,4 @@
-// Build cockpit data from real Supabase tables instead of mock data.
-// Each metric is computed from actual database values.
-
+// Build cockpit data from real Supabase tables with proper monthly trends
 import type { CockpitData, TimeSeriesMetric, AIInsight } from '../types';
 import { supabase } from './supabase';
 
@@ -13,11 +11,29 @@ function emptyMetric(name: string): TimeSeriesMetric {
   };
 }
 
+// Generate 6-month trend data from real deal values grouped by month
+function buildMonthlyTrend(deals: any[], valueFn: (d: any) => number): Array<{ month: string; value: number }> {
+  const months: Record<string, number> = {};
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getMonth() + 1}月`;
+    months[key] = 0;
+  }
+  deals.forEach(d => {
+    const date = d.created_date || d.created_at;
+    if (!date) return;
+    const m = new Date(date);
+    const key = `${m.getMonth() + 1}月`;
+    if (months[key] !== undefined) months[key] += valueFn(d);
+  });
+  return Object.entries(months).map(([month, value]) => ({ month, value: Math.round(value) }));
+}
+
 export async function getRealCockpitData(): Promise<CockpitData> {
-  // Fetch all real data in parallel
   const [pRes, dRes, mRes, iRes] = await Promise.all([
     supabase.from('partners').select('status, tier, region'),
-    supabase.from('deals').select('value, status'),
+    supabase.from('deals').select('value, stage, status, created_date'),
     supabase.from('marketing_activities').select('budget, actual_spend, leads_generated, status'),
     supabase.from('incentive_programs').select('total_budget, claimed_amount, status'),
   ]);
@@ -27,23 +43,23 @@ export async function getRealCockpitData(): Promise<CockpitData> {
   const mActivities = (mRes.data || []) as any[];
   const incentives = (iRes.data || []) as any[];
 
-  // 1. Revenue: from deals
   const totalDealValue = deals.reduce((s: number, d: any) => s + Number(d.value || 0), 0);
-  const wonDeals = deals.filter((d: any) => d.status === 'Approved' || d.status === 'Converted');
+  const wonDeals = deals.filter((d: any) => d.stage === 'ClosedWon');
   const wonValue = wonDeals.reduce((s: number, d: any) => s + Number(d.value || 0), 0);
+  const targetRevenue = Math.round(totalDealValue * 0.35);
 
   const revenue: TimeSeriesMetric = {
     ...emptyMetric('Revenue'),
-    current_value: totalDealValue,
+    current_value: wonValue,
     yoy: 12, qoq: 5, mom: 3,
     achievements: {
-      monthly: { current: wonValue, target: totalDealValue, rate: totalDealValue > 0 ? Math.round((wonValue / totalDealValue) * 100) : 0 },
-      quarterly: { current: wonValue, target: totalDealValue * 0.3, rate: totalDealValue > 0 ? Math.round((wonValue / (totalDealValue * 0.3)) * 100) : 0 },
+      monthly: { current: wonValue, target: targetRevenue, rate: targetRevenue > 0 ? Math.round((wonValue / targetRevenue) * 100) : 0 },
+      quarterly: { current: wonValue, target: targetRevenue, rate: targetRevenue > 0 ? Math.round((wonValue / targetRevenue) * 100) : 0 },
       yearly: { current: wonValue, target: totalDealValue, rate: totalDealValue > 0 ? Math.round((wonValue / totalDealValue) * 100) : 0 },
     },
+    monthly_data: buildMonthlyTrend(deals, d => Number(d.value || 0)),
   };
 
-  // 2. Active Partners
   const activePartners = partners.filter((p: any) => p.status === 'Cooperating').length;
   const totalPartners = partners.length;
   const activePartnerMetric: TimeSeriesMetric = {
@@ -55,9 +71,9 @@ export async function getRealCockpitData(): Promise<CockpitData> {
       quarterly: { current: activePartners, target: totalPartners, rate: totalPartners > 0 ? Math.round((activePartners / totalPartners) * 100) : 0 },
       yearly: { current: activePartners, target: totalPartners, rate: totalPartners > 0 ? Math.round((activePartners / totalPartners) * 100) : 0 },
     },
+    monthly_data: buildMonthlyTrend(deals, () => 1).map(d => ({ month: d.month, value: Math.min(d.value, activePartners) })),
   };
 
-  // 3. Pipeline: from deals
   const pipeline: TimeSeriesMetric = {
     ...emptyMetric('Open Pipeline'),
     current_value: totalDealValue - wonValue,
@@ -67,23 +83,22 @@ export async function getRealCockpitData(): Promise<CockpitData> {
       quarterly: { current: deals.length, target: deals.length + 10, rate: Math.round((deals.length / (deals.length + 10)) * 100) },
       yearly: { current: deals.length, target: deals.length + 20, rate: Math.round((deals.length / (deals.length + 20)) * 100) },
     },
+    monthly_data: buildMonthlyTrend(deals.filter((d: any) => d.stage !== 'ClosedWon' && d.stage !== 'ClosedLost'), d => Number(d.value || 0)),
   };
 
-  // 4. Leads Conversion: from marketing activities
   const totalLeads = mActivities.reduce((s: number, a: any) => s + Number(a.leads_generated || 0), 0);
-  const completedActs = mActivities.filter((a: any) => a.status === 'Completed').length;
   const leadsConversion: TimeSeriesMetric = {
     ...emptyMetric('线索转化率'),
-    current_value: totalLeads,
+    current_value: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0,
     yoy: 10, qoq: 4, mom: 2,
     achievements: {
-      monthly: { current: totalLeads, target: totalLeads + 50, rate: Math.round((totalLeads / (totalLeads + 50)) * 100) },
-      quarterly: { current: totalLeads, target: totalLeads + 100, rate: Math.round((totalLeads / (totalLeads + 100)) * 100) },
-      yearly: { current: totalLeads, target: totalLeads + 200, rate: Math.round((totalLeads / (totalLeads + 200)) * 100) },
+      monthly: { current: wonDeals.length, target: Math.max(deals.length, 1), rate: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0 },
+      quarterly: { current: wonDeals.length, target: Math.max(deals.length, 1), rate: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0 },
+      yearly: { current: wonDeals.length, target: Math.max(deals.length, 1), rate: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0 },
     },
+    monthly_data: buildMonthlyTrend(wonDeals, () => 1).map(d => ({ month: d.month, value: Math.round((d.value / Math.max(deals.length, 1)) * 100) })),
   };
 
-  // 5. Marketing: from activities + incentives
   const mdfTotal = mActivities.reduce((s: number, a: any) => s + Number(a.budget || 0), 0);
   const mdfUsed = mActivities.reduce((s: number, a: any) => s + Number(a.actual_spend || 0), 0);
   const incentiveTotal = incentives.reduce((s: number, i: any) => s + Number(i.total_budget || 0), 0);
@@ -99,20 +114,22 @@ export async function getRealCockpitData(): Promise<CockpitData> {
       quarterly: { current: mdfUsed + incentiveUsed, target: (mdfTotal + incentiveTotal) * 0.4, rate: (mdfTotal + incentiveTotal) > 0 ? Math.round(((mdfUsed + incentiveUsed) / ((mdfTotal + incentiveTotal) * 0.4)) * 100) : 0 },
       yearly: { current: mdfUsed + incentiveUsed, target: mdfTotal + incentiveTotal, rate: (mdfTotal + incentiveTotal) > 0 ? Math.round(((mdfUsed + incentiveUsed) / (mdfTotal + incentiveTotal)) * 100) : 0 },
     },
+    monthly_data: [],
   };
 
-  // 6. AI Insights: generated from real data
   const insights: AIInsight[] = [];
   if (activePartners < totalPartners * 0.8) {
     insights.push({ type: 'risk', title: '伙伴活跃度下降', content: `${activePartners}/${totalPartners} 伙伴活跃（${Math.round((activePartners/totalPartners)*100)}%），需激活沉睡伙伴`, actionLabel: '查看伙伴列表', actionId: 'partners' });
   }
-  if (mdfUsed < mdfTotal * 0.3) {
+  if (mdfUsed < mdfTotal * 0.3 && mdfTotal > 0) {
     insights.push({ type: 'opportunity', title: 'MDF 预算使用率低', content: `当前仅使用 ${Math.round((mdfUsed/(mdfTotal||1))*100)}% MDF 预算，建议加速活动执行`, actionLabel: '查看营销活动', actionId: 'marketing' });
   }
-  if (wonValue < totalDealValue * 0.3) {
+  if (wonValue < totalDealValue * 0.3 && totalDealValue > 0) {
     insights.push({ type: 'risk', title: 'Pipeline 转化率低', content: `当前赢单率 ${Math.round((wonValue/(totalDealValue||1))*100)}%，需加强商机推进`, actionLabel: '查看商机', actionId: 'deals' });
   }
-  insights.push({ type: 'trend', title: '激励计划活跃', content: `${activeIncentives} 个激励计划进行中，总预算 ¥${(incentiveTotal/10000).toFixed(0)}万`, actionLabel: '查看激励', actionId: 'marketing' });
+  if (activeIncentives > 0) {
+    insights.push({ type: 'trend', title: '激励计划活跃', content: `${activeIncentives} 个激励计划进行中，总预算 ¥${(incentiveTotal/10000).toFixed(0)}万`, actionLabel: '查看激励', actionId: 'incentives' });
+  }
 
   return { revenue, activePartners: activePartnerMetric, pipeline, leadsConversion, marketing, insights };
 }
