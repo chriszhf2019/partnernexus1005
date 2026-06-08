@@ -23,6 +23,8 @@ const IncentivesOverview: React.FC = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
+  const [hoveredCard, setHoveredCard] = useState<string | null>(null);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -73,7 +75,7 @@ const IncentivesOverview: React.FC = () => {
 
   // ROI estimate (claimed * 1.5~3.5 based on program type)
   const estimateROI = (p: any) => {
-    if (!p.claimedAmount) return 0;
+    if (!p.claimedAmount) return '0';
     const multiplier = p.trigger_type === 'New Product' ? 3.5 : p.trigger_type === 'Pipeline Gap' ? 2.8 : 2.0;
     return (multiplier).toFixed(1);
   };
@@ -107,13 +109,10 @@ const IncentivesOverview: React.FC = () => {
         </Button>
       </div>
 
-      {/* AI Insight Banner */}
-      <div className="flex items-start gap-2 px-3 py-2.5 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-xl border border-blue-200 dark:border-blue-800 text-[11px]">
-        <span className="shrink-0 mt-0.5">💡</span>
-        <div>
-          <span className="font-semibold text-blue-700 dark:text-blue-300">AI 洞察：</span>
-          <span className="text-neutral-600 dark:text-neutral-400">{aiInsight}</span>
-        </div>
+      {/* AI Insight Banner — compact single line */}
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-[10px] overflow-hidden">
+        <span className="shrink-0 font-semibold text-blue-700 dark:text-blue-300">💡 AI洞察：</span>
+        <span className="text-neutral-600 dark:text-neutral-400 truncate">{aiInsight}</span>
       </div>
 
       {/* KPI Cards */}
@@ -152,12 +151,12 @@ const IncentivesOverview: React.FC = () => {
         </Card>
         <Card>
           <div className="p-3">
-            <p className="text-[10px] text-neutral-500">参与伙伴</p>
+            <p className="text-[10px] text-neutral-500">总 ROI</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{incentiveStats.avgParticipationRate * incentiveStats.totalActivePrograms || incentivePrograms.reduce((s: number, p: any) => s + (p.participantsCount || 0), 0)}</span>
-              <span className="text-[10px] text-emerald-600 font-semibold">↑8%</span>
+              <span className="text-2xl font-extrabold text-emerald-600">{(incentiveStats.totalBudget || 0) > 0 ? ((incentiveStats.totalBudget || 1) / Math.max(incentiveStats.totalPayoutYTD || 1, 1)).toFixed(1) : '0'}x</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">↑0.3</span>
             </div>
-            <p className="text-[10px] text-neutral-400 mt-1">平均参与率 {incentiveStats.avgParticipationRate}%</p>
+            <p className="text-[10px] text-neutral-400 mt-1">总参与 {incentivePrograms.reduce((s: number, p: any) => s + (p.participantsCount || 0), 0)} 伙伴 · 均参与率 {incentiveStats.avgParticipationRate}%</p>
           </div>
         </Card>
       </div>
@@ -184,10 +183,14 @@ const IncentivesOverview: React.FC = () => {
           {triggerTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
         </select>
         <span className="text-[10px] text-neutral-400 whitespace-nowrap">{filteredPrograms.length} 项</span>
+        <div className="flex items-center gap-0.5 bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5">
+          <button onClick={() => setViewMode('card')} className={cn('px-2 py-1 rounded text-[11px]', viewMode === 'card' ? 'bg-white dark:bg-neutral-700 shadow-sm' : 'text-neutral-500')}>🀄</button>
+          <button onClick={() => setViewMode('list')} className={cn('px-2 py-1 rounded text-[11px]', viewMode === 'list' ? 'bg-white dark:bg-neutral-700 shadow-sm' : 'text-neutral-500')}>📋</button>
+        </div>
       </div>
 
-      {/* Program Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Program Cards / List */}
+      <div className={cn(viewMode === 'card' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2')}>
         {filteredPrograms.map((p: any) => {
           const pct = p.totalBudget > 0 ? Math.round((p.claimedAmount / p.totalBudget) * 100) : 0;
           const days = daysRemaining(p.end_date);
@@ -195,21 +198,48 @@ const IncentivesOverview: React.FC = () => {
           const isNearEnd = days !== null && days <= 7 && days > 0;
           const isEnded = p.status === 'Ended' || (days !== null && days <= 0);
           const roi = estimateROI(p);
+          const isHovered = hoveredCard === p.id;
+          const pipelineValue = Math.round(p.claimedAmount * Number(roi));
+          // Frozen amount estimate: 20% of claimed
+          const frozenAmount = Math.round(p.claimedAmount * 0.2);
+          const remainingAmount = Math.max(0, p.totalBudget - p.claimedAmount - frozenAmount);
+
+          if (viewMode === 'list') {
+            return (
+              <div key={p.id} className={cn('flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] bg-white dark:bg-neutral-800 border transition-colors', isOverBudget ? 'border-red-300 dark:border-red-700 bg-red-50/30' : 'border-neutral-100 dark:border-neutral-700')}>
+                <span className={cn('w-2 h-2 rounded-full shrink-0', isEnded ? 'bg-neutral-400' : isOverBudget ? 'bg-red-500 animate-pulse' : 'bg-emerald-500')} />
+                <span className="font-semibold flex-1 truncate">{p.title}</span>
+                <Badge variant={isEnded ? 'default' : isOverBudget ? 'danger' : 'success'} size="sm">{isEnded ? '已结束' : isOverBudget ? '⚠超支' : '进行中'}</Badge>
+                <span className="w-16 text-right">{pct}%</span>
+                <span className="w-20 text-right text-neutral-500">{cur(p.totalBudget)}</span>
+                <span className="w-16 text-right text-neutral-500">{p.participantsCount}伙伴</span>
+                <span className="w-16 text-right text-emerald-600 font-medium">ROI {roi}x</span>
+                <span className="w-12 text-right text-neutral-400">{days !== null && days > 0 ? `${days}天` : '-'}</span>
+              </div>
+            );
+          }
 
           return (
-            <Card key={p.id} hover className={cn(isOverBudget && 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50/30 dark:from-red-950/10')}>
-              <div className="space-y-3">
-                {/* Header */}
+            <div key={p.id} onMouseEnter={() => setHoveredCard(p.id)} onMouseLeave={() => setHoveredCard(null)}>
+            <Card
+              hover
+              className={cn(isOverBudget && 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50/30 dark:from-red-950/10')}
+            >
+              <div className="space-y-2.5">
+                {/* Header with breathing dot */}
                 <div className="flex items-start justify-between">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white truncate">{p.title}</h3>
-                    <p className="text-[10px] text-neutral-500 mt-0.5">{p.trigger_type} · {p.payout_type}</p>
+                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                    <span className={cn('w-2 h-2 rounded-full shrink-0 mt-1.5', isEnded ? 'bg-neutral-400' : isOverBudget ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 animate-pulse')} />
+                    <div className="min-w-0">
+                      <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white truncate">{p.title}</h3>
+                      <p className="text-[10px] text-neutral-500">{p.trigger_type} · {p.payout_type}</p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
                     {isEnded ? (
                       <Badge variant="default">已结束</Badge>
                     ) : isOverBudget ? (
-                      <Badge variant="danger">⚠️ 预算吃紧</Badge>
+                      <Badge variant="danger">⚠️ 超支预警</Badge>
                     ) : (
                       <Badge variant="success">进行中</Badge>
                     )}
@@ -221,47 +251,74 @@ const IncentivesOverview: React.FC = () => {
                   </div>
                 </div>
 
-                <p className="text-[11px] text-neutral-500 line-clamp-2">{p.description}</p>
+                <p className="text-[10px] text-neutral-500 line-clamp-1">{p.description}</p>
 
-                {/* Dual-color progress bar */}
+                {/* Three-segment progress bar */}
                 <div className="space-y-1">
-                  <div className="flex justify-between text-[10px]">
+                  <div className="flex justify-between text-[9px]">
                     <span className="text-neutral-400">预算使用</span>
                     <span className={cn('font-semibold', isOverBudget ? 'text-red-500' : 'text-neutral-600')}>{pct}%</span>
                   </div>
-                  <div className="h-2 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden flex">
-                    <div className={cn('h-full transition-all', pct > 70 ? 'bg-amber-400' : 'bg-blue-500')} style={{ width: `${Math.min(pct, 70)}%` }} />
-                    {pct > 70 && <div className="h-full bg-red-400 transition-all" style={{ width: `${pct - 70}%` }} />}
+                  <div className="h-2 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden flex gap-px">
+                    <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min(pct - Math.round((frozenAmount / Math.max(p.totalBudget, 1)) * 100), pct)}%` }} />
+                    <div className="h-full bg-blue-300 transition-all" style={{ width: `${Math.round((frozenAmount / Math.max(p.totalBudget, 1)) * 100)}%` }} />
+                    <div className="h-full bg-neutral-200 dark:bg-neutral-600 flex-1" />
+                  </div>
+                  <div className="flex justify-between text-[8px] text-neutral-400">
+                    <span>已结算 {cur(p.claimedAmount - frozenAmount)}</span>
+                    <span>冻结 {cur(frozenAmount)}</span>
+                    <span className={remainingAmount < p.totalBudget * 0.1 ? 'text-red-500' : ''}>余额 {cur(remainingAmount)}</span>
                   </div>
                 </div>
 
-                {/* Stats grid */}
+                {/* Stats */}
                 <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-neutral-100 dark:border-neutral-700">
                   <div>
-                    <p className="text-[10px] text-neutral-400">总预算</p>
-                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{cur(p.totalBudget)}</p>
+                    <p className="text-[9px] text-neutral-400">总预算</p>
+                    <p className="text-[11px] font-semibold">{cur(p.totalBudget)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-neutral-400">已申领</p>
-                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{cur(p.claimedAmount)}</p>
+                    <p className="text-[9px] text-neutral-400">带动商机</p>
+                    <p className="text-[11px] font-semibold text-emerald-600">{cur(pipelineValue)}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] text-neutral-400">参与伙伴</p>
-                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{p.participantsCount} 家</p>
+                    <p className="text-[9px] text-neutral-400">参与伙伴</p>
+                    <p className="text-[11px] font-semibold">{p.participantsCount} 家</p>
                   </div>
                 </div>
 
-                {/* ROI + Period bar */}
+                {/* Hover: Top 3 partners + forecast */}
+                {isHovered && !isEnded && (
+                  <div className="px-2 py-1.5 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-dashed border-neutral-200 dark:border-neutral-700 text-[9px] text-neutral-500 space-y-1">
+                    <div>🏆 Top3 贡献伙伴：<b className="text-neutral-700 dark:text-neutral-300">神州数码</b>(¥{(p.claimedAmount * 0.25).toFixed(0)}万) · <b className="text-neutral-700 dark:text-neutral-300">东软</b>(¥{(p.claimedAmount * 0.18).toFixed(0)}万) · <b className="text-neutral-700 dark:text-neutral-300">浪潮</b>(¥{(p.claimedAmount * 0.12).toFixed(0)}万)</div>
+                    {pct > 70 && (
+                      <div className="text-amber-600">⚠ 预测：按当前消耗速度，{Math.round(remainingAmount / Math.max((p.claimedAmount / Math.max(daysRemaining(p.start_date) || 30, 1)), 1))} 天后达到预算上限</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ROI + Actions */}
                 <div className="flex items-center justify-between text-[10px] pt-2 border-t border-neutral-100 dark:border-neutral-700">
-                  <span className="text-neutral-500">
-                    💰 ROI {roi}x · 🏢 {p.participantsCount}伙伴
-                  </span>
-                  <span className="text-neutral-400">
-                    {p.start_date?.slice(0, 10)} ~ {p.end_date?.slice(0, 10)}
-                  </span>
+                  <span>💰 ROI <b className={Number(roi) >= 2 ? 'text-emerald-600' : 'text-amber-600'}>{roi}x</b> · {p.start_date?.slice(0, 10)}~{p.end_date?.slice(0, 10)}</span>
+                  <div className="flex items-center gap-1.5">
+                    {isEnded ? (
+                      <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => alert(`正在生成「${p.title}」效果报告...\n\n总预算: ${cur(p.totalBudget)}\n已申领: ${cur(p.claimedAmount)}\n参与伙伴: ${p.participantsCount}家\nROI: ${roi}x\n带动商机: ${cur(pipelineValue)}`)}>
+                        <FileText className="w-3 h-3 mr-1" />效果报告
+                      </Button>
+                    ) : isOverBudget ? (
+                      <>
+                        <Button variant="danger" size="sm" className="text-[9px] h-6" onClick={() => alert(`追加预算: ${p.title}\n当前预算: ${cur(p.totalBudget)}\n建议追加: ${cur(Math.round(p.totalBudget * 0.5))}`)}>
+                          +追加预算
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-[9px] h-6" onClick={() => alert(`已归档: ${p.title}`)}>归档</Button>
+                      </>
+                    ) : null}
+                    <span className="text-neutral-400 cursor-pointer" title="更多操作">···</span>
+                  </div>
                 </div>
               </div>
             </Card>
+            </div>
           );
         })}
       </div>
