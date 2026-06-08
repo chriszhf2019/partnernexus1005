@@ -124,22 +124,20 @@ export const CustomerAnalysis = () => {
 
   useEffect(() => {
     if (!customerName) { setLoading(false); return; }
+    // Set loading false quickly — intel data doesn't depend on deals
+    setLoading(false);
     const load = async () => {
       try {
-        const escaped = customerName.replace(/'/g, "''");
         const { data } = await supabase.from('deals').select('*')
-          .or(`customer_name.eq.${escaped},customer.eq.${escaped}`)
-          .order('created_date', { ascending: false });
-        if (data) setDeals(data);
+          .ilike('customer_name', `%${customerName}%`)
+          .order('created_date', { ascending: false })
+          .limit(50);
+        if (data?.length) setDeals(data);
       } catch (e) {
-        console.warn('[CustomerAnalysis] Failed to load deals:', e);
+        // Use intel data only — deals are non-critical for the analysis
       }
-      setLoading(false);
     };
     load();
-    // Safety: force loading off after 5 seconds even if query hangs
-    const timer = setTimeout(() => setLoading(false), 5000);
-    return () => clearTimeout(timer);
   }, [customerName]);
 
   const [activeView, setActiveView] = useState<'factors' | 'correlation' | 'deep'>('factors');
@@ -150,7 +148,8 @@ export const CustomerAnalysis = () => {
   const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
   const wonValue = deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0);
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen text-neutral-400">加载中...</div>;
+  if (loading) return <div className="flex items-center justify-center min-h-screen text-neutral-400"><div className="text-center"><div className="animate-spin text-3xl mb-3">⏳</div>加载中...</div></div>;
+  if (!customerName) return <div className="flex items-center justify-center min-h-screen text-neutral-400"><div className="text-center"><p className="text-lg font-semibold">未找到客户名称</p><p className="text-sm mt-2">请从商机列表页点击客户名称访问</p><Button variant="secondary" className="mt-4" onClick={() => navigate('/deals')}>返回商机列表</Button></div></div>;
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
