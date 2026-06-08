@@ -284,16 +284,32 @@ export function useNetworkData() {
   return useMemo(() => ({ nodes: data.nodes, links: data.links }), [data]);
 }
 
+function fallbackCockpitData(): CockpitData {
+  const emptyMetric = (name: string): any => ({
+    metric_name: name, current_value: 0, yoy: 0, qoq: 0, mom: 0, linear_rate: 0,
+    achievements: { monthly: { current: 0, target: 100, rate: 0 }, quarterly: { current: 0, target: 100, rate: 0 }, yearly: { current: 0, target: 100, rate: 0 } },
+    monthly_data: [{ month: '1月', value: 0 }, { month: '2月', value: 0 }, { month: '3月', value: 0 }, { month: '4月', value: 0 }, { month: '5月', value: 0 }, { month: '6月', value: 0 }],
+    partner_ecosystem_details: { regional_coverage: [], tier_funnel: [] },
+    active_split: { order_placing: { value: 0, target: 1, rate: 0 }, leads_reporting: { value: 0, target: 1, rate: 0 }, incentive_participants: { value: 0, target: 1, rate: 0 } },
+    dimensional_achievements: [{ type: 'region', data: [] }],
+  });
+  return {
+    revenue: emptyMetric('Revenue'), activePartners: emptyMetric('活跃伙伴数'),
+    pipeline: emptyMetric('Pipeline'), leadsConversion: emptyMetric('线索转化率'),
+    marketing: emptyMetric('营销'), insights: [],
+  };
+}
+
 export function useCockpitData(): { data: CockpitData; loading: boolean } {
-  const [data, setData] = useState<CockpitData | null>(null);
+  const [data, setData] = useState<CockpitData>(fallbackCockpitData);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     import('../lib/realCockpitData').then(({ getRealCockpitData }) => {
       getRealCockpitData().then((realData) => {
         setData(realData);
         setLoading(false);
-      }).catch(() => { setData(null); setLoading(false); });
-    }).catch(() => { setData(null); setLoading(false); });
+      }).catch((e) => { console.warn('[useCockpitData] Failed:', e); setLoading(false); });
+    }).catch((e) => { console.warn('[useCockpitData] Import failed:', e); setLoading(false); });
   }, []);
-  return { data: data || {} as CockpitData, loading };
+  return { data, loading };
 }
