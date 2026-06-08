@@ -1,7 +1,8 @@
 import { db } from '../lib/supabase';
 import type { Deal, DealLifecycleEvent, DealLifecycleStage, DealRegistrationStats } from '../types';
-import { DEALS } from '../constants';
+
 import type { PaginatedResponse, DealFilters } from './types';
+import { debug } from '../lib/debug';
 
 // ── DB ↔ TS normalization ────────────────────────────
 // The Supabase deals table has a legacy schema. This normalizes old columns
@@ -108,9 +109,9 @@ export const dealService = {
         deals = deals.filter((d) => d.title.toLowerCase().includes(s) || d.customerName.toLowerCase().includes(s));
       }
       return { items: deals, total: deals.length, page: 1, pageSize: deals.length };
-    } catch {
-      if (import.meta.env.DEV) console.warn('[dealService] Supabase unavailable, falling back to mock deals');
-      return { items: DEALS, total: DEALS.length, page: 1, pageSize: DEALS.length };
+    } catch (e) {
+      debug.warn('[dealService] list failed:', e);
+      return { items: [], total: 0, page: 1, pageSize: 0 };
     }
   },
 
@@ -118,10 +119,10 @@ export const dealService = {
     try {
       const { data } = await db.deals().select('*').eq('id', id).single();
       if (data) return normalizeDeal(data);
-      return DEALS.find((d) => d.id === id) || null;
-    } catch {
-      if (import.meta.env.DEV) console.warn(`[dealService] Supabase unavailable, falling back to mock deal for id=${id}`);
-      return DEALS.find((d) => d.id === id) || null;
+      return null;
+    } catch (e) {
+      debug.warn('[dealService] getById failed:', e);
+      return null;
     }
   },
 

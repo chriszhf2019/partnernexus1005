@@ -1,0 +1,226 @@
+<h2>🔝 顶部区域细化 — KPI 卡片 · 雷达 · 等级 · 学习路径</h2>
+<p class="subtitle">对比三个关键子区域的设计变体，每个区域选择一个偏好的方向</p>
+
+<div class="section">
+<h3>① KPI 统计卡片 — 三种风格</h3>
+
+<div class="cards">
+  <div class="card" data-choice="kpi-a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+        <div style="padding:12px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid #f0f0f0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#2563eb,#3b82f6);display:flex;align-items:center;justify-content:center;font-size:18px;">📖</div>
+            <div><div style="font-size:8px;color:#999;">已学课程</div><div style="font-size:22px;font-weight:800;">3</div><div style="font-size:8px;color:#bbb;">2门完成</div></div>
+          </div>
+        </div>
+        <div style="padding:12px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.05);border:1px solid #f0f0f0;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#d97706,#f59e0b);display:flex;align-items:center;justify-content:center;font-size:18px;">🏆</div>
+            <div><div style="font-size:8px;color:#999;">获得积分</div><div style="font-size:22px;font-weight:800;">180</div><div style="font-size:8px;color:#bbb;">/ 320 总分</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>专业渐变图标</h3>
+      <p>彩色渐变背景图标 + 浅投影卡片 · 干净利落</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="kpi-b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+        <div style="padding:12px;background:#fff;border-radius:12px;border-left:3px solid #2563eb;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">📖</span><div style="font-size:8px;color:#999;">已学课程</div></div>
+          <div style="font-size:24px;font-weight:800;margin-top:2px;">3</div>
+          <div style="font-size:8px;color:#bbb;">2门完成</div>
+        </div>
+        <div style="padding:12px;background:#fff;border-radius:12px;border-left:3px solid #d97706;box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+          <div style="display:flex;align-items:center;gap:6px;"><span style="font-size:18px;">🏆</span><div style="font-size:8px;color:#999;">获得积分</div></div>
+          <div style="font-size:24px;font-weight:800;margin-top:2px;">180</div>
+          <div style="font-size:8px;color:#bbb;">/ 320 总分</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>彩色左边框</h3>
+      <p>左侧颜色条区分维度 + 极简投影 · 轻盈现代</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="kpi-c" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+        <div style="padding:12px;background:linear-gradient(135deg,#eff6ff,#fff);border-radius:12px;border:1px solid rgba(37,99,235,0.1);text-align:center;">
+          <div style="font-size:24px;margin-bottom:4px;">📖</div>
+          <div style="font-size:9px;color:#999;">已学课程</div>
+          <div style="font-size:24px;font-weight:800;background:linear-gradient(135deg,#2563eb,#3b82f6);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">3</div>
+          <div style="font-size:8px;color:#bbb;">2门完成</div>
+        </div>
+        <div style="padding:12px;background:linear-gradient(135deg,#fef9f0,#fff);border-radius:12px;border:1px solid rgba(217,119,6,0.1);text-align:center;">
+          <div style="font-size:24px;margin-bottom:4px;">🏆</div>
+          <div style="font-size:9px;color:#999;">获得积分</div>
+          <div style="font-size:24px;font-weight:800;background:linear-gradient(135deg,#d97706,#f59e0b);-webkit-background-clip:text;-webkit-text-fill-color:transparent;">180</div>
+          <div style="font-size:8px;color:#bbb;">/ 320 总分</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>居中 · 渐变数字</h3>
+      <p>图标上置 + 渐变文字数字 · 品牌感最强</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>② 雷达图 + 等级徽章 — 布局方案</h3>
+
+<div class="cards">
+  <div class="card" data-choice="radar-a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;text-align:center;">
+      <div style="display:flex;gap:10px;">
+        <div style="flex:2;padding:10px;background:#fff;border-radius:12px;border:1px solid #f0f0f0;text-align:center;">
+          <div style="font-size:10px;font-weight:600;margin-bottom:4px;">🎯 能力雷达</div>
+          <svg width="100" height="100" viewBox="0 0 120 120">
+            <polygon points="60,24 95,43 79,82 41,82 25,43" fill="rgba(37,99,235,0.18)" stroke="#2563eb" stroke-width="1.8"/>
+            <circle cx="60" cy="24" r="5" fill="#2563eb"/><circle cx="95" cy="43" r="4" fill="#059669"/><circle cx="79" cy="82" r="4" fill="#7c3aed"/>
+            <text x="60" y="15" text-anchor="middle" font-size="8" fill="#2563eb" font-weight="700">技术 72</text>
+            <text x="103" y="47" text-anchor="middle" font-size="8" fill="#059669">销售 58</text>
+            <text x="17" y="47" text-anchor="middle" font-size="8" fill="#7c3aed">市场 65</text>
+          </svg>
+          <div style="display:flex;justify-content:center;gap:6px;margin-top:4px;">
+            <span style="font-size:8px;padding:2px 8px;background:#eff6ff;border-radius:10px;">🔧技术</span>
+            <span style="font-size:8px;padding:2px 8px;background:#f0fdf6;border-radius:10px;">💼销售</span>
+            <span style="font-size:8px;padding:2px 8px;background:#f5f0ff;border-radius:10px;">📊市场</span>
+          </div>
+        </div>
+        <div style="flex:1;padding:10px;background:linear-gradient(135deg,#fffbf0,#fff);border-radius:12px;border:1px solid #f0f0f0;text-align:center;">
+          <div style="font-size:9px;color:#999;">当前等级</div>
+          <div style="width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#d97706,#f59e0b);margin:6px auto;display:flex;align-items:center;justify-content:center;font-size:20px;">🥇</div>
+          <div style="font-size:11px;font-weight:700;">金牌</div>
+          <div style="font-size:8px;color:#bbb;">距下一级 120分</div>
+          <div style="width:80%;height:3px;background:#eee;border-radius:2px;margin:6px auto;"><div style="width:58%;height:100%;background:#d97706;border-radius:2px;"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>并排布局</h3>
+      <p>雷达 2/3 + 等级 1/3 横向排列，信息密度高</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="radar-b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;text-align:center;">
+      <div style="padding:10px;background:#fff;border-radius:12px;border:1px solid #f0f0f0;text-align:center;">
+        <div style="font-size:10px;font-weight:600;margin-bottom:4px;">🎯 能力雷达</div>
+        <svg width="100" height="100" viewBox="0 0 120 120">
+          <polygon points="60,30 90,48 76,78 44,78 30,48" fill="rgba(37,99,235,0.15)" stroke="#2563eb" stroke-width="1.5"/>
+          <circle cx="60" cy="30" r="4" fill="#2563eb"/><circle cx="90" cy="48" r="4" fill="#059669"/><circle cx="76" cy="78" r="4" fill="#7c3aed"/>
+        </svg>
+        <div style="display:flex;justify-content:space-around;font-size:8px;color:#666;">
+          <span>技术 72</span><span>销售 58</span><span>市场 65</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>独立单卡片</h3>
+      <p>雷达独立展示 + 等级信息融入 KPI 区域</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>③ 学习路径 Banner — 表现形式</h3>
+
+<div class="cards">
+  <div class="card" data-choice="path-a" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;">
+      <div style="padding:12px;background:linear-gradient(135deg,#f0f5ff,#faf8ff);border-radius:12px;border:1px solid rgba(37,99,235,0.08);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:11px;font-weight:700;">📋 销售经理 学习路径 · 第 2/4 阶段</div>
+            <div style="font-size:9px;color:#666;">已完成 2/4 门必修课</div>
+          </div>
+          <button style="font-size:9px;padding:5px 14px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-weight:600;">▶ 继续下一课</button>
+        </div>
+        <div style="display:flex;gap:4px;align-items:center;margin-top:10px;">
+          <div style="width:24px;height:24px;border-radius:50%;background:#059669;color:#fff;text-align:center;line-height:24px;font-size:11px;">✓</div>
+          <div style="flex:1;height:3px;background:#059669;border-radius:2px;"></div>
+          <div style="width:24px;height:24px;border-radius:50%;background:#059669;text-align:center;line-height:24px;font-size:11px;">✓</div>
+          <div style="flex:1;height:3px;background:#e5e5e5;border-radius:2px;"></div>
+          <div style="width:24px;height:24px;border-radius:50%;background:#2563eb;color:#fff;text-align:center;line-height:24px;font-size:11px;">●</div>
+          <div style="flex:1;height:3px;background:#e5e5e5;border-radius:2px;"></div>
+          <div style="width:24px;height:24px;border-radius:50%;background:#e5e5e5;color:#999;text-align:center;line-height:24px;font-size:11px;">4</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:8px;color:#999;margin-top:2px;padding:0 12px;">
+          <span>基础沟通</span><span>方案设计</span><span>架构实践</span><span>专家认证</span>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>横向步骤条</h3>
+      <p>4 阶段可视化流程 + 当前阶段高亮 + 快捷按钮</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="path-b" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#fafafa;">
+      <div style="padding:12px;background:linear-gradient(90deg,#2563eb,#7c3aed);border-radius:12px;color:#fff;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-size:11px;font-weight:700;">📋 销售经理 · 学习路径</div>
+            <div style="font-size:9px;opacity:0.85;margin-top:2px;">第 2/4 阶段 · 已完成 2 门必修</div>
+          </div>
+          <button style="font-size:9px;padding:5px 14px;background:#fff;color:#2563eb;border:none;border-radius:6px;font-weight:600;">▶ 继续下一课</button>
+        </div>
+        <div style="display:flex;gap:3px;margin-top:10px;">
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.5);border-radius:3px;"><div style="width:100%;height:100%;background:#fff;border-radius:3px;"></div></div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.5);border-radius:3px;"><div style="width:100%;height:100%;background:#fff;border-radius:3px;"></div></div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.3);border-radius:3px;"><div style="width:0%;height:100%;background:#fff;border-radius:3px;"></div></div>
+          <div style="flex:1;height:6px;background:rgba(255,255,255,0.3);border-radius:3px;"><div style="width:0%;height:100%;background:#fff;border-radius:3px;"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Hero Banner 深色</h3>
+      <p>品牌渐变色背景 · 极简进度条 · 视觉冲击力强</p>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="final-a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>KPI:A 渐变图标 / 雷达:A 并排 / 路径:A 步骤条</h3>
+      <p>专业稳重路线，适合企业级后台</p>
+    </div>
+  </div>
+  <div class="option" data-choice="final-b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>KPI:B 左边框 / 雷达:A 并排 / 路径:B Hero</h3>
+      <p>轻盈现代 + 品牌色冲击，适合强调品牌感</p>
+    </div>
+  </div>
+  <div class="option" data-choice="final-c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>KPI:C 居中渐变 / 雷达:A 并排 / 路径:A 步骤条</h3>
+      <p>品牌感最强，适合高端专业平台</p>
+    </div>
+  </div>
+  <div class="option" data-choice="final-d" onclick="toggleSelect(this)">
+    <div class="letter">D</div>
+    <div class="content">
+      <h3>其他组合（请在终端说明偏好）</h3>
+      <p>选择各子区域的偏好变体后告诉我</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">每个子区域卡片可单独点击查看；下方选项提供组合建议。也可以直接告诉我各子区域的偏好组合。</p>

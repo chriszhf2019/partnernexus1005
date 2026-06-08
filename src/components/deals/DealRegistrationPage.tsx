@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   XCircle, AlertCircle, Calendar, User, MapPin, MoreHorizontal,
@@ -16,7 +16,6 @@ import { RuleEnginePanel } from './components/RuleEnginePanel';
 import { PresetFilterBar } from './components/PresetFilterBar';
 import { cn, formatCurrency } from '../../lib/utils';
 import { Deal, DealRegistrationStats, DealStatus, DealLifecycleStage, DealSource, DealConflict, DealStageProbability, WinLossReason } from '../../types';
-import { DEAL_CONFLICTS } from '../../constants';
 import { motion, AnimatePresence } from 'motion/react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -120,6 +119,8 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [showConflictModal, setShowConflictModal] = useState(false);
   const [selectedConflict, setSelectedConflict] = useState<DealConflict | null>(null);
+  const [conflicts, setConflicts] = useState<DealConflict[]>([]);
+  const [conflictsLoading, setConflictsLoading] = useState(true);
   const [filters, setFilters] = useState({ region: 'All', stage: 'All' as string, productType: 'All' as string, partnerType: 'All' as string, source: 'All' as string });
   const [selectedStageFilter, setSelectedStageFilter] = useState<string>('All');
   const [selectedDeals, setSelectedDeals] = useState<string[]>([]);
@@ -143,6 +144,28 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [showExtendModal, setShowExtendModal] = useState(false);
   const [extendingDeal, setExtendingDeal] = useState<Deal | null>(null);
   const [extendReason, setExtendReason] = useState('');
+
+  // Fetch deal conflicts from Supabase
+  useEffect(() => {
+    import('../../lib/supabase').then(({ supabase }) => {
+      supabase.from('deal_conflicts').select('*').then(({ data }) => {
+        if (data) setConflicts(data.map((c: any) => ({
+          id: c.id,
+          type: c.type,
+          dealIds: c.deal_ids || [],
+          description: c.description || '',
+          status: c.status || 'Pending',
+          resolution: c.resolution,
+          resolvedBy: c.resolved_by,
+          resolvedDate: c.resolved_date,
+          createdDate: c.created_date || '',
+          protectionPeriodDays: c.protection_period_days || 90,
+          firstReportedDealId: c.first_reported_deal_id,
+        })));
+        setConflictsLoading(false);
+      }, () => setConflictsLoading(false));
+    });
+  }, []);
   
   const [savedViews, setSavedViews] = useState<SavedView[]>([
     { id: 'v1', name: '本周待审批', filters: { region: 'All', stage: 'UnderReview', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
@@ -1169,7 +1192,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                         <p className="text-sm font-semibold text-red-700 dark:text-red-400">{t('deals.conflictDetected')}</p>
                         <p className="text-xs text-red-600 dark:text-red-300 mt-1">{t('deals.conflictDesc')}</p>
                         <Button variant="danger" size="sm" className="mt-2 w-full"
-                          onClick={() => { setSelectedConflict(DEAL_CONFLICTS.find(c => c.id === selectedDeal.conflictId) || null); setShowConflictModal(true); }}>
+                          onClick={() => { setSelectedConflict(conflicts.find(c => c.id === selectedDeal.conflictId) || null); setShowConflictModal(true); }}>
                           {t('deals.resolveConflict')}
                         </Button>
                       </div>

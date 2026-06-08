@@ -1,0 +1,239 @@
+<h2>📋 管理员控制台 — 顶部看板 v2 + 课程管理列表 + 公司维度</h2>
+<p class="subtitle">三组决策：KPI 指标调整 · 课程管理交互 · 公司/课程双视图</p>
+
+<div class="section">
+<h3>① KPI 指标 — 调整为管理视角</h3>
+
+<div class="mockup">
+  <div class="mockup-header">优化后 KPI（替换「总选课」→「活跃学员占比」，预警逻辑增强）</div>
+  <div class="mockup-body" style="font-size:10px;padding:8px;">
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;">
+      <!-- Card 1: Active rate -->
+      <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;">
+        <div style="font-size:9px;color:#999;font-weight:500;">活跃学员占比</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+          <div><span style="font-size:22px;font-weight:800;">71%</span><span style="font-size:10px;color:#059669;"> ↑5%</span></div>
+          <div style="width:50px;height:20px;">
+            <svg width="50" height="20" viewBox="0 0 50 20"><polyline points="0,18 12,15 25,10 38,6 50,3" fill="none" stroke="#059669" stroke-width="1.5"/></svg>
+          </div>
+        </div>
+        <div style="font-size:8px;color:#999;">5/7 人本周有学习行为</div>
+      </div>
+      <!-- Card 2: Completion Rate -->
+      <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;">
+        <div style="font-size:9px;color:#999;font-weight:500;">完课率</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+          <div><span style="font-size:22px;font-weight:800;">58%</span><span style="font-size:10px;color:#059669;"> ↑8%</span></div>
+          <div style="width:50px;height:20px;">
+            <svg width="50" height="20" viewBox="0 0 50 20"><polyline points="0,14 15,12 30,8 45,6 50,5" fill="none" stroke="#059669" stroke-width="1.5"/></svg>
+          </div>
+        </div>
+        <div style="font-size:8px;color:#999;">14/24 选课已完成</div>
+      </div>
+      <!-- Card 3: Stagnant Alert -->
+      <div style="padding:10px;background:linear-gradient(135deg,#fef2f2,#fff);border-radius:10px;box-shadow:0 2px 10px rgba(220,38,38,0.08);border:2px solid rgba(220,38,38,0.15);cursor:pointer;">
+        <div style="font-size:9px;color:#999;">⚠️ 预警中心</div>
+        <div style="display:flex;gap:12px;margin-top:2px;align-items:baseline;">
+          <div><span style="font-size:22px;font-weight:800;color:#dc2626;">4</span><span style="font-size:9px;color:#ef4444;"> 人滞后</span></div>
+          <span style="font-size:8px;color:#d97706;">2 课程低分</span>
+        </div>
+        <div style="font-size:8px;color:#dc2626;margin-top:2px;">滞后 7天+ · 低分 ＜3⭐ · 点击处理 →</div>
+      </div>
+      <!-- Card 4: Feedback -->
+      <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;cursor:pointer;">
+        <div style="font-size:9px;color:#999;font-weight:500;">学员反馈</div>
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+          <div><span style="font-size:22px;font-weight:800;">4.3</span><span style="font-size:10px;color:#999;"> /5</span></div>
+          <span style="font-size:8px;padding:2px 6px;background:#fef9f0;border-radius:4px;color:#d97706;">2条低分</span>
+        </div>
+        <div style="font-size:8px;color:#2563eb;">点击查看评价详情 →</div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>② 课程管理列表 — 增加管理动作、学员状态可视化、搜索筛选</h3>
+
+<div class="mockup" style="margin-top:12px;">
+  <div class="mockup-header">课程管理卡片（优化版 — 展开/折叠 + 动作按钮 + 状态标签）</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+
+    <!-- Filter bar -->
+    <div style="display:flex;gap:6px;align-items:center;margin-bottom:10px;padding:6px 8px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;">
+      <span style="font-size:8px;color:#666;">🔍</span>
+      <input placeholder="搜索学员姓名或公司..." style="flex:1;border:none;outline:none;font-size:9px;padding:3px 0;">
+      <select style="font-size:8px;border:1px solid #eee;border-radius:4px;padding:3px 6px;">
+        <option>全部状态</option><option>进行中</option><option>已完成</option><option>已滞后</option>
+      </select>
+      <select style="font-size:8px;border:1px solid #eee;border-radius:4px;padding:3px 6px;">
+        <option>全部课程</option><option>必修</option><option>选修</option>
+      </select>
+      <button style="font-size:8px;padding:3px 8px;background:#059669;color:#fff;border:none;border-radius:4px;">📥 导出 Excel</button>
+    </div>
+
+    <!-- Course Card 1: Healthy -->
+    <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 1px 8px rgba(0,0,0,0.04);border:1px solid #f0f0f0;margin-bottom:8px;">
+      <!-- Course header row -->
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#059669;"></div>
+          <span style="font-weight:700;font-size:11px;">销售基础:客户沟通技巧</span>
+          <span style="font-size:7px;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">必修</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:8px;color:#888;">👥 20人 · 完课率 67% · ⭐4.5</span>
+          <button style="font-size:7px;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:4px;">⚡ 一键催办</button>
+          <button style="font-size:7px;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:4px;">📋 详情</button>
+          <span style="font-size:9px;color:#999;">展开 ▼</span>
+        </div>
+      </div>
+      <!-- Learner row: compact horizontal chip layout -->
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
+        <div style="padding:3px 8px;background:#f0fdf6;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;position:relative;" title="张伟 · 神州数码 · 入职2023 · 考核通过率85%">
+          <span style="font-weight:600;">张伟</span><span style="color:#999;">神州数码</span>
+          <span style="padding:1px 5px;background:#059669;color:#fff;border-radius:10px;font-size:7px;font-weight:600;">92分</span>
+        </div>
+        <div style="padding:3px 8px;background:#eff6ff;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;" title="李明 · 东软集团">
+          <span style="font-weight:600;">李明</span><span style="color:#999;">东软集团</span>
+          <span style="padding:1px 5px;background:#2563eb;color:#fff;border-radius:10px;font-size:7px;">32%</span>
+        </div>
+        <div style="padding:3px 8px;background:#f0fdf6;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;" title="王芳 · 中科软">
+          <span style="font-weight:600;">王芳</span><span style="color:#999;">中科软</span>
+          <span style="padding:1px 5px;background:#059669;color:#fff;border-radius:10px;font-size:7px;font-weight:600;">83分</span>
+        </div>
+        <div style="padding:3px 8px;background:#eff6ff;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;" title="赵强">
+          <span style="font-weight:600;">赵强</span><span style="color:#999;">神州数码</span>
+          <span style="padding:1px 5px;background:#2563eb;color:#fff;border-radius:10px;font-size:7px;">9%</span>
+        </div>
+        <span style="padding:3px 8px;font-size:8px;color:#2563eb;cursor:pointer;">+ 展开 16人 ▼</span>
+      </div>
+    </div>
+
+    <!-- Course Card 2: Needs Attention -->
+    <div style="padding:10px;background:linear-gradient(135deg,#fffbf5,#fff);border-radius:10px;box-shadow:0 1px 8px rgba(0,0,0,0.04);border:2px solid rgba(217,119,6,0.15);margin-bottom:8px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#d97706;"></div>
+          <span style="font-weight:700;font-size:11px;">云原生架构深度实践</span>
+          <span style="font-size:7px;background:#fee2e2;color:#dc2626;padding:1px 5px;border-radius:3px;">必修</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:8px;color:#d97706;">⚠️ 完课率仅30% · ⭐4.0</span>
+          <button style="font-size:7px;padding:2px 6px;background:#d97706;color:#fff;border:none;border-radius:4px;">⚡ 催办 (7人)</button>
+          <button style="font-size:7px;padding:2px 6px;background:#fff;border:1px solid #ddd;border-radius:4px;">📋</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;">
+        <div style="padding:3px 8px;background:#fef2f2;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;border:1px dashed #fca5a5;" title="已逾期 · 进度 < 50%">
+          <span style="font-weight:600;">周丽</span><span style="color:#999;">华为云</span>
+          <span style="padding:1px 5px;background:#dc2626;color:#fff;border-radius:10px;font-size:7px;">逾期</span>
+        </div>
+        <div style="padding:3px 8px;background:#fef2f2;border-radius:20px;font-size:8px;display:flex;align-items:center;gap:4px;cursor:pointer;border:1px dashed #fca5a5;">
+          <span style="font-weight:600;">刘磊</span><span style="color:#999;">浪潮</span>
+          <span style="padding:1px 5px;background:#dc2626;color:#fff;border-radius:10px;font-size:7px;">逾期</span>
+        </div>
+        <span style="padding:3px 8px;font-size:8px;color:#2563eb;cursor:pointer;">+ 展开 3人 ▼</span>
+      </div>
+    </div>
+
+    <!-- Course Card 3: Empty -->
+    <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 1px 8px rgba(0,0,0,0.04);border:1px solid #f0f0f0;opacity:0.7;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#9ca3af;"></div>
+          <span style="font-weight:700;font-size:11px;">金融行业解决方案认证</span>
+          <span style="font-size:7px;background:#dbeafe;color:#2563eb;padding:1px 5px;border-radius:3px;">选修</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:8px;color:#9ca3af;">0 人报名</span>
+          <button style="font-size:7px;padding:2px 8px;background:#2563eb;color:#fff;border:none;border-radius:4px;">📨 邀请学员</button>
+        </div>
+      </div>
+      <div style="padding:12px;text-align:center;font-size:8px;color:#bbb;">尚无学员报名 · 点击「邀请学员」向合作伙伴推送课程通知</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>③ 公司维度视图 — 按合作伙伴考核</h3>
+
+<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:10px;color:#666;">
+  <span>数据视图：</span>
+  <span style="padding:3px 10px;background:#eff6ff;color:#2563eb;border-radius:6px;font-weight:600;">📚 按课程</span>
+  <span style="padding:3px 10px;background:#fff;border:1px solid #ddd;border-radius:6px;cursor:pointer;">🏢 按公司</span>
+</div>
+
+<div class="mockup">
+  <div class="mockup-header">按公司维度 — 每行一家合作伙伴，可对比能力雷达</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <!-- Company Row -->
+      <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;text-align:center;line-height:28px;font-size:13px;font-weight:800;">神</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:10px;">神州数码集团 <span style="font-size:8px;color:#059669;">🥇 最活跃</span></div>
+          <div style="font-size:8px;color:#999;">5人 · 完成12/18门 · 平均分82 · 活跃度 高</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;">
+          <span style="padding:2px 6px;background:#f0fdf6;border-radius:3px;font-size:7px;">技术 75</span>
+          <span style="padding:2px 6px;background:#fef9f0;border-radius:3px;font-size:7px;">销售 68</span>
+          <span style="padding:2px 6px;background:#f5f0ff;border-radius:3px;font-size:7px;">市场 55</span>
+        </div>
+        <span style="font-size:8px;color:#2563eb;cursor:pointer;">对比 →</span>
+      </div>
+      <!-- Row 2 -->
+      <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;text-align:center;line-height:28px;font-size:13px;font-weight:800;">东</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:10px;">东软集团</div>
+          <div style="font-size:8px;color:#999;">3人 · 完成5/9门 · 平均分78 · 活跃度 中</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <span style="padding:2px 6px;background:#f0fdf6;border-radius:3px;font-size:7px;">技术 80</span>
+          <span style="padding:2px 6px;background:#fef9f0;border-radius:3px;font-size:7px;">销售 45</span>
+          <span style="padding:2px 6px;background:#f5f0ff;border-radius:3px;font-size:7px;">市场 72</span>
+        </div>
+        <span style="font-size:8px;color:#2563eb;cursor:pointer;">对比 →</span>
+      </div>
+      <!-- Row 3: Needs attention -->
+      <div style="padding:8px 10px;background:linear-gradient(135deg,#fef2f2,#fff);border-radius:8px;border:2px solid rgba(220,38,38,0.15);display:flex;align-items:center;gap:10px;">
+        <div style="width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,#9ca3af,#6b7280);color:#fff;text-align:center;line-height:28px;font-size:13px;font-weight:800;">中</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:10px;">中科软科技 <span style="font-size:8px;color:#dc2626;">⚠️ 需关注</span></div>
+          <div style="font-size:8px;color:#999;">2人 · 完成1/6门 · 平均分55 · 活跃度 低</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <span style="padding:2px 6px;background:#f0fdf6;border-radius:3px;font-size:7px;">技术 35</span>
+          <span style="padding:2px 6px;background:#fef9f0;border-radius:3px;font-size:7px;">销售 60</span>
+          <span style="padding:2px 6px;background:#f5f0ff;border-radius:3px;font-size:7px;">市场 25</span>
+        </div>
+        <span style="font-size:8px;color:#dc2626;cursor:pointer;font-weight:600;">干预 →</span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="options" data-multiselect>
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>全部确认，继续细化</h3>
+      <p>KPI 调整 + 课程管理列表 + 公司维度视图 × 按课程/按公司切换 = 全认可</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>部分调整</h3>
+      <p>请在终端说明具体调整项</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">
+② 课程列表关键变化：学员横向 Chip 布局（默认5人+展开）、绿色（已完成高亮）/ 红色虚线边框（已逾期）/ 蓝色（进行中）、「一键催办」按钮、搜索 + 状态筛选 + 必修/选修过滤。<br>
+③ 新增公司视图切换：每家公司一行，能力分数标签 + 活跃度标签 + 「对比雷达」入口，低活跃公司红色高亮 + 干预按钮。</p>

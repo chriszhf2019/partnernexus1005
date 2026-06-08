@@ -1,0 +1,183 @@
+<h2>📊 管理员数据看板 — 从静态展示到决策工具</h2>
+<p class="subtitle">当前版本 vs 优化方案：KPI 指标 + 趋势 + 异常预警 + 卡片交互</p>
+
+<div class="section">
+<h3>① KPI 指标卡片 — 增加趋势分析与异常预警</h3>
+
+<div class="split">
+  <!-- CURRENT -->
+  <div class="mockup">
+    <div class="mockup-header">当前 — 静态数字</div>
+    <div class="mockup-body" style="font-size:11px;padding:8px;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px;">
+        <div style="padding:10px;background:#fff;border:1px solid #eee;border-radius:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:32px;height:32px;border-radius:6px;background:#eff6ff;text-align:center;line-height:32px;">👥</div>
+            <div><div style="font-size:9px;color:#999;">总学员</div><div style="font-size:18px;font-weight:800;">7</div><div style="font-size:8px;color:#bbb;">4家公司</div></div>
+          </div>
+        </div>
+        <div style="padding:10px;background:#fff;border:1px solid #eee;border-radius:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:32px;height:32px;border-radius:6px;background:#f0fdf6;text-align:center;line-height:32px;">📖</div>
+            <div><div style="font-size:9px;color:#999;">总选课</div><div style="font-size:18px;font-weight:800;">24</div><div style="font-size:8px;color:#bbb;">14门完成</div></div>
+          </div>
+        </div>
+        <div style="padding:10px;background:#fff;border:1px solid #eee;border-radius:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:32px;height:32px;border-radius:6px;background:#fef9f0;text-align:center;line-height:32px;">📈</div>
+            <div><div style="font-size:9px;color:#999;">完成率</div><div style="font-size:18px;font-weight:800;">58%</div><div style="font-size:8px;color:#bbb;">整体通过率</div></div>
+          </div>
+        </div>
+        <div style="padding:10px;background:#fff;border:1px solid #eee;border-radius:8px;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:32px;height:32px;border-radius:6px;background:#f5f0ff;text-align:center;line-height:32px;">💬</div>
+            <div><div style="font-size:9px;color:#999;">课程反馈</div><div style="font-size:18px;font-weight:800;">5</div><div style="font-size:8px;color:#bbb;">条学员评价</div></div>
+          </div>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:8px;color:#bbb;margin-top:6px;">纯数字 · 无趋势 · 无预警 · 卡片不联动</div>
+    </div>
+  </div>
+
+  <!-- OPTIMIZED -->
+  <div class="mockup">
+    <div class="mockup-header">优化 — 趋势 + 预警 + 交互</div>
+    <div class="mockup-body" style="font-size:11px;padding:8px;">
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;">
+        <!-- Card 1: Total Students with trend -->
+        <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-size:9px;color:#999;font-weight:500;">总学员</div>
+            <span style="font-size:8px;color:#059669;font-weight:600;">↑ 12%</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <span style="font-size:24px;font-weight:800;line-height:1;">7</span>
+            <div style="width:60px;height:24px;position:relative;">
+              <!-- Mini sparkline -->
+              <svg width="60" height="24" viewBox="0 0 60 24">
+                <polyline points="0,20 12,18 24,16 36,12 48,8 60,4" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+                <circle cx="60" cy="4" r="2" fill="#059669"/>
+              </svg>
+            </div>
+          </div>
+          <div style="font-size:8px;color:#999;">4家公司 · 本月+2</div>
+        </div>
+
+        <!-- Card 2: Completion Rate -->
+        <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-size:9px;color:#999;font-weight:500;">完成率</div>
+            <span style="font-size:8px;color:#059669;font-weight:600;">↑ 8%</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <span style="font-size:24px;font-weight:800;line-height:1;">58%</span>
+            <div style="width:60px;height:24px;">
+              <svg width="60" height="24" viewBox="0 0 60 24">
+                <polyline points="0,16 15,14 30,8 45,6 60,4" fill="none" stroke="#059669" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </div>
+          </div>
+          <div style="font-size:8px;color:#999;">14/24已完成</div>
+        </div>
+
+        <!-- Card 3: Stagnant Alert - NEW -->
+        <div style="padding:10px;background:linear-gradient(135deg,#fff5f5,#fff);border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:2px solid rgba(220,38,38,0.2);cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-size:9px;color:#999;font-weight:500;">⚠️ 进度滞后</div>
+            <span style="font-size:8px;color:#dc2626;font-weight:600;">需关注</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <span style="font-size:24px;font-weight:800;line-height:1;color:#dc2626;">4</span>
+            <span style="font-size:9px;color:#ef4444;">人</span>
+          </div>
+          <div style="font-size:8px;color:#999;">7天无进度 · 点击催办 →</div>
+        </div>
+
+        <!-- Card 4: Feedback with link -->
+        <div style="padding:10px;background:#fff;border-radius:10px;box-shadow:0 2px 10px rgba(0,0,0,0.05);border:1px solid #f0f0f0;cursor:pointer;">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+            <div style="font-size:9px;color:#999;font-weight:500;">课程反馈</div>
+            <span style="font-size:8px;color:#888;">⭐4.5</span>
+          </div>
+          <div style="display:flex;align-items:flex-end;justify-content:space-between;">
+            <span style="font-size:24px;font-weight:800;line-height:1;">5</span>
+            <span style="font-size:8px;color:#d97706;background:#fef9f0;padding:2px 6px;border-radius:4px;">1条低分</span>
+          </div>
+          <div style="font-size:8px;color:#2563eb;">点击查看低分反馈 →</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>② 数据看板 — 增加课程健康度概览</h3>
+
+<div class="mockup" style="margin-top:12px;">
+  <div class="mockup-header">课程健康度快速扫描（新增板块，位于 KPI 卡片下方）</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+      <!-- Course Health Card -->
+      <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#059669;"></div>
+            <span style="font-weight:600;font-size:10px;">销售基础:客户沟通</span>
+          </div>
+          <span style="font-size:8px;color:#059669;">完课率 67%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:8px;color:#888;">
+          <span>👥 20人</span><span>✅ 14完成</span><span>⭐ 4.5</span>
+          <span style="margin-left:auto;padding:1px 6px;background:#f5f5f5;border-radius:3px;">健康</span>
+        </div>
+      </div>
+      <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#d97706;"></div>
+            <span style="font-weight:600;font-size:10px;">云原生架构深度</span>
+          </div>
+          <span style="font-size:8px;color:#d97706;">完课率 30%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:8px;color:#888;">
+          <span>👥 10人</span><span>✅ 3完成</span><span>⭐ 4.0</span>
+          <span style="margin-left:auto;padding:1px 6px;background:#fef9f0;border-radius:3px;color:#d97706;">关注</span>
+        </div>
+      </div>
+      <div style="padding:8px 10px;background:#fff;border-radius:8px;border:1px solid #f0f0f0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="display:flex;align-items:center;gap:6px;">
+            <div style="width:6px;height:6px;border-radius:50%;background:#dc2626;"></div>
+            <span style="font-weight:600;font-size:10px;">金融行业解决方案</span>
+          </div>
+          <span style="font-size:8px;color:#dc2626;">0人报名</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:6px;font-size:8px;color:#888;">
+          <span>👥 0人</span><span>⏱️ 无数据</span>
+          <button style="margin-left:auto;font-size:7px;padding:1px 6px;background:#2563eb;color:#fff;border:none;border-radius:3px;">邀请学员</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>方向正确，进入详细设计</h3>
+      <p>KPI 加趋势 + 预警卡片 + 课程健康度面板的方向对了</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>部分调整</h3>
+      <p>整体方向对，但某些指标或布局需要调整（请在终端说明）</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">第一个焦点：管理看板从"报数"升级为"洞察+动作"。左侧当前版本只有静态数字，右侧增加了 Sparkline 趋势线、进度滞后的红色预警卡片（点击可一键催办）、低分反馈入口、课程健康度快速扫描面板。</p>

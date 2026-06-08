@@ -18,6 +18,7 @@ import { AdminCourseList } from './enablement/AdminCourseList';
 import { CompanyView } from './enablement/CompanyView';
 import { FeedbackAnalysis } from './enablement/FeedbackAnalysis';
 import { CourseRanking } from './enablement/CourseRanking';
+import { getUserProfile } from './enablement/userProfiles';
 
 const FRAMEWORK: Record<string, { icon: any; color: string; bg: string; desc: string }> = {
   '技术认证': { icon: Monitor, color: 'text-blue-600', bg: 'bg-blue-50', desc: '产品技术能力与解决方案架构' },
@@ -156,9 +157,9 @@ export const EnablementPage = () => {
         avgScore,
         activity,
         scores: {
-          tech: techScores.length > 0 ? Math.round(techScores.reduce((a: number, b: number) => a + b, 0) / techScores.length) : Math.round(30 + Math.random() * 20),
-          sales: salesScores.length > 0 ? Math.round(salesScores.reduce((a: number, b: number) => a + b, 0) / salesScores.length) : Math.round(30 + Math.random() * 20),
-          marketing: marketingScores.length > 0 ? Math.round(marketingScores.reduce((a: number, b: number) => a + b, 0) / marketingScores.length) : Math.round(30 + Math.random() * 20),
+          tech: techScores.length > 0 ? Math.round(techScores.reduce((a: number, b: number) => a + b, 0) / techScores.length) : (data.scores.length > 0 ? Math.round(data.scores.reduce((a: number, b: number) => a + b, 0) / data.scores.length) : 0),
+          sales: salesScores.length > 0 ? Math.round(salesScores.reduce((a: number, b: number) => a + b, 0) / salesScores.length) : (data.scores.length > 0 ? Math.round(data.scores.reduce((a: number, b: number) => a + b, 0) / data.scores.length) : 0),
+          marketing: marketingScores.length > 0 ? Math.round(marketingScores.reduce((a: number, b: number) => a + b, 0) / marketingScores.length) : (data.scores.length > 0 ? Math.round(data.scores.reduce((a: number, b: number) => a + b, 0) / data.scores.length) : 0),
         },
       };
     });
@@ -421,6 +422,7 @@ export const EnablementPage = () => {
                 learners: cs.recentLearners.map((e: any) => {
                   const weekAgo = new Date(Date.now() - 7 * 86400000);
                   const isOverdue = e.progress < 50 && e.last_activity && new Date(e.last_activity) < weekAgo;
+                  const profile = getUserProfile(e.user_name);
                   return {
                     name: e.user_name,
                     company: e.company,
@@ -428,6 +430,9 @@ export const EnablementPage = () => {
                     score: e.score || undefined,
                     progress: e.progress || 0,
                     lastActivity: e.last_activity ? new Date(e.last_activity).toLocaleDateString('zh-CN') : undefined,
+                    hireDate: profile?.hireDate,
+                    passRate: profile?.passRate,
+                    manager: profile?.manager,
                   };
                 }),
               }))}

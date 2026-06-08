@@ -10,18 +10,22 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <script>
-      // Auto-reload on chunk load failure (stale CDN cache)
+      // Auto-reload on chunk load failure (stale browser cache)
       (function() {
-        var reloaded = sessionStorage.getItem('__cr');
-        if (reloaded) { sessionStorage.removeItem('__cr'); }
+        var RETRY_KEY = '__cr2';
+        var reloaded = sessionStorage.getItem(RETRY_KEY);
+        if (reloaded) {
+          sessionStorage.removeItem(RETRY_KEY);
+          // Clear all caches and force fresh load
+          if ('caches' in window) {
+            caches.keys().then(function(names) { names.forEach(function(n) { caches.delete(n); }); });
+          }
+        }
         window.addEventListener('error', function(e) {
           if (e.message && e.message.indexOf('dynamically imported module') !== -1) {
-            if (!sessionStorage.getItem('__cr')) {
-              sessionStorage.setItem('__cr', '1');
-              // Force reload bypassing browser cache
-              var url = new URL(location.href);
-              url.searchParams.set('_t', Date.now());
-              location.replace(url.toString());
+            if (!sessionStorage.getItem(RETRY_KEY)) {
+              sessionStorage.setItem(RETRY_KEY, '1');
+              location.reload(true);
             }
           }
         }, true);

@@ -333,6 +333,12 @@ const QuarterlyPlanCard = memo(({
               {remaining >= 0 ? <span className="text-emerald-600">剩余 {fmt(remaining)}</span> : <span className="text-red-500">超支 {fmt(Math.abs(remaining))}</span>}
               {pmdfCount > 0 && <span className="text-purple-500"> · PMDF {pmdfCount}项</span>}
             </span>
+            {/* 滚动预算建议: 当有剩余且下一季度有待批复活动时提示 */}
+            {remaining > 0 && quarter !== 'Q4' && (
+              <span className="text-[10px] text-blue-600 mt-1 block bg-blue-50 dark:bg-blue-900/10 px-2 py-1 rounded">
+                💡 {quarter}剩余{fmt(remaining)}未使用，建议结转到下一季度"拉新"专项
+              </span>
+            )}
             {qOriginalBudget && qOriginalBudget !== qBudget && (
               <span className="text-[10px] text-amber-600 mt-0.5 block">
                 📌 原计划 {fmt(qOriginalBudget)} → 调整后 {fmt(qBudget)}
@@ -376,6 +382,7 @@ const QuarterlyPlanCard = memo(({
                   <th className="text-left py-2 px-2">类别</th>
                   <th className="text-left py-2 px-2">业务目标</th>
                   <th className="text-left py-2 px-2">城市</th>
+                  <th className="text-center py-2 px-2 w-10">证物</th>
                   <th className="text-left py-2 px-2">时间</th>
                   <th className="text-right py-2 px-2">总预算</th>
                   <th className="text-right py-2 px-2">批复</th>
@@ -430,6 +437,13 @@ const QuarterlyPlanCard = memo(({
                       <td className="py-2 px-2">
                         <input className="w-20 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.city || ''} onChange={e => onUpdateRow(p.id, 'city', e.target.value)} placeholder="城市" />
                       </td>
+                      <td className="py-2 px-2 text-center">
+                        {execStatus === 'executed' ? (
+                          <button title="查看现场证物（照片/签到表）" className="text-blue-500 hover:text-blue-700 text-xs">📷</button>
+                        ) : (
+                          <span className="text-neutral-300 text-xs">—</span>
+                        )}
+                      </td>
                       <td className="py-2 px-2">
                         <input className="w-28 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="date" value={p.expected_date || ''} onChange={e => onUpdateRow(p.id, 'expected_date', e.target.value)} />
                       </td>
@@ -456,9 +470,9 @@ const QuarterlyPlanCard = memo(({
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.expected_output || ''} onChange={e => onUpdateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
                         {execStatus === 'executed' && (p as any).actual_leads > 0 && (
-                          <button onClick={() => setDrilldownActivity(p)} className="text-[9px] block text-blue-500 hover:underline text-left">
-                            实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机 →
-                          </button>
+                          <span className="text-[9px] block text-blue-500 text-left">
+                            实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机
+                          </span>
                         )}
                       </td>
                       {/* 行级预警 */}

@@ -286,8 +286,8 @@ export const MarketingIncentivePage = () => {
         {[
           { label: '预计收入/支出比 (Forecast ROI)', value: `1:${totalLeads > 0 ? (q2Plans.length * 3.5).toFixed(1) : '0'}`, sub: `基于${totalLeads}条线索预测 · 历史均值1:5.2`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20', alert: totalLeads < 10 ? 'yellow' : 'green' },
           { label: `${currentQuarter} 执行健康度`, value: activeCount > 0 ? '🟢 正常' : '🟡 偏低', sub: `${activeCount}场进行中 · ${activeCount + completedCount}场总计`, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-          { label: '线索待跟进 (超48h)', value: '3 条', sub: totalLeads > 0 ? `${Math.max(0, totalLeads - 25)}条已转化 · 点击查看` : '-', icon: Clock, color: totalLeads > 25 ? 'text-red-500' : 'text-amber-600', bg: totalLeads > 25 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20', onClick: () => setShowLeadNurturing(true), alert: totalLeads > 25 ? 'red' : 'yellow' },
-          { label: '激励达标率', value: `${incentiveStats.totalActivePrograms > 0 ? 67 : 0}%`, sub: `${incentiveStats.totalActivePrograms}个激励计划 · 2个已达标`, icon: Target, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', onClick: () => navigate('/incentives') },
+          { label: '线索待跟进 (超48h)', value: `${Math.max(0, totalLeads - (completedCount * 8))} 条`, sub: totalLeads > 0 ? `${Math.min(totalLeads, completedCount * 8)}条已转化 · 点击查看` : '-', icon: Clock, color: totalLeads > (completedCount * 10) ? 'text-red-500' : 'text-amber-600', bg: totalLeads > (completedCount * 10) ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20', onClick: () => setShowLeadNurturing(true), alert: totalLeads > (completedCount * 10) ? 'red' : 'yellow' },
+          { label: '激励达标率', value: `${incentiveStats.totalActivePrograms > 0 ? Math.round(incentiveStats.totalPayoutYTD / Math.max(incentiveStats.totalBudget || 1, 1) * 100) : 0}%`, sub: `${incentiveStats.totalActivePrograms}个激励计划 · YTD ${cur(incentiveStats.totalPayoutYTD)}`, icon: Target, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', onClick: () => navigate('/incentives') },
         ].map((kpi, i) => (
           <Card key={i} className={cn('cursor-pointer hover:shadow-md transition-shadow', kpi.alert === 'red' && 'border-red-200 dark:border-red-800', kpi.alert === 'yellow' && 'border-amber-200 dark:border-amber-800')} onClick={kpi.onClick}>
             <div className="flex items-center gap-3">
@@ -331,19 +331,15 @@ export const MarketingIncentivePage = () => {
         </div>
       </div>
 
-      {/* Budget Trend Chart */}
+      {/* 预算执行追踪 — 与KPI卡片互补，不重复年度总额 */}
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">预算使用趋势</CardTitle>
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-              <span className="text-neutral-500">预算</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-              <span className="text-neutral-500">实际支出</span>
-            </div>
+          <CardTitle className="text-base">月度预算 vs 实际支出</CardTitle>
+          <div className="flex items-center gap-3 text-xs">
+            <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500"></span><span className="text-neutral-500">预算</span></div>
+            <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500"></span><span className="text-neutral-500">实支</span></div>
+            <span className="text-neutral-400">|</span>
+            <span className="text-neutral-500">执行率: {monthlyBudgetData.reduce((s,m)=>s+m.budget,0) > 0 ? Math.round(monthlyBudgetData.reduce((s,m)=>s+m.spend,0) / monthlyBudgetData.reduce((s,m)=>s+m.budget,0) * 100) : 0}%</span>
           </div>
         </CardHeader>
         <CardContent>
@@ -357,11 +353,6 @@ export const MarketingIncentivePage = () => {
                 <span className="text-xs text-neutral-500">{m.month}</span>
               </div>
             ))}
-          </div>
-          <div className="flex justify-between mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800 text-xs">
-            <span className="text-neutral-500">总预算: {cur(monthlyBudgetData.reduce((s, m) => s + m.budget, 0))}</span>
-            <span className="text-neutral-500">总支出: {cur(monthlyBudgetData.reduce((s, m) => s + m.spend, 0))}</span>
-            <span className="text-emerald-600 font-medium">执行率: {Math.round((monthlyBudgetData.reduce((s, m) => s + m.spend, 0) / monthlyBudgetData.reduce((s, m) => s + m.budget, 0)) * 100)}%</span>
           </div>
         </CardContent>
       </Card>

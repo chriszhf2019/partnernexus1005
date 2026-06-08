@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { debug } from '../lib/debug';
 import type { User } from '@supabase/supabase-js';
 
 export type AuthUser = {
@@ -27,13 +28,15 @@ export const isInternalRole = (role: UserRole): boolean => ['admin','channel_dir
 export const isExternalRole = (role: UserRole): boolean => ['partner_admin','partner_sales','partner_engineer'].includes(role);
 
 // Mock users for development/testing
-const MOCK_USERS: Record<string, { password: string; role: UserRole; displayName: string }> = {
-  'admin@partnernxus.com': { password: 'YOUR_PASSWORD', role: 'admin', displayName: '系统管理员' },
-  'channel@partnernxus.com': { password: 'Channel@2024!', role: 'channel_manager', displayName: '渠道经理' },
-  'marketing@partnernxus.com': { password: 'Market@2024!', role: 'marketing_manager', displayName: '市场经理' },
-  'partner@partnernxus.com': { password: 'Partner@2024!', role: 'partner_admin', displayName: '渠道商管理员' },
-  'sales@partnernxus.com': { password: 'Sales@2024!', role: 'partner_sales', displayName: '渠道商销售' },
-  'partner@example.com': { password: 'Partner@123', role: 'partner_admin', displayName: '渠道商管理员' },
+// 开发/测试用 mock 用户（仅 mock 模式下有效，任意密码均可登录）
+// 生产环境通过 Supabase Auth 认证，不会读取此列表
+const MOCK_USERS: Record<string, { role: UserRole; displayName: string }> = {
+  'admin@partnernxus.com': { role: 'admin', displayName: '系统管理员' },
+  'channel@partnernxus.com': { role: 'channel_manager', displayName: '渠道经理' },
+  'marketing@partnernxus.com': { role: 'marketing_manager', displayName: '市场经理' },
+  'partner@partnernxus.com': { role: 'partner_admin', displayName: '渠道商管理员' },
+  'sales@partnernxus.com': { role: 'partner_sales', displayName: '渠道商销售' },
+  'partner@example.com': { role: 'partner_admin', displayName: '渠道商管理员' },
 };
 
 const toAuthUser = (user: User | null): AuthUser | null => {
@@ -59,7 +62,7 @@ export const authService = {
     // Use mock authentication for development/testing
     if (!hasValidSupabaseConfig()) {
       const mockUser = MOCK_USERS[email.toLowerCase()];
-      if (mockUser && mockUser.password === password) {
+      if (mockUser) {
         // Store role in localStorage
         const uid = `mock_${email.replace(/[^a-zA-Z0-9]/g, '_')}`;
         localStorage.setItem(`role_${uid}`, mockUser.role);
@@ -162,7 +165,7 @@ export const authService = {
         const role = data.session.user.user_metadata.role;
         if (Object.keys(ROLE_LABELS).includes(role)) return role as UserRole;
       }
-    } catch { /* fall back to localStorage */ }
+    } catch (e) { debug.warn('[authService] getUserRole failed:', e); }
     // Fall back to localStorage for backward compatibility
     const stored = localStorage.getItem(`role_${uid}`);
     if (stored && Object.keys(ROLE_LABELS).includes(stored)) return stored as UserRole;
@@ -172,7 +175,7 @@ export const authService = {
     localStorage.setItem(`role_${uid}`, role);
     // Also persist to Supabase user metadata (server-side enforcement)
     if (hasValidSupabaseConfig()) {
-      try { await supabase.auth.updateUser({ data: { role } }); } catch { /* non-critical; server enforces separately */ }
+      try { await supabase.auth.updateUser({ data: { role } }); } catch (e) { debug.warn('[authService] setUserRole failed:', e); }
     }
   },
 };

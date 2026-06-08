@@ -1,0 +1,71 @@
+import { createContext, useContext } from 'react';
+import type { PartnerDetails, Activity as ActivityType, GlobalConfig } from '../../../types';
+
+export interface ProfileTabValue {
+  partner: PartnerDetails;
+  t: (key: string) => string;
+  cur: (v: number) => string;
+  config: GlobalConfig;
+  activities: ActivityType[];
+  realDeals: any[];
+  realActivities: any[];
+  realIncentives: any[];
+  isEditing: boolean;
+  setIsEditing: (v: boolean) => void;
+  activeTab: string;
+  setActiveTab: (v: string) => void;
+  formData: Record<string, any>;
+  dispatch: (action: any) => void;
+  scores: Record<string, any>;
+  breakthroughs: any[];
+  ecosystemPartners: any[];
+  milestones: any[];
+  industryCoverage: any[];
+  tasks: any[];
+  setTasks: (v: any) => void;
+  taskFilter: string;
+  setTaskFilter: (v: string) => void;
+  toggleTaskComplete: (id: number) => void;
+  updateTaskStatus: (id: number, status: string) => void;
+  updateTaskDetail: (id: number, field: string, value: string) => void;
+  addSubtask: (id: number, title: string) => void;
+  deleteSubtask: (id: number, sid: number) => void;
+  updateSubtaskStatus: (id: number, sid: number, status: string) => void;
+  createNewTask: () => void;
+  updatePartner: (p: PartnerDetails) => void;
+  followUps: any[];
+  saveFollowUps: (items: any[]) => void;
+  addFollowUp: () => void;
+  removeFollowUp: (id: string) => void;
+  saveFollowUpEdit: () => void;
+  customers: any[];
+  saveCustomers: (items: any[]) => void;
+  addCustomer: () => void;
+  removeCustomer: (id: string) => void;
+  saveCustomerEdit: () => void;
+  closeDetail: () => void;
+  openDetail: (type: string, data: any) => void;
+  detailModal: any;
+  capFill: number;
+  winRate: number;
+  marketingScore: number;
+  mdfPct: number;
+  pipelineHealth: string;
+  handleSave: () => Promise<void>;
+  keyCustomers: any[];
+  editingCustomer: any;
+  setEditingCustomer: (v: any) => void;
+  showCustomerForm: boolean;
+  setShowCustomerForm: (v: boolean) => void;
+  primaryContact: any;
+  loading: boolean;
+}
+
+const ProfileTabCtx = createContext<ProfileTabValue | null>(null);
+
+export const ProfileTabProvider = ProfileTabCtx.Provider;
+export const useProfileTab = () => {
+  const ctx = useContext(ProfileTabCtx);
+  if (!ctx) throw new Error('useProfileTab must be used within ProfileTabProvider');
+  return ctx;
+};

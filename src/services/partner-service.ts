@@ -1,6 +1,7 @@
 import { db, supabase } from '../lib/supabase';
 import type { Partner } from '../types';
 import type { PaginatedResponse, PartnerFilters } from './types';
+import { debug } from '../lib/debug';
 
 // ── Helpers ──────────────────────────────────────────
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,8 +24,8 @@ const SNAKE_KEYS: Record<string, string> = {
   ecosystem_partners: 'ecosystem_partners', sub_partners: 'sub_partners',
   strategy_recommendations: 'strategy_recommendations',
 };
-const toSnake = (camel: Record<string, any>): Record<string, any> => {
-  const out: Record<string, any> = {};
+const toSnake = (camel: Record<string, unknown>): Record<string, unknown> => {
+  const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(camel)) {
     if (v === undefined) continue;
     out[SNAKE_KEYS[k] || k] = v;
@@ -55,7 +56,7 @@ function normalizeContacts(contacts: any[]): any[] {
   }));
 }
 
-const normalizePartner = (p: any): Partner => {
+const normalizePartner = (p: Record<string, any>): Partner => {
   let startDate = p.startDate || p.start_date || '';
   // Normalize status to ensure consistent casing
   const status = (p.status || 'Prospective').trim();
@@ -92,18 +93,12 @@ const normalizePartner = (p: any): Partner => {
     englishName: p.englishName || p.english_name || '',
     website: p.website || '',
     applicationDate: p.applicationDate || p.application_date || startDate,
-  };
+  } as Partner;
 };
 
 // ── Audit Logger ─────────────────────────────────────
-async function logOp(partnerId: string, action: string, operator: string, details: Record<string, any> = {}) {
-  if (false) {
-    const logs = JSON.parse(localStorage.getItem('operationLogs') || '[]');
-    logs.push({ partner_id: partnerId, action, operator, details, created_at: new Date().toISOString() });
-    localStorage.setItem('operationLogs', JSON.stringify(logs.slice(-50))); // keep last 50
-    return;
-  }
-  try { await db.operationLogs().insert({ partner_id: partnerId, action, operator, details }); } catch { /* best-effort */ }
+async function logOp(partnerId: string, action: string, operator: string = 'system', details: Record<string, unknown> = {}) {
+  try { await db.operationLogs().insert({ partner_id: partnerId, action, operator, details }); } catch (e) { debug.warn('[partnerService] logOp failed:', e); }
 }
 
 export const partnerService = {
@@ -132,13 +127,13 @@ export const partnerService = {
     try {
       const { data } = await db.partners().select('*').eq('id', id).single();
       if (data) return normalizePartner(data);
-    } catch { /* fall through */ }
+    } catch (e) { debug.warn('[partnerService] getById failed:', e); }
     return null;
   },
 
   // ── Create ───────────────────────────────────────────
-  create: async (input: Record<string, any>): Promise<Partner> => {
-    const dbFields: Record<string, any> = {
+  create: async (input: Record<string, unknown>): Promise<Partner> => {
+    const dbFields: Record<string, unknown> = {
       id: crypto.randomUUID(),
       name: input.name,
       logo: input.logo || '',
@@ -170,9 +165,9 @@ export const partnerService = {
       const { data, error } = await db.partners().insert(dbFields).select().single();
       if (error) throw new Error(error.message);
 
-      const contacts: any[] = input.contacts || [];
+      const contacts: any[] = (input.contacts as any) || [];
       if (contacts.length > 0) {
-        await db.contacts().insert(contacts.map((c: any) => ({
+        await db.contacts().insert(contacts.map((c: Record<string, any>) => ({
           partner_id: (data as any).id,
           salutation: c.salutation || '',
           first_name: c.firstName || c.first_name || '',
@@ -184,7 +179,7 @@ export const partnerService = {
         })));
       }
 
-      await logOp((data as any).id, 'create', input._operator || 'system', { name: dbFields.name, status: dbFields.status });
+      await logOp(String((data as any)?.id || ''), 'create', String((input as any)._operator || 'system'), { name: dbFields.name, status: dbFields.status });
       return normalizePartner(data);
     } catch (err: any) {
       throw new Error('创建合作伙伴失败: ' + (err.message || '未知错误'));
@@ -193,13 +188,13 @@ export const partnerService = {
 
   // ── Update ──────────────────────────────────────────
   update: async (id: string, data: Partial<Partner> & { _operator?: string }, operator?: string): Promise<void> => {
-    const dbData = toSnake(data as Record<string, any>);
+    const dbData = toSnake(data as Record<string, unknown>);
     delete dbData._operator;
     delete dbData.contacts;
     try {
       const { error } = await db.partners().update({ ...dbData, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) throw new Error(error.message);
-      await logOp(id, 'edit', data._operator || operator || 'system', { changes: dbData });
+      await logOp(id, 'edit', String(data._operator || operator || 'system'), { changes: dbData });
     } catch (err: any) {
       if (!err.message?.includes('not configured')) throw err;
     }
@@ -222,12 +217,12 @@ export const partnerService = {
     try {
       await db.partners().update({ tier: data.tier, status: data.status, manager: data.manager, tags: data.tags, start_date: new Date().toISOString().split('T')[0] }).eq('id', id);
       await logOp(id, 'approve', operator || 'system', data);
-    } catch { /* ok */ }
+    } catch (e) { debug.warn('[partnerService] approve failed:', e); }
   },
 
   // ── Reject ───────────────────────────────────────────
   reject: async (id: string, operator?: string): Promise<void> => {
-    try { await db.partners().update({ status: 'Prospective' }).eq('id', id); await logOp(id, 'reject', operator || 'system', {}); } catch {}
+    try { await db.partners().update({ status: 'Prospective' }).eq('id', id); await logOp(id, 'reject', operator || 'system', {}); } catch (e) { debug.warn('[partnerService] reject failed:', e); }
   },
 
   // ── Batch approve ────────────────────────────────────
@@ -238,7 +233,7 @@ export const partnerService = {
         await db.partners().update({ tier: data.tier, status: data.status, manager: data.manager, tags: data.tags, start_date: new Date().toISOString().split('T')[0] }).in('id', dbIds);
         for (const id of dbIds) await logOp(id, 'approve', operator || 'system', { batch: true, ...data });
       }
-    } catch { /* ok */ }
+    } catch (e) { debug.warn('[partnerService] batchApprove failed:', e); }
   },
 
   // ── Batch reject ─────────────────────────────────────
@@ -246,36 +241,22 @@ export const partnerService = {
     try {
       const dbIds = ids.filter(id => !false);
       if (dbIds.length > 0) { await db.partners().update({ status: 'Prospective' }).in('id', dbIds); for (const id of dbIds) await logOp(id, 'reject', operator || 'system', { batch: true }); }
-    } catch { /* ok */ }
+    } catch (e) { debug.warn('[partnerService] batchReject failed:', e); }
   },
 
   // ── JBP Meetings ─────────────────────────────────────
   getJBPs: async (partnerId: string): Promise<any[]> => {
-    if (false) {
-      const stored = JSON.parse(localStorage.getItem('jbpMeetings') || '[]');
-      return stored.filter((m: any) => m.partner_id === partnerId);
-    }
-    try { const { data } = await supabase.from('jbp_meetings').select('*').eq('partner_id', partnerId).order('meeting_date', { ascending: false }); return (data || []) as any[]; } catch { return []; }
+    try { const { data } = await supabase.from('jbp_meetings').select('*').eq('partner_id', partnerId).order('meeting_date', { ascending: false }); return (data || []) as any[]; } catch (e) { debug.warn('[partnerService] getJBPs failed:', e); return []; }
   },
-  createJBP: async (partnerId: string, jbp: Record<string, any>): Promise<void> => {
-    if (false) {
-      const stored = JSON.parse(localStorage.getItem('jbpMeetings') || '[]');
-      stored.push({ ...jbp, partner_id: partnerId, id: 'jbp-' + Date.now(), created_at: new Date().toISOString() });
-      localStorage.setItem('jbpMeetings', JSON.stringify(stored));
-      return;
-    }
-    try { const { error } = await supabase.from('jbp_meetings').insert({ ...jbp, partner_id: partnerId }); if (error) throw new Error(error.message); } catch { /* local fallback */ }
+  createJBP: async (partnerId: string, jbp: Record<string, unknown>): Promise<void> => {
+    try { const { error } = await supabase.from('jbp_meetings').insert({ ...jbp, partner_id: partnerId }); if (error) throw new Error(error.message); } catch (e) { debug.warn('[partnerService] createJBP failed:', e); }
   },
 
   // ── Operation logs ───────────────────────────────────
   getOperationLogs: async (partnerId: string): Promise<any[]> => {
-    if (false) {
-      const logs = JSON.parse(localStorage.getItem('operationLogs') || '[]');
-      return logs.filter((l: any) => l.partner_id === partnerId);
-    }
     try {
       const { data } = await db.operationLogs().select('*').eq('partner_id', partnerId).order('created_at', { ascending: false });
       return (data || []) as any[];
-    } catch { return []; }
+    } catch (e) { debug.warn('[partnerService] getOperationLogs failed:', e); return []; }
   },
 };

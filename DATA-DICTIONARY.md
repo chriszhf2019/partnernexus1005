@@ -283,3 +283,40 @@ partners (Supabase) → JOIN partner_name
 - [ ] Deals 表缺少 `stage` / `lifecycle` 列（需 migration）
 - [ ] 大部分合作伙伴 pipeline 数据为空
 - [ ] 认证到期风险(expiryRiskCount) 未关联真实证书数据
+
+---
+
+## 10. 新增表和字段 (2025-06-15 更新)
+
+### 商机冲突表 (deal_conflicts)
+
+| 字段 | 类型 | 说明 | 关联 |
+|------|------|------|------|
+| `id` | UUID | 主键 | DealRegistrationPage |
+| `type` | TEXT | 冲突类型(SameCustomer/SameProduct/MultiPartner) | 筛选 |
+| `deal_ids` | UUID[] | 涉及商机列表 | 详情展示 |
+| `description` | TEXT | 冲突描述 | 弹窗展示 |
+| `status` | TEXT | Pending/Resolved/Escalated | 状态管理 |
+| `resolution` | TEXT | 处理方案 | 冲突解决 |
+| `resolved_by` | TEXT | 解决人 | 审计 |
+| `protection_period_days` | INT | 保护期天数 | 规则引擎 |
+
+### 数据流变更
+
+```
+v1 (Mock):   constants.ts → 组件直用
+v2 (现在):   Supabase tables → services → 组件
+              |-- partners, deals, deal_conflicts
+              |-- marketing_activities, incentive_programs
+              |-- partner_operation_logs → Activity feed
+              |-- deal_lifecycle_events → Pipeline analysis
+              |-- settings → Global config
+```
+
+### 已移除的 Mock 数据依赖
+
+| 文件名 | 移除内容 | 替代方案 |
+|--------|----------|----------|
+| `constants.ts` | DEALS, DEAL_CONFLICTS | DB查询 |
+| `data/importedPartners.ts` | IMPORTED_PARTNERS | 整个文件删除 |
+| `firebase.ts` | 所有内容 | 整个文件删除 |

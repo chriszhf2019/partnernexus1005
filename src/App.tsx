@@ -7,7 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoader } from './components/ui/PageLoader';
 import { NetworkStatus } from './components/ui/NetworkStatus';
 import { ToastProvider } from './components/ui/Toast';
-import { usePartners, useDeals, useActivities } from './hooks/useData';
+import { usePartners, useDeals, useActivities, type ActivityItem } from './hooks/useData';
 import { partnerService } from './services/partner-service';
 import { dealService } from './services/deal-service';
 import { buildPartnerDetails } from './lib/partnerDataBuilder';
@@ -175,7 +175,7 @@ function PartnerProfileRoute() {
       <Suspense fallback={<PageLoader />}>
         <PartnerProfile
           partner={partnerDetails}
-          activities={activities}
+          activities={activities as any}
           onBack={() => navigate('/partners')}
         />
       </Suspense>
