@@ -83,6 +83,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const [showMap, setShowMap] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showAdvFilter, setShowAdvFilter] = useState(false);
+  const [segmentFilter, setSegmentFilter] = useState('all');
 
   // ── Sort state ───────────────────────────────────
   const [sortField, setSortField] = useState<SortField>('name');
@@ -176,6 +177,11 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
         );
       }
       if (statusFilter !== 'All') result = result.filter((p) => p.status === statusFilter);
+      // Segment filter
+      if (segmentFilter === 'champion') result = result.filter(p => (p.winRate||0) > 50 && p.status === 'Cooperating');
+      if (segmentFilter === 'dormant') result = result.filter(p => p.status === 'Cooperating' && (p.winRate||0) === 0);
+      if (segmentFilter === 'newcomer') result = result.filter(p => p.status === 'Prospective');
+      if (segmentFilter === 'rising') result = result.filter(p => p.status === 'Cooperating' && new Date(p.startDate).getTime() > Date.now() - 90*86400000);
       if (tierFilter !== 'All') result = result.filter((p) => p.tier === tierFilter);
       if (typeFilter !== 'All') result = result.filter((p) => p.type === typeFilter);
       if (regionFilter !== 'All') result = result.filter((p) => p.region === regionFilter);
@@ -201,7 +207,7 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
       });
     }
     return result;
-  }, [partners, deferredSearch, statusFilter, tierFilter, typeFilter, regionFilter, tab, sortField, sortDir]);
+  }, [partners, deferredSearch, statusFilter, tierFilter, typeFilter, regionFilter, tab, segmentFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPartners.length / ITEMS_PER_PAGE));
   const pagedPartners = filteredPartners.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -350,6 +356,24 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />刷新
           </button>
         </div>
+      </div>
+
+      {/* ═══════════ Dynamic Segment Filter ═══════════ */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] text-neutral-400 font-medium">分层:</span>
+        {[
+          { key: 'all', label: '全部', count: partners.length, color: 'bg-neutral-100 text-neutral-600' },
+          { key: 'champion', label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+          { key: 'dormant', label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length, color: 'bg-amber-50 text-amber-700 border-amber-200' },
+          { key: 'newcomer', label: '🆕 新进', count: pendingCount, color: 'bg-blue-50 text-blue-700 border-blue-200' },
+          { key: 'rising', label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length, color: 'bg-purple-50 text-purple-700 border-purple-200' },
+        ].map(seg => (
+          <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }}
+            className={cn('px-3 py-1 rounded-full text-[10px] font-semibold border transition-all hover:shadow-sm',
+              segmentFilter === seg.key ? 'ring-2 ring-offset-1 ' + seg.color.replace('bg-', 'ring-') : seg.color)}>
+            {seg.label} {seg.count}
+          </button>
+        ))}
       </div>
 
       {/* ═══════════ Batch Actions ═══════════ */}
