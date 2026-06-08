@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card } from '../ui/Card';
 import { cn } from '../../lib/utils';
-import { MapPin, TrendingUp, Award, Activity, ChevronRight, X, Bell, AlertTriangle, Calendar, Target, DollarSign, Users, Shield } from 'lucide-react';
+import { MapPin, TrendingUp, Award, Activity, ChevronRight, X, Bell, AlertTriangle, Calendar, Target, Clock, DollarSign, Users, Shield } from 'lucide-react';
 
 interface PartnerHealthBarProps {
   partners: any[];
