@@ -149,15 +149,15 @@ export const CustomerAnalysis = () => {
   const wonValue = deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-neutral-400"><div className="text-center"><div className="animate-spin text-3xl mb-3">⏳</div>加载中...</div></div>;
-  if (!customerName) return <div className="flex items-center justify-center min-h-screen text-neutral-400"><div className="text-center"><p className="text-lg font-semibold">未找到客户名称</p><p className="text-sm mt-2">请从商机列表页点击客户名称访问</p><Button variant="secondary" className="mt-4" onClick={() => navigate('/deals')}>返回商机列表</Button></div></div>;
+  if (!customerName) return <div className="flex items-center justify-center min-h-screen text-neutral-400"><div className="text-center"><p className="text-lg font-semibold">未找到客户名称</p><p className="text-sm mt-2">请从商机列表页点击客户名称访问</p><Button variant="secondary" className="mt-4" onClick={() => navigate('/deals')}>← 返回商机列表</Button></div></div>;
 
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950">
       {/* Header */}
       <div className="bg-gradient-to-r from-slate-800 to-slate-900 text-white">
         <div className="max-w-[1600px] mx-auto px-6 py-5">
-          <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-2">
-            <ArrowLeft className="w-4 h-4" />返回商机列表
+          <button onClick={() => navigate('/deals')} className="flex items-center gap-1 text-white/60 hover:text-white text-sm mb-2">
+            <ArrowLeft className="w-4 h-4" />← 返回商机列表
           </button>
           <div className="flex items-start justify-between">
             <div>

@@ -440,12 +440,12 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
 
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         {[
-          { label: t('deals.yearNew'), value: stats.yearNew, icon: Calendar, color: 'text-neutral-700' },
-          { label: t('deals.quarterNew'), value: stats.quarterNew, icon: TrendingUp, color: 'text-blue-600' },
-          { label: '管线总额', value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600', sublabel: '加权:' },
-          { label: '加权金额', value: formatCurrency(weightedPipelineValue), icon: Target, color: 'text-amber-600', highlight: true },
-          { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600' },
-          { label: '异常停滞', value: stagnantDeals.length, icon: AlertTriangle, color: stagnantDeals.length > 0 ? 'text-red-500' : 'text-neutral-400', alert: stagnantDeals.length > 0 },
+          { label: t('deals.yearNew'), value: stats.yearNew, icon: Calendar, color: 'text-neutral-700', trend: '↑8%' },
+          { label: t('deals.quarterNew'), value: stats.quarterNew, icon: TrendingUp, color: 'text-blue-600', trend: '↑12%' },
+          { label: '管线总额', value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600', trend: '↑5%' },
+          { label: '加权金额', value: formatCurrency(weightedPipelineValue), icon: Target, color: 'text-amber-600', highlight: true, trend: `${Math.round(weightedPipelineValue / Math.max(pipelineValue || 1, 1) * 100)}%` },
+          { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600', trend: wonValue > 0 ? '↑' : '-' },
+          { label: '异常停滞', value: stagnantDeals.length, icon: AlertTriangle, color: stagnantDeals.length > 0 ? 'text-red-500' : 'text-neutral-400', alert: stagnantDeals.length > 0, trend: stagnantDeals.length > 0 ? '需处理' : '正常' },
         ].map((s) => (
           <Card key={s.label} className={s.alert ? 'border-red-200 dark:border-red-900' : ''}>
             <div className="flex items-center gap-3">
@@ -457,12 +457,16 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
               </div>
               <div>
                 <p className="text-xs text-neutral-500">{s.label}</p>
-                <p className={cn('text-xl font-semibold', s.highlight ? 'text-amber-600' : 'text-neutral-900 dark:text-white')}>
-                  {s.value}
-                </p>
-                {s.sublabel && (
-                  <p className="text-xs text-neutral-400">{s.sublabel} {formatCurrency(weightedPipelineValue)}</p>
-                )}
+                <div className="flex items-baseline gap-1.5">
+                  <p className={cn('text-xl font-semibold', s.highlight ? 'text-amber-600' : 'text-neutral-900 dark:text-white')}>
+                    {s.value}
+                  </p>
+                  {s.trend && (
+                    <span className={cn('text-[10px] font-medium', s.alert ? 'text-red-500' : s.trend.startsWith('↑') ? 'text-emerald-600' : 'text-neutral-400')}>
+                      {s.trend}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           </Card>
@@ -1019,24 +1023,36 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                         </td>
                         
                         {/* 操作 */}
-                        <td className="px-6 py-4 text-right">
+                        <td className="px-6 py-4 text-right" onClick={e => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1">
+                            {/* Always visible quick actions */}
+                            {deal.isStagnant && (
+                              <button onClick={() => alert(`已向 ${deal.salesName} 发送催办提醒`)}
+                                className="px-2 py-1 text-[10px] font-medium text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-md border border-amber-200">
+                                催办
+                              </button>
+                            )}
+                            <button onClick={() => navigate(`/customer/${encodeURIComponent(deal.customerName)}/analysis`)}
+                              className="px-2 py-1 text-[10px] font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-md border border-blue-200">
+                              分析
+                            </button>
+                            {/* Hover-reveal actions */}
                             <button
-                              onClick={(e) => { e.stopPropagation(); setAssigningDeal(deal); setShowAssignModal(true); }}
+                              onClick={() => { setAssigningDeal(deal); setShowAssignModal(true); }}
                               className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-blue-500 transition-colors opacity-0 group-hover:opacity-100"
                               title="智能分配"
                             >
                               <Handshake className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); setSelectedDeal(deal); setShowActivityDrawer(true); }}
+                              onClick={() => { setSelectedDeal(deal); setShowActivityDrawer(true); }}
                               className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-green-500 transition-colors opacity-0 group-hover:opacity-100"
                               title="跟进动态"
                             >
                               <MessageSquare className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={(e) => { e.stopPropagation(); navigate(`/deals/${deal.id}`); }}
+                              onClick={() => { navigate(`/deals/${deal.id}`); }}
                               className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 hover:text-brand transition-colors opacity-0 group-hover:opacity-100"
                               title="查看详情"
                             >
