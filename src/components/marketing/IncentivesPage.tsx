@@ -10,6 +10,7 @@ import { Modal } from '../ui/Modal';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
 import { Gift, TrendingUp, Users, Target, Plus, Calendar, Settings, BarChart3, FileText, X, RefreshCw, Layers, Eye, Edit, Download, Bell, AlertCircle, TrendingDown, PieChart, Award, Zap, Shield, Check, Send, ThumbsUp, Briefcase, ChevronRight } from 'lucide-react';
+import { ProgramReportDrawer } from './enablement/ProgramReportDrawer';
 import { cn } from '../../lib/utils';
 
 // 概览页面组件
@@ -25,6 +26,7 @@ const IncentivesOverview: React.FC = () => {
   const [typeFilter, setTypeFilter] = useState('all');
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
+  const [reportProgram, setReportProgram] = useState<any>(null);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -302,7 +304,7 @@ const IncentivesOverview: React.FC = () => {
                   <span>💰 ROI <b className={Number(roi) >= 2 ? 'text-emerald-600' : 'text-amber-600'}>{roi}x</b> · {p.start_date?.slice(0, 10)}~{p.end_date?.slice(0, 10)}</span>
                   <div className="flex items-center gap-1.5">
                     {isEnded ? (
-                      <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => alert(`正在生成「${p.title}」效果报告...\n\n总预算: ${cur(p.totalBudget)}\n已申领: ${cur(p.claimedAmount)}\n参与伙伴: ${p.participantsCount}家\nROI: ${roi}x\n带动商机: ${cur(pipelineValue)}`)}>
+                      <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => setReportProgram(p)}>
                         <FileText className="w-3 h-3 mr-1" />效果报告
                       </Button>
                     ) : isOverBudget ? (
@@ -378,6 +380,16 @@ const IncentivesOverview: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Program Report Drawer */}
+      <ProgramReportDrawer
+        open={!!reportProgram}
+        onClose={() => setReportProgram(null)}
+        program={reportProgram}
+        cur={cur}
+        roi={reportProgram ? estimateROI(reportProgram) : '0'}
+        pipelineValue={reportProgram ? Math.round((reportProgram.claimedAmount || 0) * Number(estimateROI(reportProgram))) : 0}
+      />
     </div>
   );
 };
