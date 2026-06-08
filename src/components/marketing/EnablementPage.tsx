@@ -481,6 +481,8 @@ export const EnablementPage = () => {
         <CourseRanking
           courses={programs.map((p: any) => {
             const cs = courseStats.find(c => c.id === p.id);
+            const isDead = cs?.enrollmentCount === 0 && cs?.completedCount === 0;
+            const warningReason = isDead ? '近30天无新增选课' : cs?.avgRating < 3 ? '平均评分低于3分，建议检查内容质量' : undefined;
             return {
               id: p.id,
               name: p.name,
@@ -488,14 +490,55 @@ export const EnablementPage = () => {
               avgRating: cs?.avgRating || 0,
               enrollmentCount: cs?.enrollmentCount || 0,
               duration: p.duration,
-              isDead: cs?.enrollmentCount === 0 && cs?.completedCount === 0,
+              isDead,
+              isRequired: p.is_required,
+              category: p.category,
+              updatedAt: p.updated_at ? new Date(p.updated_at).toISOString().slice(0, 10) : p.created_at ? new Date(p.created_at).toISOString().slice(0, 10) : undefined,
+              warningReason,
             };
           })}
           onRetire={(id) => {
             const p = programs.find((prog: any) => prog.id === id);
-            if (confirm(`确定要下架课程 "${p?.name}" 吗？`)) {
+            if (confirm(`确定要下架课程 "${p?.name}" 吗？此操作可撤销。`)) {
               alert('课程已下架（演示）');
             }
+          }}
+          onEdit={(id) => {
+            alert(`编辑课程: ${programs.find((p: any) => p.id === id)?.name}`);
+          }}
+          onAnalyze={(id) => {
+            const p = programs.find((prog: any) => prog.id === id);
+            alert(`打开课程分析: ${p?.name}\n\n完课率、学员明细、章节数据等功能将在课程详情页实现`);
+          }}
+          onNewCourse={() => alert('新建课程功能将在后续版本中实现')}
+          onExport={() => {
+            const exportData = programs.map((p: any) => {
+              const cs = courseStats.find(c => c.id === p.id);
+              return {
+                '课程名称': p.name,
+                '分类': p.category,
+                '必修/选修': p.is_required ? '必修' : '选修',
+                '完课率': `${cs?.enrollmentCount ? Math.round((cs.completedCount / cs.enrollmentCount) * 100) : 0}%`,
+                '评分': cs?.avgRating || '-',
+                '选课人数': cs?.enrollmentCount || 0,
+                '更新时间': p.updated_at || p.created_at || '-',
+              };
+            });
+            const cols = ['课程名称','分类','必修/选修','完课率','评分','选课人数','更新时间'];
+            const csv = '﻿' + cols.join(',') + '\n' + exportData.map((r: any) => cols.map(k => `"${String(r[k] || '').replace(/"/g,'""')}"`).join(',')).join('\n');
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url; a.download = `课程管理报表_${new Date().toISOString().slice(0,10)}.csv`;
+            a.click(); URL.revokeObjectURL(url);
+          }}
+          onBatchRetire={(ids) => {
+            if (confirm(`确定要下架选中的 ${ids.length} 门课程吗？`)) {
+              alert(`已下架 ${ids.length} 门课程（演示）`);
+            }
+          }}
+          onBatchExport={(ids) => {
+            alert(`已导出 ${ids.length} 门课程的报告（演示）`);
           }}
         />
       )}
