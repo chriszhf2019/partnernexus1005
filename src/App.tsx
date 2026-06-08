@@ -25,6 +25,7 @@ import { retryableLazy } from './lib/retryableLazy';
 const EcosystemDashboard = retryableLazy(() => import('./components/dashboard/EcosystemDashboard').then(m => ({ default: m.EcosystemDashboard })));
 const PartnerList = retryableLazy(() => import('./components/partners/PartnerList').then(m => ({ default: m.PartnerList })));
 import { PartnerProfile } from './components/partners/PartnerProfile';
+import { PartnerBusinessPlan } from './components/partners/PartnerBusinessPlan';
 const PartnerFormPage = retryableLazy(() => import('./components/partners/PartnerFormPage').then(m => ({ default: m.PartnerFormPage })));
 const MarketingIncentivePage = retryableLazy(() => import('./components/marketing/MarketingIncentivePage').then(m => ({ default: m.MarketingIncentivePage })));
 const DealRegistrationPage = retryableLazy(() => import('./components/deals/DealRegistrationPage').then(m => ({ default: m.DealRegistrationPage })));
@@ -174,11 +175,18 @@ function PartnerProfileRoute() {
   return (
     <ErrorBoundary>
       <Suspense fallback={<PageLoader />}>
-        <PartnerProfile
-          partner={partnerDetails}
-          activities={activities as any}
-          onBack={() => navigate('/partners')}
-        />
+        <div className="space-y-6">
+          <PartnerBusinessPlan
+            partner={partner}
+            relatedDeals={relatedDeals}
+            contacts={partner.contacts}
+          />
+          <PartnerProfile
+            partner={partnerDetails}
+            activities={activities as any}
+            onBack={() => navigate('/partners')}
+          />
+        </div>
       </Suspense>
     </ErrorBoundary>
   );
