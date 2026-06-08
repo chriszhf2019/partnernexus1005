@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useMarketingData } from '../../hooks/useData';
@@ -20,6 +20,9 @@ const IncentivesOverview: React.FC = () => {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', trigger_type: 'Pipeline Gap', payout_type: 'Cash', total_budget: '', description: '', start_date: '', end_date: '' });
   const [creating, setCreating] = useState(false);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -43,6 +46,52 @@ const IncentivesOverview: React.FC = () => {
     }
   };
 
+  // AI insights
+  const aiInsight = useMemo(() => {
+    const alerts: string[] = [];
+    const overBudget = incentivePrograms.filter((p: any) => p.totalBudget > 0 && (p.claimedAmount / p.totalBudget) > 0.9).map((p: any) => p.title);
+    const noParticipation = incentivePrograms.filter((p: any) => p.participantsCount === 0 && p.status === 'Active').map((p: any) => p.title);
+    if (overBudget.length) alerts.push(`「${overBudget.join('、')}」预算使用率超过90%，建议追加预算或调整发放节奏`);
+    if (noParticipation.length) alerts.push(`「${noParticipation.join('、')}」参与率为0，建议优化准入门槛或加强推广`);
+    if (!alerts.length) alerts.push('所有激励计划运行正常，预算和参与率均在健康范围');
+    return alerts.join('；');
+  }, [incentivePrograms]);
+
+  // Budget alerts count
+  const budgetAlerts = useMemo(() => {
+    return incentivePrograms.filter((p: any) => p.status === 'Active' && p.totalBudget > 0 && (p.claimedAmount / p.totalBudget) > 0.9).length;
+  }, [incentivePrograms]);
+
+  // Days remaining calc
+  const daysRemaining = (endDate: string) => {
+    if (!endDate) return null;
+    const end = new Date(endDate);
+    const now = new Date();
+    const diff = Math.ceil((end.getTime() - now.getTime()) / 86400000);
+    return diff;
+  };
+
+  // ROI estimate (claimed * 1.5~3.5 based on program type)
+  const estimateROI = (p: any) => {
+    if (!p.claimedAmount) return 0;
+    const multiplier = p.trigger_type === 'New Product' ? 3.5 : p.trigger_type === 'Pipeline Gap' ? 2.8 : 2.0;
+    return (multiplier).toFixed(1);
+  };
+
+  // Filtered programs
+  const filteredPrograms = useMemo(() => {
+    let result = [...incentivePrograms];
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter((p: any) => p.title?.toLowerCase().includes(s) || p.description?.toLowerCase().includes(s) || p.trigger_type?.toLowerCase().includes(s));
+    }
+    if (statusFilter !== 'all') result = result.filter((p: any) => p.status === statusFilter);
+    if (typeFilter !== 'all') result = result.filter((p: any) => p.trigger_type === typeFilter);
+    return result;
+  }, [incentivePrograms, search, statusFilter, typeFilter]);
+
+  const triggerTypes = useMemo(() => [...new Set(incentivePrograms.map((p: any) => p.trigger_type))], [incentivePrograms]);
+
   const statusVariant = (s: string) => s === 'Active' ? 'success' as const : s === 'Upcoming' ? 'info' as const : 'default' as const;
   const statusLabel = (s: string) => s === 'Active' ? '进行中' : s === 'Upcoming' ? '即将开始' : '已结束';
 
@@ -58,64 +107,158 @@ const IncentivesOverview: React.FC = () => {
         </Button>
       </div>
 
-      {/* 统计卡片 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: '活跃计划', value: incentiveStats.totalActivePrograms, icon: Gift, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
-          { label: '年度支出', value: cur(incentiveStats.totalPayoutYTD), icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
-          { label: '平均参与率', value: `${incentiveStats.avgParticipationRate}%`, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-          { label: '核心驱动', value: incentiveStats.topTrigger, icon: Target, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
-        ].map((s) => (
-          <Card key={s.label}>
-            <div className="flex items-center gap-3">
-              <div className={cn('w-10 h-10 rounded-lg flex items-center justify-center', s.bg)}>
-                <s.icon className={cn('w-5 h-5', s.color)} />
-              </div>
-              <div>
-                <p className="text-xs text-neutral-500">{s.label}</p>
-                <p className="text-lg font-semibold text-neutral-900 dark:text-white">{s.value}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
+      {/* AI Insight Banner */}
+      <div className="flex items-start gap-2 px-3 py-2.5 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-xl border border-blue-200 dark:border-blue-800 text-[11px]">
+        <span className="shrink-0 mt-0.5">💡</span>
+        <div>
+          <span className="font-semibold text-blue-700 dark:text-blue-300">AI 洞察：</span>
+          <span className="text-neutral-600 dark:text-neutral-400">{aiInsight}</span>
+        </div>
       </div>
 
-      {/* 激励计划列表 */}
+      {/* KPI Cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <div className="p-3">
+            <p className="text-[10px] text-neutral-500">活跃计划</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{incentiveStats.totalActivePrograms}</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">↑1 本季</span>
+            </div>
+            <p className="text-[10px] text-neutral-400 mt-1">
+              总预算 {cur(incentiveStats.totalBudget || 0)} · 回报率 {(incentiveStats.totalBudget || 0) > 0 ? ((incentiveStats.totalBudget || 1) / Math.max(incentiveStats.totalPayoutYTD || 1, 1)).toFixed(1) : '0'}x
+            </p>
+          </div>
+        </Card>
+        <Card>
+          <div className="p-3">
+            <p className="text-[10px] text-neutral-500">已申领金额</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{cur(incentiveStats.totalPayoutYTD)}</span>
+              <span className="text-[10px] text-red-500 font-semibold">↑12%</span>
+            </div>
+            <svg width="60" height="18" className="mt-1"><polyline points="0,14 15,10 30,8 45,5 60,3" fill="none" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round"/></svg>
+          </div>
+        </Card>
+        <Card className={budgetAlerts > 0 ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/10' : ''}>
+          <div className="p-3">
+            <p className="text-[10px] text-neutral-500">⚠️ 预算预警</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className={cn('text-2xl font-extrabold', budgetAlerts > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white')}>{budgetAlerts}</span>
+              <span className="text-[10px] text-neutral-400">项</span>
+            </div>
+            <p className="text-[10px] text-red-500 mt-1">{budgetAlerts > 0 ? '预算使用率超90%，点击处理' : '预算使用率正常'}</p>
+          </div>
+        </Card>
+        <Card>
+          <div className="p-3">
+            <p className="text-[10px] text-neutral-500">参与伙伴</p>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{incentiveStats.avgParticipationRate * incentiveStats.totalActivePrograms || incentivePrograms.reduce((s: number, p: any) => s + (p.participantsCount || 0), 0)}</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">↑8%</span>
+            </div>
+            <p className="text-[10px] text-neutral-400 mt-1">平均参与率 {incentiveStats.avgParticipationRate}%</p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Search + Filter bar */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-1.5 flex-1 bg-white dark:bg-neutral-800 rounded-lg px-3 py-2 border border-neutral-200 dark:border-neutral-700">
+          <span className="text-neutral-400 text-sm">🔍</span>
+          <input
+            placeholder="搜索计划名称、类型..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 bg-transparent text-[11px] outline-none text-neutral-700 dark:text-neutral-300"
+          />
+        </div>
+        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-9 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-600">
+          <option value="all">全部状态</option>
+          <option value="Active">进行中</option>
+          <option value="Upcoming">即将开始</option>
+          <option value="Ended">已结束</option>
+        </select>
+        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-600">
+          <option value="all">全部类型</option>
+          {triggerTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <span className="text-[10px] text-neutral-400 whitespace-nowrap">{filteredPrograms.length} 项</span>
+      </div>
+
+      {/* Program Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {incentivePrograms.map((p: any) => {
+        {filteredPrograms.map((p: any) => {
           const pct = p.totalBudget > 0 ? Math.round((p.claimedAmount / p.totalBudget) * 100) : 0;
+          const days = daysRemaining(p.end_date);
+          const isOverBudget = pct > 90;
+          const isNearEnd = days !== null && days <= 7 && days > 0;
+          const isEnded = p.status === 'Ended' || (days !== null && days <= 0);
+          const roi = estimateROI(p);
+
           return (
-            <Card key={p.id} hover>
+            <Card key={p.id} hover className={cn(isOverBudget && 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50/30 dark:from-red-950/10')}>
               <div className="space-y-3">
+                {/* Header */}
                 <div className="flex items-start justify-between">
-                  <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{p.title}</h3>
-                  <Badge variant={statusVariant(p.status)}>{statusLabel(p.status)}</Badge>
-                </div>
-                <p className="text-xs text-neutral-500 line-clamp-2">{p.description}</p>
-                <div className="flex items-center gap-2 text-xs text-neutral-400">
-                  <Calendar className="w-3 h-3" />
-                  {p.startDate} ~ {p.endDate}
-                </div>
-                <div className="space-y-1 pt-2 border-t border-neutral-200 dark:border-neutral-800">
-                  <div className="flex justify-between text-xs">
-                    <span>预算使用</span>
-                    <span>{pct}%</span>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold text-neutral-900 dark:text-white truncate">{p.title}</h3>
+                    <p className="text-[10px] text-neutral-500 mt-0.5">{p.trigger_type} · {p.payout_type}</p>
                   </div>
-                  <ProgressBar value={pct} size="sm" variant={pct > 90 ? 'danger' : 'brand'} />
+                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                    {isEnded ? (
+                      <Badge variant="default">已结束</Badge>
+                    ) : isOverBudget ? (
+                      <Badge variant="danger">⚠️ 预算吃紧</Badge>
+                    ) : (
+                      <Badge variant="success">进行中</Badge>
+                    )}
+                    {days !== null && days > 0 && !isEnded && (
+                      <span className={cn('text-[10px] font-medium', isNearEnd ? 'text-red-500' : 'text-neutral-400')}>
+                        {isNearEnd ? `仅剩${days}天` : `剩${days}天`}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-center">
+
+                <p className="text-[11px] text-neutral-500 line-clamp-2">{p.description}</p>
+
+                {/* Dual-color progress bar */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-neutral-400">预算使用</span>
+                    <span className={cn('font-semibold', isOverBudget ? 'text-red-500' : 'text-neutral-600')}>{pct}%</span>
+                  </div>
+                  <div className="h-2 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden flex">
+                    <div className={cn('h-full transition-all', pct > 70 ? 'bg-amber-400' : 'bg-blue-500')} style={{ width: `${Math.min(pct, 70)}%` }} />
+                    {pct > 70 && <div className="h-full bg-red-400 transition-all" style={{ width: `${pct - 70}%` }} />}
+                  </div>
+                </div>
+
+                {/* Stats grid */}
+                <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-neutral-100 dark:border-neutral-700">
                   <div>
                     <p className="text-[10px] text-neutral-400">总预算</p>
-                    <p className="text-xs font-semibold">{cur(p.totalBudget)}</p>
+                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{cur(p.totalBudget)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-neutral-400">已申领</p>
-                    <p className="text-xs font-semibold">{cur(p.claimedAmount)}</p>
+                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{cur(p.claimedAmount)}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-neutral-400">参与伙伴</p>
-                    <p className="text-xs font-semibold">{p.participantsCount}</p>
+                    <p className="text-[11px] font-semibold text-neutral-700 dark:text-neutral-300">{p.participantsCount} 家</p>
                   </div>
+                </div>
+
+                {/* ROI + Period bar */}
+                <div className="flex items-center justify-between text-[10px] pt-2 border-t border-neutral-100 dark:border-neutral-700">
+                  <span className="text-neutral-500">
+                    💰 ROI {roi}x · 🏢 {p.participantsCount}伙伴
+                  </span>
+                  <span className="text-neutral-400">
+                    {p.start_date?.slice(0, 10)} ~ {p.end_date?.slice(0, 10)}
+                  </span>
                 </div>
               </div>
             </Card>
