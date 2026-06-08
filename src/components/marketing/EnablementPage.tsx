@@ -19,6 +19,7 @@ import { CompanyView } from './enablement/CompanyView';
 import { FeedbackAnalysis } from './enablement/FeedbackAnalysis';
 import { CourseRanking } from './enablement/CourseRanking';
 import { CourseCatalog } from './enablement/CourseCatalog';
+import { PointsStore } from './enablement/PointsStore';
 import { getUserProfile } from './enablement/userProfiles';
 
 const FRAMEWORK: Record<string, { icon: any; color: string; bg: string; desc: string }> = {
@@ -586,14 +587,10 @@ export const EnablementPage = () => {
 
       {/* Store */}
       {activeTab === 'store' && (
-        <div className="space-y-4">
-          <p className="text-sm">可用积分: <span className="text-amber-600 font-bold">{earnedPoints}</span> ⭐</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[{ name: '免费易拉宝套装', cost: 50, icon: Gift }, { name: 'Demo机试用30天', cost: 100, icon: Monitor }, { name: '原厂专家现场支持', cost: 200, icon: Users }, { name: '营销物料大礼包', cost: 80, icon: Package }, { name: '优先商机分配权(月)', cost: 150, icon: Target }, { name: '年度峰会VIP席位', cost: 300, icon: Star }].map((item, i) => (
-              <Card key={i} hover><CardContent><div className="text-center"><item.icon className="w-8 h-8 mx-auto mb-2 text-amber-500" /><p className="text-sm font-semibold">{item.name}</p><div className="flex items-center justify-center gap-1 mt-2"><Star className="w-4 h-4 text-amber-500 fill-amber-500" /><span className="text-lg font-bold text-amber-600">{item.cost}</span></div><Button variant={earnedPoints >= item.cost ? 'brand' : 'secondary'} size="sm" className="w-full mt-2" disabled={earnedPoints < item.cost}><ShoppingCart className="w-3.5 h-3.5 mr-1" />{earnedPoints >= item.cost ? '立即兑换' : '积分不足'}</Button></div></CardContent></Card>
-            ))}
-          </div>
-        </div>
+        <PointsStore
+          earnedPoints={earnedPoints}
+          onNavigateToLearning={() => setActiveTab('dashboard')}
+        />
       )}
 
       {/* Assessment Modal */}
