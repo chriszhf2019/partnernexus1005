@@ -201,7 +201,7 @@ export const PartnerStaffPage = () => {
           <div className="flex items-center gap-2 text-sm text-neutral-400">
             <a href="/partners" className="hover:text-blue-600 transition-colors">合作伙伴管理中心</a>
             <ChevronRight className="w-3.5 h-3.5" />
-            <a href={`/partners/${params.partnerId}`} className="hover:text-blue-600 transition-colors">{staffList[0]?.partnerName || '合作伙伴'}</a>
+            <a href={`/partners/${params.partnerId}`} className="hover:text-blue-600 transition-colors">伙伴详情</a>
             <ChevronRight className="w-3.5 h-3.5" />
             <span className="text-neutral-700 dark:text-neutral-300 font-medium">人员管理</span>
           </div>

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Building2, Save, ArrowLeft, Plus, Trash2, Upload, Info, ChevronDown } from 'lucide-react';
+import { Building2, Save, ArrowLeft, Plus, Trash2, Upload, Info, ChevronDown, ChevronRight } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useToast } from '../ui/Toast';
