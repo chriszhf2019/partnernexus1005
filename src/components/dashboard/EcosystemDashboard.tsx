@@ -111,7 +111,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               <div className="mt-2 pt-3 border-t border-neutral-100 dark:border-neutral-800">
                 <div className="flex items-start gap-1.5">
                   <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-neutral-500 leading-relaxed">{kpi.diagnosis}</p>
+                  <button
+                    onClick={() => onViewChange(kpi.label === '季度营收' ? 'analytics' : kpi.label === '活跃伙伴数' ? 'partners' : kpi.label === 'Pipeline 商机额' ? 'deals' : 'marketing')}
+                    className="text-xs text-neutral-500 hover:text-blue-600 hover:underline text-left leading-relaxed transition-colors">
+                    {kpi.diagnosis}
+                    <span className="ml-1 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
+                  </button>
                 </div>
               </div>
             </Card>
@@ -128,11 +133,16 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     <SafeGrid />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
                     <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
-                    {/* Tooltip removed */}
-                    <Area type="monotone" dataKey="value" stroke="#18181b" fill="url(#revArea)" strokeWidth={2} />
+                    <Area type="monotone" dataKey="value" stroke="#18181b" fill="url(#revArea)" strokeWidth={2} name="实际营收" />
+                    <Line type="monotone" dataKey="value" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} name="预测趋势" />
                     <defs><linearGradient id="revArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18181b" stopOpacity={0.08} /><stop offset="100%" stopColor="#18181b" stopOpacity={0} /></linearGradient></defs>
                   </ComposedChart>
                 </ResponsiveContainer>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[10px] text-neutral-400">
+                <span className="flex items-center gap-2"><span className="w-3 h-0.5 bg-neutral-800 rounded" />实际</span>
+                <span className="flex items-center gap-2"><span className="w-3 h-0.5 bg-neutral-400 rounded" style={{borderTop:'2px dashed #94a3b8'}} />预测</span>
+                <span className="text-amber-500">⚠ 按当前趋势，季末缺口约 ¥{(revenue?.achievements?.quarterly?.target ?? 0) > (revenue?.achievements?.quarterly?.current ?? 0) ? ((revenue?.achievements?.quarterly?.target ?? 0) - (revenue?.achievements?.quarterly?.current ?? 0)) / 10000 : 0}万</span>
               </div>
             </CardContent>
           </Card>
