@@ -32,6 +32,7 @@ const DealRegistrationForm = retryableLazy(() => import('./components/deals/Deal
 const DealDetailPage = retryableLazy(() => import('./components/deals/DealDetailPage').then(m => ({ default: m.DealDetailPage })));
 const SettingsPage = retryableLazy(() => import('./components/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const IncentivesPage = retryableLazy(() => import('./components/marketing/IncentivesPage').then(m => ({ default: m.IncentivesPage })));
+const IncentiveClosingDashboard = retryableLazy(() => import('./components/marketing/IncentiveClosingDashboard').then(m => ({ default: m.IncentiveClosingDashboard })));
 const EnablementPage = retryableLazy(() => import('./components/marketing/EnablementPage').then(m => ({ default: m.EnablementPage })));
 const AnalyticsPage = retryableLazy(() => import('./components/marketing/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const ChannelDashboard = retryableLazy(() => import('./components/marketing/ChannelDashboard').then(m => ({ default: m.ChannelDashboard })));
@@ -330,6 +331,7 @@ function AppLayout() {
               <Route path="/marketing/channel-campaigns" element={<Suspense fallback={<PageLoader />}><ChannelCampaignPage /></Suspense>} />
               <Route path="/marketing/incentive-policy" element={<Navigate to="/incentives" replace />} />
               <Route path="/incentives" element={<IncentivesRoute />} />
+              <Route path="/incentives/:id/report" element={<Suspense fallback={<PageLoader />}><IncentiveClosingDashboard /></Suspense>} />
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />
               <Route path="/settings" element={<SettingsRoute />} />

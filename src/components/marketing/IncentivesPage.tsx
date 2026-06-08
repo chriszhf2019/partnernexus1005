@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useMarketingData } from '../../hooks/useData';
@@ -17,6 +18,7 @@ import { cn } from '../../lib/utils';
 const IncentivesOverview: React.FC = () => {
   const { t } = useLanguage();
   const { config } = useConfig();
+  const navigate = useNavigate();
   const { incentivePrograms, incentiveStats } = useMarketingData();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', trigger_type: 'Pipeline Gap', payout_type: 'Cash', total_budget: '', description: '', start_date: '', end_date: '' });
@@ -304,7 +306,7 @@ const IncentivesOverview: React.FC = () => {
                   <span>💰 ROI <b className={Number(roi) >= 2 ? 'text-emerald-600' : 'text-amber-600'}>{roi}x</b> · {p.start_date?.slice(0, 10)}~{p.end_date?.slice(0, 10)}</span>
                   <div className="flex items-center gap-1.5">
                     {isEnded ? (
-                      <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => setReportProgram(p)}>
+                      <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => navigate(`/incentives/${p.id}/report`)}>
                         <FileText className="w-3 h-3 mr-1" />效果报告
                       </Button>
                     ) : isOverBudget ? (
