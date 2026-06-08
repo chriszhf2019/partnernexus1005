@@ -301,9 +301,6 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
       <PartnerHealthBar
         partners={partners}
         pendingCount={pendingCount}
-        coopCount={partners.filter(p => p.status === 'Cooperating').length}
-        totalPipeline={107100000}
-        wonCount={partners.filter(p => (p.winRate || 0) > 0).length}
         onFilterStatus={(s) => { setStatusFilter(s as any); }}
         onTabChange={(t) => setTab(t as any)}
       />
