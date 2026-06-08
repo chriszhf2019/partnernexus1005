@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Target, Activity, Clock,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Zap, CheckCircle2,
-  MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles,
+  MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles, X,
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -18,6 +18,7 @@ import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell
 
 import { StrategicGoalBoard } from './StrategicGoalBoard';
 import { HistoricalTrendChart } from './HistoricalTrendChart';
+import { supabase } from '../../lib/supabase';
 import { ErrorBoundary } from '../ErrorBoundary';
 
 interface EcosystemDashboardProps {
@@ -53,6 +54,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
   const { t } = useLanguage();
   const { data: cockpitData, loading: cockpitLoading } = useCockpitData();
   const [detailDim, setDetailDim] = useState<string>('region');
+  const [showPartnerList, setShowPartnerList] = useState<{ title: string; partners: any[] } | null>(null);
 
   const { revenue, activePartners, pipeline, leadsConversion, marketing, insights } = cockpitData;
   const ecosystem = activePartners?.partner_ecosystem_details;
@@ -87,6 +89,17 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
     return { finding: `${top?.name}主导，${bottom?.name}待开发`, detail: `${top?.name}贡献显著，${bottom?.name}存在不均衡。`, action: '加大资源投放', actionTarget: 'marketing' };
   }, [dimData, detailDim]);
 
+  const handleShowPartners = async (title: string, filter?: { region?: string; tier?: string; status?: string }) => {
+    try {
+      let query = supabase.from('partners').select('id,name,tier,region,status,win_rate,manager');
+      if (filter?.region) query = query.eq('region', filter.region);
+      if (filter?.tier) query = query.eq('tier', filter.tier);
+      if (filter?.status) query = query.eq('status', filter.status);
+      const { data } = await query.order('tier').limit(50);
+      setShowPartnerList({ title, partners: data || [] });
+    } catch { /* ignore */ }
+  };
+
   if (cockpitLoading) {
     return (
       <div className="space-y-6 animate-pulse">
@@ -107,7 +120,9 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
         <SectionHeader number="1" title="业绩总揽与根因分析" subtitle="不只呈现结果，更揭示驱动业绩变化的深层原因" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {kpis.map((kpi) => (
-            <Card key={kpi.label} hover>
+            <Card key={kpi.label} hover
+              onClick={kpi.label === '活跃伙伴数' ? () => handleShowPartners('活跃合作伙伴 (Cooperating)', { status: 'Cooperating' }) : undefined}
+              className={kpi.label === '活跃伙伴数' ? 'cursor-pointer' : ''}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-medium text-neutral-500">{kpi.label}</span>
                 {kpi.spark.length > 0 && <Spark data={kpi.spark} color={kpi.color} />}
@@ -126,7 +141,14 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                 <div className="flex items-start gap-1.5">
                   <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
                   <button
-                    onClick={() => onViewChange(kpi.label === '季度营收' ? 'analytics' : kpi.label === '活跃伙伴数' ? 'partners' : kpi.label === 'Pipeline 商机额' ? 'deals' : 'marketing')}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (kpi.label === '活跃伙伴数') {
+                        handleShowPartners('活跃合作伙伴 (Cooperating)', { status: 'Cooperating' });
+                      } else {
+                        onViewChange(kpi.label === '季度营收' ? 'analytics' : kpi.label === 'Pipeline 商机额' ? 'deals' : 'marketing');
+                      }
+                    }}
                     className="text-xs text-neutral-500 hover:text-blue-600 hover:underline text-left leading-relaxed transition-colors">
                     {kpi.diagnosis}
                     <span className="ml-1 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
@@ -188,7 +210,8 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                       const density = region.city_count > 0 ? (region.partner_count / region.city_count).toFixed(1) : '0';
                       const isLow = parseFloat(density) < 4;
                       const max = Math.max(...ecosystem.regional_coverage.map((r) => r.partner_count));
-                      return (<div key={i} className={cn('p-3 rounded-lg border', isLow ? 'border-amber-200 dark:border-amber-800 bg-amber-50/20' : 'border-neutral-200 dark:border-neutral-800')}><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><MapPin className={cn('w-4 h-4', isLow ? 'text-amber-500' : 'text-neutral-400')} /><span className="text-sm font-medium">{region.region}</span><Badge variant="default" size="sm">{region.partner_count} 伙伴</Badge></div></div><div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden"><div className={cn('h-full rounded-full', isLow ? 'bg-amber-400' : 'bg-blue-500')} style={{ width: `${(region.partner_count / max) * 100}%` }} /></div></div>);
+                      return (<button key={i} onClick={() => handleShowPartners(`${region.region} · ${region.partner_count} 家伙伴`, { region: region.region })}
+  className={cn('w-full text-left p-3 rounded-lg border cursor-pointer hover:shadow-sm transition-all', isLow ? 'border-amber-200 dark:border-amber-800 bg-amber-50/20' : 'border-neutral-200 dark:border-neutral-800')}><div className="flex items-center justify-between mb-2"><div className="flex items-center gap-2"><MapPin className={cn('w-4 h-4', isLow ? 'text-amber-500' : 'text-neutral-400')} /><span className="text-sm font-medium">{region.region}</span><Badge variant="default" size="sm">{region.partner_count} 伙伴</Badge></div><ChevronRight className="w-3.5 h-3.5 text-neutral-300" /></div><div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden"><div className={cn('h-full rounded-full', isLow ? 'bg-amber-400' : 'bg-blue-500')} style={{ width: `${(region.partner_count / max) * 100}%` }} /></div></button>);
                     })}</div>
                   ) : <EmptyState title="覆盖数据加载中" />}
                 </CardContent>
@@ -478,6 +501,40 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
           </div>
         </div>
       </section>
+
+      {/* Partner List Modal */}
+      {showPartnerList && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowPartnerList(null)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-5 py-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold">{showPartnerList.title}</h3>
+              <button onClick={() => setShowPartnerList(null)} className="p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800 rounded-lg"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-1">
+              {showPartnerList.partners.length === 0 ? (
+                <p className="text-sm text-neutral-400 text-center py-8">暂无匹配伙伴</p>
+              ) : (
+                showPartnerList.partners.map(p => (
+                  <a key={p.id} href={`/partners/${p.id}`} target="_blank" rel="noreferrer"
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors group">
+                    <div className="w-8 h-8 rounded-lg bg-neutral-100 dark:bg-neutral-700 flex items-center justify-center text-xs font-bold">
+                      {p.name?.[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold group-hover:text-blue-600 transition-colors truncate">{p.name}</p>
+                      <p className="text-[10px] text-neutral-400">{p.region} · {p.manager || '—'}</p>
+                    </div>
+                    <Badge variant={p.tier === 'Diamond' || p.tier === 'Platinum' ? 'brand' : 'default'} size="sm">{p.tier}</Badge>
+                    <Badge variant={p.status === 'Cooperating' ? 'success' : 'warning'} size="sm">{p.status === 'Cooperating' ? '合作中' : p.status}</Badge>
+                    <span className="text-[10px] text-neutral-400">赢单率 {p.win_rate || 0}%</span>
+                    <ChevronRight className="w-4 h-4 text-neutral-300 group-hover:text-blue-500" />
+                  </a>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
