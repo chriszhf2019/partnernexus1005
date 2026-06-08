@@ -126,14 +126,20 @@ export const CustomerAnalysis = () => {
     if (!customerName) { setLoading(false); return; }
     const load = async () => {
       try {
+        const escaped = customerName.replace(/'/g, "''");
         const { data } = await supabase.from('deals').select('*')
-          .or(`customer_name.eq.${customerName},customer.eq.${customerName}`)
+          .or(`customer_name.eq.${escaped},customer.eq.${escaped}`)
           .order('created_date', { ascending: false });
         if (data) setDeals(data);
-      } catch { }
+      } catch (e) {
+        console.warn('[CustomerAnalysis] Failed to load deals:', e);
+      }
       setLoading(false);
     };
     load();
+    // Safety: force loading off after 5 seconds even if query hangs
+    const timer = setTimeout(() => setLoading(false), 5000);
+    return () => clearTimeout(timer);
   }, [customerName]);
 
   const [activeView, setActiveView] = useState<'factors' | 'correlation' | 'deep'>('factors');
