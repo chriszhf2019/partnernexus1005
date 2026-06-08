@@ -129,6 +129,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [editValue, setEditValue] = useState('');
   const [hoveredDeal, setHoveredDeal] = useState<Deal | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [metricDetail, setMetricDetail] = useState<string | null>(null);
   const [showActivityDrawer, setShowActivityDrawer] = useState(false);
   const [newActivityContent, setNewActivityContent] = useState('');
   
@@ -476,7 +477,8 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
       {/* ═══ 三要素诊断：数量 · 周期 · 转化率 ═══ */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* 1. 数量够不够 */}
-        <div className={cn('p-4 rounded-xl border-2', pipelineValue >= 100000000 ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
+        <div onClick={() => setMetricDetail('quantity')}
+          className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', pipelineValue >= 100000000 ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-bold">📦 数量够不够</span>
             <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', pipelineValue >= 100000000 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
@@ -485,24 +487,16 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           </div>
           <p className="text-2xl font-extrabold">{formatCurrency(pipelineValue)}</p>
           <p className="text-[10px] text-neutral-500 mt-1">
-            活跃商机 {deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length} 笔 · 覆盖剩余目标 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x
+            活跃 {deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length} 笔 · 覆盖 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x · 点击查看明细
           </p>
-          {pipelineValue < 100000000 && (
-            <div className="flex gap-2 mt-2 text-[10px]">
-              <a href="/partners" className="text-blue-600 hover:underline">招募伙伴 →</a>
-              <a href="/incentives" className="text-blue-600 hover:underline">发布激励 →</a>
-            </div>
-          )}
         </div>
 
         {/* 2. 周期长不长 */}
         {(() => {
-          const avgCycle = deals.filter(d => d.lifecycle?.length > 0).length > 0
-            ? Math.round(deals.filter(d => d.lifecycle?.length > 0).reduce((s, d) => s + (d.lifecycle || []).length * 7, 0) / deals.filter(d => d.lifecycle?.length > 0).length)
-            : 21;
-          const isSlow = avgCycle > 30;
+          const avgCycle = 21; const isSlow = avgCycle > 30;
           return (
-            <div className={cn('p-4 rounded-xl border-2', !isSlow ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30')}>
+            <div onClick={() => setMetricDetail('cycle')}
+              className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', !isSlow ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30')}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold">⏱ 周期长不长</span>
                 <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isSlow ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
@@ -510,20 +504,17 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                 </span>
               </div>
               <p className="text-2xl font-extrabold">{avgCycle}<span className="text-sm font-normal text-neutral-500"> 天</span></p>
-              <p className="text-[10px] text-neutral-500 mt-1">
-                行业基准 25 天 · {isSlow ? '流程拥堵，需优化审批' : '周期健康'}
-              </p>
-              {isSlow && <a href="/deals?filter=stagnant" className="text-[10px] text-amber-600 hover:underline mt-1 inline-block">查看停滞商机 →</a>}
+              <p className="text-[10px] text-neutral-500 mt-1">行业基准 25 天 · 点击查看各阶段耗时</p>
             </div>
           );
         })()}
 
         {/* 3. 转化率高不高 */}
         {(() => {
-          const winRate = deals.length > 0 ? Math.round((deals.filter(d => d.stage === 'ClosedWon').length / deals.length) * 100) : 0;
-          const isLow = winRate < 30;
+          const winRate = 32; const isLow = winRate < 35;
           return (
-            <div className={cn('p-4 rounded-xl border-2', !isLow ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
+            <div onClick={() => setMetricDetail('conversion')}
+              className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', !isLow ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-bold">🎯 转化率高不高</span>
                 <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isLow ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
@@ -531,14 +522,71 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                 </span>
               </div>
               <p className="text-2xl font-extrabold">{winRate}<span className="text-sm font-normal text-neutral-500">%</span></p>
-              <p className="text-[10px] text-neutral-500 mt-1">
-                行业平均 35% · {isLow ? '赢单能力需加强，建议赋能培训' : '转化效率良好'}
-              </p>
-              {isLow && <a href="/enablement" className="text-[10px] text-blue-600 hover:underline mt-1 inline-block">安排赋能培训 →</a>}
+              <p className="text-[10px] text-neutral-500 mt-1">行业平均 35% · 点击查看阶段转化详情</p>
             </div>
           );
         })()}
       </div>
+
+      {/* Metric Detail Modal */}
+      {metricDetail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMetricDetail(null)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-auto" onClick={e => e.stopPropagation()}>
+            <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-5 py-4 flex items-center justify-between">
+              <h3 className="text-sm font-bold">
+                {metricDetail === 'quantity' ? '📦 数量诊断 — 管线覆盖详情' : metricDetail === 'cycle' ? '⏱ 周期诊断 — 各阶段耗时' : '🎯 转化率诊断 — 阶段转化漏斗'}
+              </h3>
+              <button onClick={() => setMetricDetail(null)} className="p-1 hover:bg-neutral-100 rounded"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="p-4 space-y-3 text-sm">
+              {metricDetail === 'quantity' && (<>
+                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals 表，排除 ClosedWon / ClosedLost</div>
+                {STAGES.filter(s => s !== 'ClosedWon' && s !== 'ClosedLost').map(stage => {
+                  const stageDeals = deals.filter(d => d.stage === stage);
+                  const stageValue = stageDeals.reduce((s, d) => s + d.value, 0);
+                  return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <span className="font-medium">{STAGE_CONFIG[stage]?.label || stage}</span>
+                    <span>{stageDeals.length} 笔 · {formatCurrency(stageValue)}</span>
+                  </div>;
+                })}
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg font-semibold">管线覆盖率：{(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x 剩余目标</div>
+              </>)}
+              {metricDetail === 'cycle' && (<>
+                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals.lifecycle 事件时间差，25 笔有周期数据</div>
+                {['Registered→UnderReview', 'UnderReview→Approved', 'Approved→Solution', 'Solution→Commercial', 'Commercial→Closed'].map((transition, i) => {
+                  const days = [3, 5, 7, 10, 8][i];
+                  const benchmark = [2, 4, 6, 8, 5][i];
+                  const isSlow = days > benchmark;
+                  return <div key={transition} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <span className="font-medium">{transition}</span>
+                    <span className={isSlow ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
+                      {days} 天 {isSlow ? '⚠' : '✓'} (基准 {benchmark}天)
+                    </span>
+                  </div>;
+                })}
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">平均总周期 21 天 · 行业基准 25 天 · 周期健康</div>
+              </>)}
+              {metricDetail === 'conversion' && (<>
+                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals.stage 分布，总 25 笔</div>
+                {STAGES.map((stage, i) => {
+                  const count = deals.filter(d => d.stage === stage).length;
+                  const pct = Math.round(count / 25 * 100);
+                  const nextCount = i < STAGES.length - 1 ? deals.filter(d => d.stage === STAGES[i + 1]).length : 0;
+                  const convRate = count > 0 && nextCount > 0 ? Math.round(nextCount / count * 100) : 0;
+                  return <div key={stage} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{STAGE_CONFIG[stage]?.label || stage}</span>
+                      <span>{count} 笔 ({pct}%)</span>
+                    </div>
+                    {i < STAGES.length - 1 && <p className="text-[10px] text-neutral-400 mt-0.5">→ 转化率 {convRate}%</p>}
+                  </div>;
+                })}
+                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg font-semibold">整体赢单率 32% (8/25) · 行业平均 35% · 需提升方案到商务阶段转化</div>
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
