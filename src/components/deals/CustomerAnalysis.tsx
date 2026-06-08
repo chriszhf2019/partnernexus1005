@@ -136,8 +136,10 @@ export const CustomerAnalysis = () => {
     load();
   }, [customerName]);
 
+  const [activeView, setActiveView] = useState<'factors' | 'correlation' | 'deep'>('factors');
   const factors = useMemo(() => generateFactorScores(customerName, deals), [customerName, deals]);
   const strategy = useMemo(() => generateStrategy(customerName, deals), [customerName, deals]);
+  const intel = useMemo(() => getCustomerIntel(customerName, deals), [customerName, deals]);
   const aiConfidence = 85;
   const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
   const wonValue = deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0);
@@ -172,7 +174,28 @@ export const CustomerAnalysis = () => {
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="max-w-[1600px] mx-auto px-6 pt-4">
+        <div className="flex items-center gap-2">
+          {[
+            { id: 'factors' as const, label: '🔍 7要素分析', desc: '全貌诊断' },
+            { id: 'correlation' as const, label: '🔗 生态相关性', desc: '找关联·找抓手' },
+            { id: 'deep' as const, label: '🧠 深度分析', desc: '定方案' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setActiveView(tab.id)}
+              className={cn('px-4 py-2.5 rounded-xl text-left transition-all',
+                activeView === tab.id
+                  ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 shadow-sm'
+                  : 'text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800')}>
+              <div className="text-sm font-semibold">{tab.label}</div>
+              <div className="text-[10px] opacity-60">{tab.desc}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Main: Radar + Factors + Strategy */}
+      {activeView === 'factors' && (
       <div className="max-w-[1600px] mx-auto px-6 py-6">
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
           {/* ═══ LEFT: Radar Chart ═══ */}
@@ -365,6 +388,245 @@ export const CustomerAnalysis = () => {
           </div>
         </div>
       </div>
+      )}
+
+      {/* ═══ CORRELATION: Ecosystem View ═══ */}
+      {activeView === 'correlation' && (
+      <div className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+          {/* LEFT: Ecosystem Reach Radar */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Radar className="w-4 h-4 text-purple-600" />生态渗透力诊断</CardTitle></CardHeader>
+              <CardContent className="flex flex-col items-center">
+                <div className="relative w-[180px] h-[180px]">
+                  <svg width="180" height="180" viewBox="0 0 180 180">
+                    {[0.3, 0.6, 1].map(scale => {
+                      const labels = ['集团协同', '供应链粘性', '投资扩张', '竞争压迫'];
+                      const scores = intel.ecosystem ? [
+                        intel.ecosystem.synergyScore, intel.ecosystem.supplyChainScore,
+                        intel.ecosystem.investmentScore, intel.ecosystem.competitivePressure
+                      ] : [50, 50, 50, 50];
+                      const pts = scores.map((s, i) => {
+                        const angle = (i * 90 - 90) * Math.PI / 180;
+                        const r = 20 + scale * 60;
+                        return `${90 + r * Math.cos(angle)},${90 + r * Math.sin(angle)}`;
+                      }).join(' ');
+                      return <polygon key={scale} points={pts} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />;
+                    })}
+                    {intel.ecosystem && (() => {
+                      const scores = [intel.ecosystem.synergyScore, intel.ecosystem.supplyChainScore, intel.ecosystem.investmentScore, intel.ecosystem.competitivePressure];
+                      const pts = scores.map((s, i) => {
+                        const angle = (i * 90 - 90) * Math.PI / 180;
+                        const r = 20 + (s / 100) * 60;
+                        return `${90 + r * Math.cos(angle)},${90 + r * Math.sin(angle)}`;
+                      }).join(' ');
+                      return <polygon points={pts} fill="rgba(37,99,235,0.15)" stroke="#2563eb" strokeWidth="1.5" />;
+                    })()}
+                    {['集团协同', '供应链粘性', '投资扩张', '竞争压迫'].map((label, i) => {
+                      const scores = intel.ecosystem ? [intel.ecosystem.synergyScore, intel.ecosystem.supplyChainScore, intel.ecosystem.investmentScore, intel.ecosystem.competitivePressure] : [50, 50, 50, 50];
+                      const angle = (i * 90 - 90) * Math.PI / 180;
+                      const r = 20 + (scores[i] / 100) * 60 + 15;
+                      return <text key={i} x={90 + r * Math.cos(angle)} y={90 + r * Math.sin(angle)} textAnchor="middle" dominantBaseline="central" fontSize="8" fill="#2563eb" fontWeight="600">{label} {scores[i]}</text>;
+                    })}
+                  </svg>
+                </div>
+                <div className="mt-3 text-center">
+                  <p className="text-[10px] text-neutral-500">生态覆盖率</p>
+                  <p className="text-xl font-extrabold text-blue-600">{intel.ecosystem?.coverageRate || 30}%</p>
+                  <p className="text-[9px] text-neutral-400">产品在客户生态的渗透程度</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* CENTER: Ecosystem Web */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Subsidiaries */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Building2 className="w-4 h-4 text-blue-600" />核心子公司 & 投资布局</CardTitle></CardHeader>
+              <CardContent>
+                {intel.ecosystem?.subsidiaries.map((sub, i) => (
+                  <div key={i} className="flex items-start gap-3 p-2.5 bg-neutral-50 dark:bg-neutral-800 rounded-lg mb-2 last:mb-0">
+                    <div className="w-2 h-2 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{sub.name}</span>
+                        <Badge size="sm" variant="info">{sub.relation}</Badge>
+                      </div>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">{sub.note}</p>
+                    </div>
+                  </div>
+                ))}
+                {!intel.ecosystem && <p className="text-sm text-neutral-400 text-center py-4">暂无生态数据</p>}
+                {intel.ecosystem && (
+                  <div className="mt-3 p-2.5 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100">
+                    <div className="flex items-start gap-2">
+                      <Brain className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-blue-700 dark:text-blue-300">{intel.ecosystem.strategyInsights[0]}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Supply Chain */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Link2 className="w-4 h-4 text-emerald-600" />上下游供应链关联</CardTitle></CardHeader>
+              <CardContent>
+                {intel.ecosystem?.supplyChain.map((sc, i) => (
+                  <div key={i} className="flex items-start gap-3 p-2.5 bg-neutral-50 dark:bg-neutral-800 rounded-lg mb-2 last:mb-0">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{sc.name}</span>
+                        <Badge size="sm" variant="success">{sc.relation}</Badge>
+                      </div>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">{sc.note}</p>
+                    </div>
+                  </div>
+                ))}
+                {!intel.ecosystem && <p className="text-sm text-neutral-400 text-center py-4">暂无供应链数据</p>}
+                {intel.ecosystem && (
+                  <div className="mt-3 p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100">
+                    <div className="flex items-start gap-2">
+                      <Brain className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-emerald-700 dark:text-emerald-300">{intel.ecosystem.strategyInsights[1]}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Competitors */}
+            <Card>
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-red-500" />竞争态势</CardTitle></CardHeader>
+              <CardContent>
+                {intel.ecosystem?.competitors.map((comp, i) => (
+                  <div key={i} className="flex items-start gap-3 p-2.5 bg-red-50/50 dark:bg-red-900/10 rounded-lg mb-2 last:mb-0">
+                    <div className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-sm">{comp.name}</span>
+                        <Badge size="sm" variant="danger">{comp.status}</Badge>
+                      </div>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">{comp.threat}</p>
+                    </div>
+                  </div>
+                ))}
+                {!intel.ecosystem && <p className="text-sm text-neutral-400 text-center py-4">暂无竞争对手数据</p>}
+                {intel.ecosystem && (
+                  <div className="mt-3 p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-100">
+                    <div className="flex items-start gap-2">
+                      <Brain className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-amber-700 dark:text-amber-300">{intel.ecosystem.strategyInsights[2]}</p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* RIGHT: Action Prescriptions */}
+          <div className="lg:col-span-1">
+            <Card className="sticky top-6">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-amber-500" />AI 攻坚处方</CardTitle></CardHeader>
+              <CardContent className="space-y-3">
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-100">
+                  <p className="text-[10px] font-semibold text-blue-600 mb-1">🌐 生态进攻策略</p>
+                  <p className="text-[11px] text-neutral-700 dark:text-neutral-300">
+                    {intel.ecosystem?.strategyInsights[0] || '先与子公司技术团队建立联系，作为内部突破口向集团推进。'}
+                  </p>
+                </div>
+                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg border border-emerald-100">
+                  <p className="text-[10px] font-semibold text-emerald-600 mb-1">🔗 供应链借力</p>
+                  <p className="text-[11px] text-neutral-700 dark:text-neutral-300">
+                    {intel.ecosystem?.strategyInsights[1] || '通过已有客户关系的上下游伙伴进行引荐背书。'}
+                  </p>
+                </div>
+                <div className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100">
+                  <p className="text-[10px] font-semibold text-red-600 mb-1">⚡ 竞争性逼单</p>
+                  <p className="text-[11px] text-neutral-700 dark:text-neutral-300">
+                    {intel.ecosystem?.strategyInsights[2] || '利用竞争对手已实现的标杆效应，激发客户紧迫感。'}
+                  </p>
+                </div>
+                <div className="pt-3 border-t">
+                  <Button variant="brand" size="sm" className="w-full text-[10px]"
+                    onClick={() => alert('已生成生态攻坚方案，包含：子公司切入路径 · 上下游引荐策略 · 竞争应对方案')}>
+                    <FileText className="w-3 h-3 mr-1" />生成生态攻坚方案
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* ═══ DEEP: Organizational + Financial + Architecture ═══ */}
+      {activeView === 'deep' && (
+      <div className="max-w-[1600px] mx-auto px-6 py-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="w-4 h-4 text-purple-600" />组织行为分析</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">采购决策模式</p>
+                <p className="font-semibold text-purple-700">{intel.decisionMode}</p>
+              </div>
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">决策链长度</p>
+                <p className="font-semibold text-purple-700">{intel.decisionMode.includes('集团') ? '3-5层审批' : '2-3层审批'}</p>
+              </div>
+              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">关键影响人</p>
+                <p className="font-semibold text-purple-700">{intel.cioProfile} · {intel.cioBackground}</p>
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-2">{intel.decisionMode.includes('集团') ? '集团集中采购模式意味着需要总部级别的关系突破，但一旦签约，子公司采购将大幅简化。' : '部门级决策模式意味着周期较短，但需要关注多部门协同。'}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-600" />财务造影分析</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">5年期 TCO 估算</p>
+                <p className="font-semibold text-emerald-700">{cur(totalValue * 3)}</p>
+              </div>
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">预计运维节省</p>
+                <p className="font-semibold text-emerald-700">30% / 年</p>
+              </div>
+              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">投资回收期</p>
+                <p className="font-semibold text-emerald-700">18-24 个月</p>
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-2">基于{intel.revenue}营收规模和{intel.itBudgetGrowth}的IT预算增速，5年期TCO约为{cur(totalValue * 3)}，预计可节省30%运维成本。</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-600" />技术架构演进</CardTitle></CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">当前阶段</p>
+                <p className="font-semibold text-blue-700">{intel.techStack}</p>
+              </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">1-2年演进</p>
+                <p className="font-semibold text-blue-700">混合云 + 容器化</p>
+              </div>
+              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-[10px] text-neutral-500">3-5年目标</p>
+                <p className="font-semibold text-blue-700">云原生 + AI 原生</p>
+              </div>
+              <p className="text-[11px] text-neutral-500 mt-2">基于当前{intel.cloudMaturity}上云比例和{intel.hiringHot}的招聘方向，预计2年内完成容器化改造，5年内向AI原生架构演进。</p>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+      )}
+
     </div>
   );
 };

@@ -29,6 +29,17 @@ export interface CustomerIntel {
   };
   aiFindings: string[];
   sources: string[];
+  ecosystem?: {
+    coverageRate: number;
+    synergyScore: number;
+    supplyChainScore: number;
+    investmentScore: number;
+    competitivePressure: number;
+    subsidiaries: Array<{ name: string; relation: string; note: string }>;
+    supplyChain: Array<{ name: string; relation: string; note: string }>;
+    competitors: Array<{ name: string; status: string; threat: string }>;
+    strategyInsights: string[];
+  };
 }
 
 // 25家客户完整情报
@@ -44,6 +55,27 @@ const intel: Record<string, CustomerIntel> = {
     scores: { scale: 90, strategy: 85, digital: 75, procurement: 50, stakeholder: 55, financial: 90, dynamics: 80 },
     aiFindings: ['保险+健康科技融合带来大量IT整合需求', '私有云向混合云迁移是核心机会', 'CIO公开表示\"AI是未来10年核心战略\"'],
     sources: ['2024年报', 'LinkedIn', '财经媒体报道', '招投标公示'],
+    ecosystem: {
+      coverageRate: 45, synergyScore: 65, supplyChainScore: 55, investmentScore: 70, competitivePressure: 60,
+      subsidiaries: [
+        { name: '平安科技', relation: '全资子公司', note: '集团IT主力，负责AI和云平台建设' },
+        { name: '平安好医生', relation: '控股子公司', note: '医疗健康数字化，数据合规需求高' },
+        { name: '陆金所', relation: '控股子公司', note: '金融科技，安全合规要求严格' },
+      ],
+      supplyChain: [
+        { name: '华为云', relation: '上游供应商', note: '当前私有云主要供应商，关系稳固' },
+        { name: '蚂蚁集团', relation: '生态合作伙伴', note: '联合研发金融风控模型' },
+      ],
+      competitors: [
+        { name: '中国人寿', status: '已全面上云', threat: '数字化进度领先，客户体验优于平安' },
+        { name: '泰康在线', status: '正在招标', threat: '互联网保险新势力，技术架构更灵活' },
+      ],
+      strategyInsights: [
+        '以平安科技为切入点，先与子公司技术团队建立信任',
+        '通过好医生和陆金所的合规需求，展示安全方案实力',
+        '对标人保的数字化进度，激发管理层紧迫感',
+      ],
+    },
   },
   '深圳市人民政府': {
     customerName: '深圳市人民政府',
@@ -56,6 +88,26 @@ const intel: Record<string, CustomerIntel> = {
     scores: { scale: 95, strategy: 80, digital: 60, procurement: 40, stakeholder: 50, financial: 85, dynamics: 75 },
     aiFindings: ['国资云和信创政策是核心驱动力', '需要提供完整的国产化替代方案', '政务数据共享平台有大量商机'],
     sources: ['政府采购网', '市政府工作报告', '招投标公示'],
+    ecosystem: {
+      coverageRate: 30, synergyScore: 40, supplyChainScore: 35, investmentScore: 55, competitivePressure: 70,
+      subsidiaries: [
+        { name: '市大数据中心', relation: '下属机构', note: '政务数据整合，大数据平台需求' },
+        { name: '市信息中心', relation: '下属机构', note: '政务云运维和国产化推动者' },
+      ],
+      supplyChain: [
+        { name: '华为', relation: '核心供应商', note: '政务云和网络基础设施' },
+        { name: '浪潮', relation: '供应商', note: '服务器和政务应用' },
+      ],
+      competitors: [
+        { name: '阿里云', status: '已中标部分项目', threat: '政务数字化方案成熟度高' },
+        { name: '腾讯云', status: '积极投标', threat: '微信生态整合能力强' },
+      ],
+      strategyInsights: [
+        '政务云国产化是核心切入点，提供信创全套方案',
+        '通过大数据中心的技术团队建立信任关系',
+        '对标杭州市的数字化先进经验，推动决策',
+      ],
+    },
   },
   '比亚迪': {
     customerName: '比亚迪',
@@ -80,6 +132,26 @@ const intel: Record<string, CustomerIntel> = {
     scores: { scale: 98, strategy: 75, digital: 45, procurement: 35, stakeholder: 40, financial: 90, dynamics: 70 },
     aiFindings: ['电力物联网是最大商机', '安全合规要求极高，需提供等保三级方案', '预算充裕但决策周期长'],
     sources: ['年报', '能源局文件', '招投标公示'],
+    ecosystem: {
+      coverageRate: 25, synergyScore: 35, supplyChainScore: 50, investmentScore: 60, competitivePressure: 45,
+      subsidiaries: [
+        { name: '国网信通', relation: '全资子公司', note: '集团信息化主力，负责数字化转型' },
+        { name: '南瑞集团', relation: '控股子公司', note: '电力自动化和智能电网' },
+        { name: '国网数科', relation: '控股子公司', note: '新能源和数字化新业务' },
+      ],
+      supplyChain: [
+        { name: '华为', relation: '核心供应商', note: '网络和IT基础设施' },
+        { name: '中兴通讯', relation: '供应商', note: '通信设备' },
+      ],
+      competitors: [
+        { name: '南方电网', status: '数字化领先', threat: '数字电网平台建设速度快' },
+      ],
+      strategyInsights: [
+        '以国网信通为切入点，提供电力物联网方案',
+        '通过南瑞的技术合作建立行业标杆',
+        '利用碳中和政策窗口期，推动绿色数据中心建设',
+      ],
+    },
   },
 };
 
