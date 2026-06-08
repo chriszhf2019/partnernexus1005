@@ -340,13 +340,13 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
       {/* ═══════════ Segment Filter ═══════════ */}
       <div className="flex items-center gap-2 flex-wrap">
         {[
-          { key: 'all', label: '全部', count: partners.length },
-          { key: 'champion', label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length },
-          { key: 'dormant', label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length },
-          { key: 'newcomer', label: '🆕 新进', count: pendingCount },
-          { key: 'rising', label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length },
+          { key: 'all', label: '全部', count: partners.length, tip: '显示全部合作伙伴，不应用任何分层筛选' },
+          { key: 'champion', label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, tip: '赢单率超过 50% 的活跃伙伴。这些是生态中的核心战斗力，贡献了大部分营收。' },
+          { key: 'dormant', label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length, tip: '状态为合作中但尚无任何赢单记录的伙伴。需诊断是激励不足、能力缺失还是商机匹配问题。' },
+          { key: 'newcomer', label: '🆕 新进', count: pendingCount, tip: '已提交注册但尚未批复的待审核伙伴。超过 3 天未处理将影响伙伴体验和生态扩展速度。' },
+          { key: 'rising', label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length, tip: '近 90 天内新加入且已激活的伙伴。处于成长曲线初期，建议给予更多赋能和关注。' },
         ].map(seg => (
-          <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }}
+          <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }} title={seg.tip}
             className={cn('px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all',
               segmentFilter === seg.key ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900' : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-400')}>
             {seg.label} <span className="ml-0.5 opacity-60">{seg.count}</span>
