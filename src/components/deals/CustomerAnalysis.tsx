@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
+import { getCustomerIntel } from '../../data/customerIntelligence';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
@@ -24,95 +25,89 @@ interface FactorScore {
 }
 
 function generateFactorScores(customerName: string, deals: any[]): FactorScore[] {
-  const totalValue = deals.reduce((s: number, d: any) => s + (d.value || 0), 0);
-  const wonDeals = deals.filter((d: any) => d.stage === 'ClosedWon');
-  const winRate = deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0;
-
+  const intel = getCustomerIntel(customerName, deals);
   return [
     {
-      score: totalValue > 10000000 ? 85 : totalValue > 5000000 ? 65 : 45,
-      label: '行业地位', color: '#2563eb',
+      score: intel.scores.scale, label: '行业地位', color: '#2563eb',
       metrics: [
-        { label: '年度营收(估)', value: totalValue > 10000000 ? '¥15-30亿' : totalValue > 5000000 ? '¥5-15亿' : '¥1-5亿' },
-        { label: '同比增速', value: totalValue > 5000000 ? '+12%' : '+5%' },
-        { label: '员工规模(估)', value: totalValue > 10000000 ? '5000+' : '1000-5000' },
-        { label: '行业排名', value: totalValue > 10000000 ? 'Top 10' : 'Top 50' },
+        { label: '年度营收', value: intel.revenue },
+        { label: '同比增速', value: intel.revenueGrowth },
+        { label: '员工规模', value: intel.employees },
+        { label: '行业排名', value: intel.rank },
       ],
-      aiFinding: totalValue > 5000000
-        ? `该客户营收连增3年，但人均产出低于行业平均15%，存在提效需求。`
-        : `该客户处于快速成长期，IT投入占比逐年上升。`,
-      sources: ['2024年度财报', '企查查企业信息', '行业分析报告'],
+      aiFinding: intel.aiFindings[0] || '暂无分析',
+      sources: intel.sources || ['企查查', '行业报告'],
     },
     {
-      score: 70, label: '战略愿景', color: '#7c3aed',
+      score: intel.scores.strategy, label: '战略愿景', color: '#7c3aed',
       metrics: [
-        { label: '战略关键词', value: '#数字化转型 #降本增效 #智能工厂' },
-        { label: '海外扩张', value: totalValue > 5000000 ? '活跃' : '观望' },
+        { label: '战略关键词', value: intel.strategyKeywords.join(' ') },
         { label: '技术投入方向', value: 'AI/大数据/云原生' },
+        { label: '数字化转型', value: intel.cloudMaturity + ' 上云' },
       ],
-      aiFinding: `管理层近期多次提及"供应链韧性"，对风险管理类产品兴趣度预估较高。`,
-      sources: ['CEO季度演讲', '官网战略更新', '媒体报道'],
+      aiFinding: intel.aiFindings[2] || intel.aiFindings[0] || '暂无分析',
+      sources: intel.sources || ['媒体报道', '官网'],
     },
     {
-      score: totalValue > 5000000 ? 75 : 50, label: '数字化成熟度', color: '#059669',
+      score: intel.scores.digital, label: '数字化成熟度', color: '#059669',
       metrics: [
-        { label: '当前技术栈', value: '私有云 + Java + Oracle' },
-        { label: '招聘热度', value: '在招 50+ K8s/安全工程师' },
-        { label: '云化程度', value: totalValue > 5000000 ? '30% 上云' : '10% 上云' },
+        { label: '当前技术栈', value: intel.techStack },
+        { label: '招聘热度', value: intel.hiringHot },
+        { label: '云化程度', value: intel.cloudMaturity + ' 上云' },
       ],
-      aiFinding: `近期大量招聘K8s专家，推测正在进行容器化架构重构，切入机会大。`,
-      sources: ['BOSS直聘/拉勾', '公开技术博客', 'GitHub组织页'],
+      aiFinding: intel.aiFindings[1] || '暂无分析',
+      sources: ['BOSS直聘/拉勾', '公开技术博客'],
     },
     {
-      score: 60, label: '采购性格', color: '#d97706',
+      score: intel.scores.procurement, label: '采购性格', color: '#d97706',
       metrics: [
-        { label: '核心供应商', value: '华为 60% · DELL 20% · 其他 20%' },
-        { label: '平均招标周期', value: '45 天' },
-        { label: '决策模式', value: '集中采购 · CIO主导' },
+        { label: '核心供应商', value: intel.topVendors },
+        { label: '平均招标周期', value: intel.bidCycle },
+        { label: '决策模式', value: intel.decisionMode },
       ],
-      aiFinding: `供应商极其集中，替换成本高。建议以"增量扩容"或"多云备份"名义切入。`,
-      sources: ['过去3年招投标公示', '政府采购网', '电子招标平台'],
+      aiFinding: '建议以"增量扩容"或"多云备份"名义切入，避免直接替换现有供应商。',
+      sources: ['招投标公示', '政府采购网'],
     },
     {
-      score: 55, label: '决策人画像', color: '#dc2626',
+      score: intel.scores.stakeholder, label: '决策人画像', color: '#dc2626',
       metrics: [
-        { label: 'CIO/CTO', value: '技术背景 · IBM出身 · 关注安全' },
-        { label: '采购决策链', value: 'CIO → 采购部 → CEO审批' },
-        { label: '关键偏好', value: '重视合规 · ROI敏感' },
+        { label: 'CIO/CTO', value: intel.cioProfile },
+        { label: '背景', value: intel.cioBackground },
+        { label: '关键偏好', value: intel.cioPreference },
       ],
-      aiFinding: `CIO曾发表"安全是数字化底座"的言论，方案中应优先强调合规与安全。`,
-      sources: ['LinkedIn领英', '媒体采访报道', '行业会议演讲'],
+      aiFinding: intel.aiFindings[0] || '暂无分析',
+      sources: ['LinkedIn领英', '媒体采访'],
     },
     {
-      score: totalValue > 5000000 ? 80 : 55, label: '财务健康', color: '#0891b2',
+      score: intel.scores.financial, label: '财务健康', color: '#0891b2',
       metrics: [
-        { label: '资产负债率', value: '45% (健康)' },
-        { label: '现金流', value: '充足 · 正向' },
-        { label: '预估IT预算增幅', value: '+15% YoY' },
+        { label: '资产负债率', value: intel.debtRatio },
+        { label: '现金流', value: intel.cashflow },
+        { label: '预估IT预算增幅', value: intel.itBudgetGrowth },
       ],
-      aiFinding: `现金流充足但利润率微降，对"投入产出比(ROI)"非常敏感，需提供详细成本分析。`,
-      sources: ['季度资产负债表', '年报财务数据', '行业分析师报告'],
+      aiFinding: 'IT预算充足，对投资回报率(ROI)敏感，需提供详细的TCO对比分析。',
+      sources: ['年报财务数据', '行业分析师报告'],
     },
     {
-      score: 65, label: '重大动态', color: '#e11d48',
+      score: intel.scores.dynamics, label: '重大动态', color: '#e11d48',
       metrics: [
-        { label: '近期舆情', value: '收购某AI初创公司 · 高管变动' },
-        { label: '风险预警', value: '行业合规新政(Q3生效)' },
-        { label: '机会信号', value: '海外研发中心筹建中' },
+        { label: '近期事件', value: intel.recentEvents.slice(0, 2).join(' · ') || '暂无' },
+        { label: '风险预警', value: intel.riskAlerts.slice(0, 2).join(' · ') || '暂无' },
       ],
-      aiFinding: `上周刚宣布成立海外研发中心，预计对全球组网与跨境合规有即时需求。`,
+      aiFinding: intel.aiFindings[0] || '暂无分析',
       sources: ['百度新闻', '36氪/虎嗅', '监管部门公示'],
     },
   ];
 }
 
 // AI Strategy
-function generateStrategy(factors: FactorScore[], customerName: string): string[] {
+function generateStrategy(customerName: string, deals: any[]): string[] {
+  const intel = getCustomerIntel(customerName, deals);
   return [
-    `切入时机：建议在下月预算窗口期前拜访，利用海外研发中心建设的时间窗口。`,
-    `首选话术：重点谈我们如何帮助${customerName}解决"海外研发中心"的数据合规与全球组网问题。`,
-    `防御策略：警惕华为在该客户侧的传统优势，主打我们的"灵活架构"与"多云管理"差异化。`,
-    `ROI论证：准备详细的TCO对比分析，强调3年内可降低运维成本30%。`,
+    `切入时机：建议在${intel.bidCycle.replace('天', '')}天招标窗口期前拜访，利用${intel.recentEvents[0] || '数字化转型'}的时间窗口。`,
+    `首选话术：重点谈我们如何帮助${customerName}解决"${intel.strategyKeywords[0]?.replace('#', '') || '数字化转型'}"，突出${intel.cioPreference || 'ROI'}。`,
+    `防御策略：警惕${intel.topVendors.split('·')[0]?.trim() || '现有供应商'}在该客户侧的传统优势，主打我们的灵活架构与多云管理差异化。`,
+    `ROI论证：准备详细的TCO对比分析，${intel.itBudgetGrowth.includes('+') ? `客户IT预算增长${intel.itBudgetGrowth}，预算窗口良好` : '强调长期成本优化价值'}。`,
   ];
 }
 
@@ -142,7 +137,7 @@ export const CustomerAnalysis = () => {
   }, [customerName]);
 
   const factors = useMemo(() => generateFactorScores(customerName, deals), [customerName, deals]);
-  const strategy = useMemo(() => generateStrategy(factors, customerName), [factors, customerName]);
+  const strategy = useMemo(() => generateStrategy(customerName, deals), [customerName, deals]);
   const aiConfidence = 85;
   const totalValue = deals.reduce((s, d) => s + (d.value || 0), 0);
   const wonValue = deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + d.value, 0);
