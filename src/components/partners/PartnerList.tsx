@@ -298,12 +298,31 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
     <div className="space-y-4">
       {/* ═══════════ Page Header ═══════════ */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            管理合作伙伴生态 · 点击KPI卡片查看明细 · 点击伙伴名称预览画像 · 使用自动分层快速筛选
+        <div className="flex items-center justify-between gap-4 flex-wrap w-full">
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
+            <p className="text-sm text-neutral-500 mt-1">生态健康度诊断 · 覆盖/活跃/能效三位一体</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {[
+              { key: 'all', label: '全部', count: partners.length },
+              { key: 'champion', label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length },
+              { key: 'dormant', label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length },
+              { key: 'newcomer', label: '🆕 新进', count: pendingCount },
+              { key: 'rising', label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length },
+            ].map(seg => (
+              <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }}
+                className={cn('px-3 py-1.5 rounded-full text-[11px] font-semibold border transition-all hover:shadow-sm',
+                  segmentFilter === seg.key
+                    ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900 dark:border-white'
+                    : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-400')}>
+                {seg.label} <span className="ml-0.5 opacity-60">{seg.count}</span>
+              </button>
+            ))}
+          </div>
+        </div>
 
-      {/* Health Scorecard */}
+        {/* Health Scorecard */}
       <PartnerHealthBar
         partners={partners}
         pendingCount={pendingCount}
@@ -356,24 +375,6 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
             <RefreshCw className={cn('w-3.5 h-3.5', refreshing && 'animate-spin')} />刷新
           </button>
         </div>
-      </div>
-
-      {/* ═══════════ Dynamic Segment Filter ═══════════ */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-[11px] text-neutral-400 font-medium">分层:</span>
-        {[
-          { key: 'all', label: '全部', count: partners.length, color: 'bg-neutral-100 text-neutral-600' },
-          { key: 'champion', label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-          { key: 'dormant', label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length, color: 'bg-amber-50 text-amber-700 border-amber-200' },
-          { key: 'newcomer', label: '🆕 新进', count: pendingCount, color: 'bg-blue-50 text-blue-700 border-blue-200' },
-          { key: 'rising', label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length, color: 'bg-purple-50 text-purple-700 border-purple-200' },
-        ].map(seg => (
-          <button key={seg.key} onClick={() => { setSegmentFilter(seg.key); setPage(1); }}
-            className={cn('px-3 py-1 rounded-full text-[10px] font-semibold border transition-all hover:shadow-sm',
-              segmentFilter === seg.key ? 'ring-2 ring-offset-1 ' + seg.color.replace('bg-', 'ring-') : seg.color)}>
-            {seg.label} {seg.count}
-          </button>
-        ))}
       </div>
 
       {/* ═══════════ Batch Actions ═══════════ */}
