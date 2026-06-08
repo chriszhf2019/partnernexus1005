@@ -473,21 +473,72 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
         ))}
       </div>
 
-      {/* Pipeline Coverage Prediction */}
-      {wonValue < 150000000 * 0.5 && (
-        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 text-[11px] flex items-center gap-3">
-          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-          <span className="text-amber-700 dark:text-amber-400">
-            当前有效管线 {formatCurrency(pipelineValue)} 为剩余目标 {formatCurrency(150000000 - wonValue)} 的 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)} 倍，按历史 35% 转化率{ pipelineValue * 0.35 < 150000000 - wonValue ? '，无法覆盖缺口。建议前往 ' : '，可覆盖目标。' }
-          </span>
-          {pipelineValue * 0.35 < 150000000 - wonValue && (
-            <div className="flex gap-2 ml-auto shrink-0">
+      {/* ═══ 三要素诊断：数量 · 周期 · 转化率 ═══ */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* 1. 数量够不够 */}
+        <div className={cn('p-4 rounded-xl border-2', pipelineValue >= 100000000 ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-bold">📦 数量够不够</span>
+            <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', pipelineValue >= 100000000 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
+              {pipelineValue >= 100000000 ? '✓ 充足' : '⚠ 不足'}
+            </span>
+          </div>
+          <p className="text-2xl font-extrabold">{formatCurrency(pipelineValue)}</p>
+          <p className="text-[10px] text-neutral-500 mt-1">
+            活跃商机 {deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length} 笔 · 覆盖剩余目标 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x
+          </p>
+          {pipelineValue < 100000000 && (
+            <div className="flex gap-2 mt-2 text-[10px]">
               <a href="/partners" className="text-blue-600 hover:underline">招募伙伴 →</a>
               <a href="/incentives" className="text-blue-600 hover:underline">发布激励 →</a>
             </div>
           )}
         </div>
-      )}
+
+        {/* 2. 周期长不长 */}
+        {(() => {
+          const avgCycle = deals.filter(d => d.lifecycle?.length > 0).length > 0
+            ? Math.round(deals.filter(d => d.lifecycle?.length > 0).reduce((s, d) => s + (d.lifecycle || []).length * 7, 0) / deals.filter(d => d.lifecycle?.length > 0).length)
+            : 21;
+          const isSlow = avgCycle > 30;
+          return (
+            <div className={cn('p-4 rounded-xl border-2', !isSlow ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30')}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold">⏱ 周期长不长</span>
+                <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isSlow ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
+                  {!isSlow ? '✓ 正常' : '⚠ 偏长'}
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold">{avgCycle}<span className="text-sm font-normal text-neutral-500"> 天</span></p>
+              <p className="text-[10px] text-neutral-500 mt-1">
+                行业基准 25 天 · {isSlow ? '流程拥堵，需优化审批' : '周期健康'}
+              </p>
+              {isSlow && <a href="/deals?filter=stagnant" className="text-[10px] text-amber-600 hover:underline mt-1 inline-block">查看停滞商机 →</a>}
+            </div>
+          );
+        })()}
+
+        {/* 3. 转化率高不高 */}
+        {(() => {
+          const winRate = deals.length > 0 ? Math.round((deals.filter(d => d.stage === 'ClosedWon').length / deals.length) * 100) : 0;
+          const isLow = winRate < 30;
+          return (
+            <div className={cn('p-4 rounded-xl border-2', !isLow ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-bold">🎯 转化率高不高</span>
+                <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isLow ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
+                  {!isLow ? '✓ 正常' : '⚠ 偏低'}
+                </span>
+              </div>
+              <p className="text-2xl font-extrabold">{winRate}<span className="text-sm font-normal text-neutral-500">%</span></p>
+              <p className="text-[10px] text-neutral-500 mt-1">
+                行业平均 35% · {isLow ? '赢单能力需加强，建议赋能培训' : '转化效率良好'}
+              </p>
+              {isLow && <a href="/enablement" className="text-[10px] text-blue-600 hover:underline mt-1 inline-block">安排赋能培训 →</a>}
+            </div>
+          );
+        })()}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
