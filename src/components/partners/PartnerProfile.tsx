@@ -7,7 +7,7 @@ import {
   Layers, Briefcase, GitBranch, Network, Calendar, Package, ShoppingCart, Star,
   Lightbulb, Info, Link2, Activity, Shield, Search, BarChart3, PieChart, Eye,
   MessageSquare, ThumbsUp, ThumbsDown, RefreshCw, Rocket, Crosshair, Compass,
-  Radar, Flame, Bell, Mail, Gift, X, Check, Tag, ListTodo, Trash2, Pencil,
+  Radar, Flame, Bell, Mail, Gift, X, Check, Tag, ListTodo, Trash2, Pencil, ArrowLeft,
 } from 'lucide-react';
 import { PartnerDetails, Activity as ActivityType, JBPFormData, PartnerContact, PartnerTimelineEvent } from '../../types';
 import { cn, formatCurrency } from '../../lib/utils';
@@ -722,7 +722,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
       {/* ═══ HEADER ═══ */}
       <div className={cn('flex items-center justify-between p-3 rounded-2xl border', partner.status === 'Cooperating' ? 'bg-emerald-50/30 border-emerald-200 dark:bg-emerald-900/10' : partner.status === 'Prospective' ? 'bg-blue-50/30 border-blue-200' : 'bg-neutral-50/30 border-neutral-200')}>
         <div className="flex items-center gap-3">
-          {onBack && <button onClick={onBack} className="flex items-center gap-2 text-neutral-400 hover:text-neutral-900 dark:hover:text-white font-medium text-sm transition-colors"><ChevronRight className="w-4 h-4 rotate-180" />{t('profile.backToList')}</button>}
+          <button onClick={() => navigate('/partners')} className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-700 font-medium text-sm transition-colors shadow-sm"><ArrowLeft className="w-4 h-4" />← 返回合作伙伴列表</button>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="secondary" size="sm" onClick={() => navigate(`/deals?partner=${partner.id}`)}>{t('common.deals')}</Button>
