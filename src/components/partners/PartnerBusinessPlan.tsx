@@ -161,6 +161,8 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
   const [generating, setGenerating] = useState(false);
   const [actions, setActions] = useState<ActionItem[]>([]);
   const [confidence, setConfidence] = useState(0);
+  const [editingAction, setEditingAction] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
 
   const tags = useMemo(() => extractTags(partner, relatedDeals, contacts), [partner, relatedDeals, contacts]);
   const roiAlert = useMemo(() => generateROIAlert(tags, partner), [tags, partner]);
@@ -219,6 +221,11 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
                     </span>
                   </CardTitle>
                   <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const newActions = generateActions(tags, partner);
+                      setActions(newActions);
+                      alert('计划已刷新，基于最新数据重新生成行动方案');
+                    }}><RefreshCw className="w-3.5 h-3.5 mr-1" />刷新</Button>
                     <Button variant="secondary" size="sm" onClick={() => {
                       const blob = new Blob([tags.map(t => `- **${t.label}**: ${t.value} (${t.alert === 'red' ? '⚠️' : t.alert === 'amber' ? '⚡' : '✅'}) ${t.benchmark || ''}`).join('\n')], { type: 'text/markdown' });
                       const url = URL.createObjectURL(blob); const a = document.createElement('a');
@@ -321,27 +328,39 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
                     <div className="space-y-1.5">
                       {actions.map(action => (
                         <div key={action.id}
-                          className={cn('p-2 rounded-lg border transition-all cursor-pointer hover:shadow-sm',
-                            action.done ? 'bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 opacity-70' : 'bg-white dark:bg-neutral-800 border-neutral-100 dark:border-neutral-700')}
-                          onClick={() => action.action?.()}>
-                          <div className="flex items-center gap-2">
-                            <input type="checkbox" checked={action.done} onChange={() => toggleAction(action.id)}
-                              className="w-3 h-3 rounded accent-blue-600 shrink-0" onClick={e => e.stopPropagation()} />
-                            <span className={cn('text-[11px] flex-1', action.done ? 'text-neutral-400 line-through' : 'text-neutral-700 dark:text-neutral-300')}>
-                              {action.text}
-                            </span>
-                          </div>
-                          <div className="flex gap-1.5 mt-1.5 ml-5">
-                            <Badge size="sm" variant={action.impact === 'high' ? 'success' : 'default'} className="text-[8px]">
-                              {action.impact === 'high' ? '高收益' : '中收益'}
-                            </Badge>
-                            <Badge size="sm" variant={action.difficulty === 'easy' ? 'info' : 'warning'} className="text-[8px]">
-                              {action.difficulty === 'easy' ? '易达成' : action.difficulty === 'medium' ? '需投入' : '挑战'}
-                            </Badge>
-                            {action.action && !action.done && (
-                              <span className="text-[8px] text-blue-500 ml-auto cursor-pointer hover:underline" onClick={e => { e.stopPropagation(); action.action?.(); }}>执行 →</span>
-                            )}
-                          </div>
+                          className={cn('p-2 rounded-lg border transition-all hover:shadow-sm',
+                            action.done ? 'bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 opacity-70' : 'bg-white dark:bg-neutral-800 border-neutral-100 dark:border-neutral-700')}>
+                          {editingAction === action.id ? (
+                            <div className="flex items-center gap-2">
+                              <input value={editText} onChange={e => setEditText(e.target.value)}
+                                className="flex-1 text-[11px] px-2 py-1 border rounded" autoFocus
+                                onKeyDown={e => { if (e.key === 'Enter') { setActions(prev => prev.map(a => a.id === action.id ? { ...a, text: editText } : a)); setEditingAction(null); } }} />
+                              <Button variant="brand" size="sm" className="text-[9px]" onClick={() => { setActions(prev => prev.map(a => a.id === action.id ? { ...a, text: editText } : a)); setEditingAction(null); }}>保存</Button>
+                              <Button variant="ghost" size="sm" className="text-[9px]" onClick={() => setEditingAction(null)}>取消</Button>
+                            </div>
+                          ) : (
+                            <>
+                              <div className="flex items-center gap-2" onClick={() => action.action?.()}>
+                                <input type="checkbox" checked={action.done} onChange={() => toggleAction(action.id)}
+                                  className="w-3 h-3 rounded accent-blue-600 shrink-0" onClick={e => e.stopPropagation()} />
+                                <span className={cn('text-[11px] flex-1 cursor-pointer', action.done ? 'text-neutral-400 line-through' : 'text-neutral-700 dark:text-neutral-300')}>
+                                  {action.text}
+                                </span>
+                                <button className="text-neutral-300 hover:text-neutral-500 shrink-0" onClick={e => { e.stopPropagation(); setEditingAction(action.id); setEditText(action.text); }} title="编辑">✎</button>
+                              </div>
+                              <div className="flex gap-1.5 mt-1.5 ml-5">
+                                <Badge size="sm" variant={action.impact === 'high' ? 'success' : 'default'} className="text-[8px]">
+                                  {action.impact === 'high' ? '高收益' : '中收益'}
+                                </Badge>
+                                <Badge size="sm" variant={action.difficulty === 'easy' ? 'info' : 'warning'} className="text-[8px]">
+                                  {action.difficulty === 'easy' ? '易达成' : action.difficulty === 'medium' ? '需投入' : '挑战'}
+                                </Badge>
+                                {action.action && !action.done && (
+                                  <span className="text-[8px] text-blue-500 ml-auto cursor-pointer hover:underline" onClick={e => { e.stopPropagation(); action.action?.(); }}>执行 →</span>
+                                )}
+                              </div>
+                            </>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -360,23 +379,45 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
                   </div>
                 </div>
 
-                {/* ── JBP CTA ── */}
-                <div className="p-4 bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 rounded-xl border-2 border-dashed border-purple-200 dark:border-purple-800">
-                  <div className="flex items-center justify-between mb-3">
+                {/* ── JBP CTA (integrated with action progress) ── */}
+                <div className={cn('p-4 rounded-xl border-2 transition-all',
+                  doneCount >= actions.length / 2
+                    ? 'bg-gradient-to-r from-purple-50 to-blue-50 dark:from-purple-950/20 dark:to-blue-950/20 border-purple-300 dark:border-purple-700'
+                    : 'bg-neutral-50 dark:bg-neutral-900 border-dashed border-neutral-200 dark:border-neutral-700')}>
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
-                        <Video className="w-5 h-5 text-white" />
+                      <div className={cn('w-10 h-10 rounded-xl flex items-center justify-center',
+                        doneCount >= 3 ? 'bg-gradient-to-br from-purple-500 to-blue-600' : 'bg-neutral-200 dark:bg-neutral-700')}>
+                        <Video className={cn('w-5 h-5', doneCount >= 3 ? 'text-white' : 'text-neutral-400')} />
                       </div>
                       <div>
-                        <h5 className="text-sm font-bold text-neutral-900 dark:text-white">发起 JBP 联合业务规划会议</h5>
-                        <p className="text-[10px] text-neutral-500">基于诊断和差距分析，自动生成会议议程与联合攻坚方案</p>
+                        <h5 className="text-sm font-bold text-neutral-900 dark:text-white">
+                          {doneCount >= 3 ? '✅ 准备就绪 — 发起 JBP 联合业务规划会议' : '发起 JBP 联合业务规划会议'}
+                        </h5>
+                        <p className="text-[10px] text-neutral-500 mt-0.5">
+                          {doneCount >= 3
+                            ? `已完成 ${doneCount}/${actions.length} 项行动，可基于成果发起 JBP 会议`
+                            : `完成上方 ${Math.max(3 - doneCount, 1)} 项关键行动后，系统将自动预填会议议程`}
+                        </p>
                       </div>
                     </div>
                     <Button variant="brand" size="md" onClick={onScheduleJBP} className="shrink-0">
                       <Calendar className="w-4 h-4 mr-2" />发起 JBP 会议
                     </Button>
                   </div>
-                  {/* Auto-generated agenda */}
+
+                  {/* Pre-filled context from actions */}
+                  {doneCount > 0 && (
+                    <div className="mb-3 p-2.5 bg-white dark:bg-neutral-800 rounded-lg text-[10px]">
+                      <p className="font-semibold text-neutral-500 mb-1">📌 会议将携带以下已确认的行动成果：</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {actions.filter(a => a.done).map(a => (
+                          <Badge key={a.id} variant="success" size="sm" className="text-[9px]">✓ {a.text}</Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-[10px]">
                     <div className="p-2.5 bg-white dark:bg-neutral-800 rounded-lg">
                       <p className="font-semibold text-neutral-700 dark:text-neutral-300 mb-1.5">📋 AI 建议议程</p>
@@ -385,8 +426,11 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
                           `1. 业务回顾：${tags.find(t => t.label === '商机管道')?.value || '商机概况'}`,
                           `2. 差距分析：${coreConflictTags[0]?.label || '关键指标'} 低于基准`,
                           `3. 联合攻坚方案：${tags.find(t => t.label === '行业聚焦')?.value?.split('·')[0] || '目标市场'} 拓展`,
-                          '4. 目标设定与 KPI 对齐',
+                          `4. 目标设定与 KPI 对齐`,
                         ].map((item, i) => (<p key={i}>{item}</p>))}
+                      </div>
+                      <div className="flex gap-2 mt-2">
+                        <button className="text-[9px] text-blue-500 hover:underline" onClick={() => { setEditingAction(0); setEditText(actions[0]?.text || ''); }}>✎ 修改议程</button>
                       </div>
                     </div>
                     <div className="p-2.5 bg-white dark:bg-neutral-800 rounded-lg">
@@ -409,6 +453,13 @@ export const PartnerBusinessPlan = ({ partner, relatedDeals, contacts, onSchedul
                       </div>
                     </div>
                   </div>
+
+                  {/* Integration hint when actions incomplete */}
+                  {doneCount < 3 && (
+                    <div className="mt-3 text-center text-[10px] text-neutral-400">
+                      💡 完成上方行动项后，JBP 会议将自动带入已确认的成果和行动计划
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
