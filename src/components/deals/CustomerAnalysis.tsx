@@ -166,6 +166,7 @@ export const CustomerAnalysis = () => {
                 <span className="px-2 py-1 bg-white/10 rounded-full text-xs flex items-center gap-1">
                   <Brain className="w-3 h-3" />AI 数据置信度 {aiConfidence}%
                 </span>
+                <span className="text-white/40 text-[10px]">🕐 数据同步: 2小时前</span>
               </div>
               <p className="text-white/50 text-sm mt-1">{deals.length} 个商机 · {cur(totalValue)} 总额 · 赢单 {cur(wonValue)}</p>
             </div>
@@ -218,6 +219,15 @@ export const CustomerAnalysis = () => {
                     }).join(' ');
                     return <polygon key={scale} points={pts} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />;
                   })}
+                  {/* Industry benchmark (dashed) */}
+                  <polygon
+                    points={factors.map((_, i) => {
+                      const angle = (i * 360 / 7 - 90) * Math.PI / 180;
+                      const r = 30 + 0.55 * 60;
+                      return `${100 + r * Math.cos(angle)},${100 + r * Math.sin(angle)}`;
+                    }).join(' ')}
+                    fill="none" stroke="#94a3b8" strokeWidth="1" strokeDasharray="4 3"
+                  />
                   {/* Data polygon */}
                   <polygon
                     points={factors.map((f, i) => {
@@ -242,6 +252,10 @@ export const CustomerAnalysis = () => {
                   })}
                 </svg>
                 <div className="mt-3 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-1 text-[9px] text-neutral-400">
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-blue-500 inline-block rounded" />客户</span>
+                    <span className="flex items-center gap-1"><span className="w-2.5 h-0.5 bg-neutral-400 inline-block rounded" style={{borderTop:'2px dashed #94a3b8'}} />行业均值</span>
+                  </div>
                   <p className="text-[10px] text-neutral-500">综合评估</p>
                   <p className="text-lg font-extrabold text-blue-600">
                     {Math.round(factors.reduce((s, f) => s + f.score, 0) / 7)}/100
@@ -275,11 +289,19 @@ export const CustomerAnalysis = () => {
                           <h4 className="text-sm font-bold text-neutral-900 dark:text-white">{factor.label}</h4>
                           <span className="text-[10px] text-neutral-400">评分 {factor.score}/100</span>
                         </div>
-                        <div className="h-1.5 bg-neutral-100 dark:bg-neutral-700 rounded-full mt-1">
+                        <div className={cn('h-1.5 rounded-full mt-1 overflow-hidden', factor.score < 55 ? 'bg-red-100 dark:bg-red-900/20 shadow-[0_0_6px_rgba(239,68,68,0.3)]' : 'bg-neutral-100 dark:bg-neutral-700')}>
                           <div className="h-full rounded-full transition-all" style={{ width: `${factor.score}%`, background: factor.color }} />
                         </div>
+                        {/* TL;DR insight */}
+                        <p className="text-[10px] text-neutral-500 mt-1 line-clamp-1 italic">
+                          {factor.score < 55 ? '⚠ ' : factor.score >= 75 ? '✓ ' : ''}
+                          {factor.aiFinding.slice(0, 60)}{factor.aiFinding.length > 60 ? '...' : ''}
+                        </p>
                       </div>
-                      <ChevronRight className={cn('w-4 h-4 text-neutral-400 transition-transform', isSelected && 'rotate-90')} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {factor.score < 55 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="⚠ 瓶颈" />}
+                        <ChevronRight className={cn('w-4 h-4 transition-transform', factor.score < 55 ? 'text-red-400' : 'text-neutral-400', isSelected && 'rotate-90')} />
+                      </div>
                     </div>
 
                     {/* Expanded detail */}
@@ -368,10 +390,10 @@ export const CustomerAnalysis = () => {
                   <div className="space-y-1">
                     {factors.map((f, i) => (
                       <label key={i} className="flex items-center gap-2 text-[10px] cursor-pointer">
-                        <input type="checkbox" defaultChecked={f.score < 70} className="w-3 h-3 rounded accent-blue-600" />
+                        <input type="checkbox" defaultChecked={f.score < 55} className="w-3 h-3 rounded accent-blue-600" />
                         <span className="w-2 h-2 rounded-full shrink-0" style={{ background: f.color }} />
                         {f.label} ({f.score}分)
-                        {f.score < 70 && <span className="text-red-500 text-[8px]">待突破</span>}
+                        {f.score < 55 && <span className="text-red-500 text-[8px]">⚠ 瓶颈</span>}
                       </label>
                     ))}
                   </div>
