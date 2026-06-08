@@ -80,15 +80,21 @@ export const PartnerHealthBar = ({
         </Card>
       </div>
 
-      {/* Right-side Smart Task Drawer Trigger */}
-      <button
-        onClick={() => setShowDrawer(true)}
-        className="fixed right-0 top-1/2 -translate-y-1/2 z-40 bg-amber-500 hover:bg-amber-600 text-white rounded-l-xl shadow-lg px-2 py-4 flex flex-col items-center gap-1 transition-all group"
-        title="智能待办">
-        <Bell className="w-5 h-5" />
-        <span className="text-[10px] font-bold writing-vertical">{pendingCount + partners.filter(p => !p.winRate).length}</span>
-        <span className="text-[8px] opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap absolute -left-16">待办</span>
-      </button>
+      {/* Right-side Smart Task Drawer Trigger — prominent */}
+      <div className="fixed right-0 top-1/2 -translate-y-1/2 z-40 flex items-center">
+        {/* Label hint */}
+        <div className="bg-amber-500 text-white text-[11px] font-bold px-3 py-2 rounded-l-lg shadow-lg mr-0 animate-pulse">
+          待办 <span className="text-base">{pendingCount + partners.filter(p => !p.winRate).length}</span> 项
+        </div>
+        {/* Click target */}
+        <button
+          onClick={() => setShowDrawer(true)}
+          className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white rounded-r-xl shadow-xl px-1.5 py-5 flex flex-col items-center gap-1.5 transition-all group"
+          title="点击打开智能待办中心">
+          <Bell className="w-5 h-5 animate-pulse" />
+          <ChevronRight className="w-4 h-4 rotate-180" />
+        </button>
+      </div>
 
       {/* Smart Task Drawer */}
       <AnimatePresence>
@@ -101,10 +107,15 @@ export const PartnerHealthBar = ({
               className="fixed right-0 top-0 bottom-0 z-50 w-[380px] bg-white dark:bg-neutral-900 shadow-2xl overflow-y-auto"
               onClick={e => e.stopPropagation()}>
               {/* Header */}
-              <div className="sticky top-0 bg-gradient-to-r from-amber-500 to-amber-600 text-white px-5 py-4 flex items-center justify-between z-10">
-                <div className="flex items-center gap-2">
-                  <Bell className="w-5 h-5" />
-                  <h3 className="text-sm font-bold">智能待办中心</h3>
+              <div className="sticky top-0 bg-gradient-to-r from-amber-500 via-orange-500 to-red-500 text-white px-5 py-5 flex items-center justify-between z-10 shadow-lg">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
+                    <Bell className="w-6 h-6 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-extrabold">智能待办中心</h3>
+                    <p className="text-[11px] text-white/70">{pendingCount + partners.filter(p => !p.winRate).length} 项待处理</p>
+                  </div>
                 </div>
                 <button onClick={() => setShowDrawer(false)} className="p-1 hover:bg-white/20 rounded-lg">
                   <X className="w-5 h-5" />
