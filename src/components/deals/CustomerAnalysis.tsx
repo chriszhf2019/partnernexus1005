@@ -145,9 +145,13 @@ export const CustomerAnalysis = () => {
   // Try DB first, fall back to static file
   useEffect(() => {
     if (!customerName) return;
-    supabase.from('customer_intelligence').select('*').eq('customer_name', customerName).single()
-      .then(({ data }) => { if (data) setDbIntel(data); })
-      .catch(() => {});
+    const load = async () => {
+      try {
+        const { data } = await supabase.from('customer_intelligence').select('*').eq('customer_name', customerName).single();
+        if (data) setDbIntel(data);
+      } catch { /* table may not exist yet */ }
+    };
+    load();
   }, [customerName]);
 
   const factors = useMemo(() => generateFactorScores(customerName, deals), [customerName, deals]);

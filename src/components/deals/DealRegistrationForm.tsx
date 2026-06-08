@@ -8,6 +8,7 @@ import { partnerService } from '../../services/partner-service';
 import { dealService } from '../../services/deal-service';
 import type { Partner } from '../../types';
 import { Button } from '../ui/Button';
+import { Badge } from '../ui/Badge';
 
 // Pinyin initial map for common Chinese surnames/characters
 const PINYIN: Record<string, string> = {
@@ -208,21 +209,30 @@ export const DealRegistrationForm = () => {
   return (
     <div className="grid grid-cols-12 gap-8 items-start">
       <div className="col-span-12 lg:col-span-8 space-y-6">
-        {/* Stepper */}
-        <div className="flex items-center justify-between px-2">
-          {[1,2,3].map((s, idx) => (
-            <div key={s} className="flex items-center gap-3">
-              <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center text-xs font-bold transition-all',
-                step === s ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 shadow-md scale-110' :
-                step > s ? 'bg-emerald-500 text-white' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400')}>
-                {step > s ? <CheckCircle2 className="w-4 h-4" /> : s}
+        {/* Stepper with descriptions */}
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="flex items-center justify-between">
+            {[
+              { num: 1, label: '基本信息', desc: '伙伴·客户·项目' },
+              { num: 2, label: '商机详情', desc: '金额·时间·行业' },
+              { num: 3, label: '确认提交', desc: '审核·预览·报备' },
+            ].map((s, idx) => (
+              <div key={s.num} className="flex items-center gap-2">
+                <div className={cn('w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold transition-all',
+                  step === s.num ? 'bg-blue-600 text-white shadow-lg shadow-blue-200 scale-110' :
+                  step > s.num ? 'bg-emerald-500 text-white' : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-400')}>
+                  {step > s.num ? <CheckCircle2 className="w-4 h-4" /> : s.num}
+                </div>
+                <div className="hidden sm:block">
+                  <p className={cn('text-xs font-bold', step >= s.num ? 'text-neutral-900 dark:text-white' : 'text-neutral-400')}>{s.label}</p>
+                  <p className="text-[10px] text-neutral-400">{s.desc}</p>
+                </div>
+                {idx < 2 && (
+                  <div className={cn('w-8 sm:w-16 h-0.5 rounded-full mx-1', step > s.num ? 'bg-emerald-500' : 'bg-neutral-100 dark:bg-neutral-800')} />
+                )}
               </div>
-              <span className={cn('text-xs font-semibold uppercase tracking-wider hidden sm:block', step >= s ? 'text-neutral-900 dark:text-white' : 'text-neutral-400')}>
-                {t(`deals.step${s}`)}
-              </span>
-              {idx < 2 && <div className={cn('h-0.5 flex-1 mx-4 rounded-full', step > s ? 'bg-emerald-500' : 'bg-neutral-100 dark:bg-neutral-800')} />}
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
         {/* Form */}
@@ -380,16 +390,42 @@ export const DealRegistrationForm = () => {
       </div>
 
       {/* Tips Sidebar */}
-      <div className="col-span-12 lg:col-span-4">
-        <div className="p-6 bg-neutral-900 dark:bg-neutral-800 rounded-2xl text-white">
-          <h3 className="text-sm font-semibold mb-4">报备提示</h3>
-          <div className="space-y-4 text-sm">
-            <p className="text-neutral-400">1. 确保<strong className="text-white">客户名称</strong>与工商注册一致。</p>
-            <p className="text-neutral-400">2. 选择正确的<strong className="text-white">合作伙伴</strong>，关联后将自动填充区域。</p>
-            <p className="text-neutral-400">3. 商机金额以人民币(¥)为单位。</p>
-            <p className="text-neutral-400">4. 提交后渠道经理将在 48 小时内审核。</p>
+      <div className="col-span-12 lg:col-span-4 space-y-4">
+        <div className="p-5 bg-gradient-to-br from-blue-600 to-indigo-700 rounded-2xl text-white">
+          <h3 className="text-sm font-bold mb-3">
+            {step === 1 ? '📋 ' : step === 2 ? '💰 ' : '✅ '}
+            {step === 1 ? '选择合作伙伴与客户' : step === 2 ? '填写商机详情' : '确认并提交报备'}
+          </h3>
+          <div className="space-y-3 text-xs text-white/70">
+            {step === 1 && (<>
+              <p>🔍 支持<strong className="text-white">拼音首字母</strong>搜索（如输入"hw"匹配"华为"）</p>
+              <p>📌 选择合作伙伴后，<strong className="text-white">区域和行业</strong>将自动填充</p>
+              <p>💡 客户名称与已有商机关联，可用于<strong className="text-white">客户7要素分析</strong></p>
+            </>)}
+            {step === 2 && (<>
+              <p>💰 商机金额建议填写<strong className="text-white">预估合同总额</strong></p>
+              <p>📅 预计结单日期影响<strong className="text-white">Pipeline加权计算</strong></p>
+              <p>🏭 行业分类用于后续<strong className="text-white">AI客户分析</strong></p>
+            </>)}
+            {step === 3 && (<>
+              <p>📝 请仔细核对所有信息，提交后<strong className="text-white">48小时内审核</strong></p>
+              <p>🛡️ 报备后将自动进入<strong className="text-white">商机保护期</strong></p>
+              <p>📊 审核通过后可在<strong className="text-white">商机列表</strong>中追踪全生命周期</p>
+            </>)}
           </div>
         </div>
+
+        {/* Quick Stats */}
+        {formData.partnerId && (
+          <div className="p-4 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-100 dark:border-neutral-700">
+            <h4 className="text-xs font-semibold text-neutral-500 mb-2">合作方信息</h4>
+            <div className="space-y-1.5 text-xs">
+              <p className="flex justify-between"><span className="text-neutral-400">名称</span><span className="font-medium">{formData.partnerName}</span></p>
+              <p className="flex justify-between"><span className="text-neutral-400">等级</span><Badge variant={partners.find(p=>p.id===formData.partnerId)?.tier === 'Platinum' ? 'brand' : 'default'} size="sm">{partners.find(p=>p.id===formData.partnerId)?.tier || '-'}</Badge></p>
+              <p className="flex justify-between"><span className="text-neutral-400">区域</span><span className="font-medium">{partners.find(p=>p.id===formData.partnerId)?.region || '-'}</span></p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
