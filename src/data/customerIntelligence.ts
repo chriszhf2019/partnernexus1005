@@ -121,6 +121,45 @@ const intel: Record<string, CustomerIntel> = {
     aiFindings: ['海外工厂需要全球组网和数据合规方案', '智能驾驶带来海量数据处理需求', '供应链数字化是新增切入点'],
     sources: ['2024年报', 'LinkedIn', '媒体报道'],
   },
+  '海尔集团': {
+    customerName: '海尔集团',
+    industry: '家电/物联网/工业互联网', revenue: '¥3500亿', revenueGrowth: '+8%', employees: '100,000+', rank: '全球家电前三',
+    strategyKeywords: ['#智能家居', '#工业互联网', '#卡奥斯COSMOPlat', '#海外扩张'], techStack: '混合云 + SAP + 自建卡奥斯平台', cloudMaturity: '40%', hiringHot: 'IoT工程师 300+ · 云原生 150+',
+    topVendors: '华为 40% · SAP 30% · 自建 20% · 其他 10%', bidCycle: '60天', decisionMode: '集团+事业部双层采购',
+    cioProfile: 'CIO 刘建国', cioBackground: 'SAP出身 · 工业互联网专家', cioPreference: '自主可控 · 生态协同 · ROI敏感',
+    debtRatio: '62%', cashflow: '健康', itBudgetGrowth: '+18% YoY',
+    recentEvents: ['卡奥斯(COSMOPlat)获工信部双跨平台认证', '海外印度工厂投产', '收购3家智能传感器公司'], riskAlerts: ['美的数字化转型领先', '家电行业利润率下滑', '工业互联网赛道竞争加剧'],
+    scores: { scale: 90, strategy: 88, digital: 70, procurement: 55, stakeholder: 60, financial: 85, dynamics: 80 },
+    aiFindings: [
+      '海尔智家正在推行全集团云原生标准，本项目极具标杆意义，一旦签单可快速横向复制到卡奥斯等15家核心成员企业',
+      '日日顺物流已在用云原生方案，建议通过日日顺CIO向集团引荐，背书方案在大物流场景下的稳定性',
+      '美的美云智数已实现100%容器化，海尔在工业互联网赛道面临被反超风险，本项目是维持卡奥斯行业地位的关键',
+    ],
+    sources: ['2024年报', '卡奥斯白皮书', '企查查股权穿透', 'IDC制造业数字化报告'],
+    ecosystem: {
+      coverageRate: 45, synergyScore: 78, supplyChainScore: 65, investmentScore: 72, competitivePressure: 75,
+      subsidiaries: [
+        { name: '海尔智家 (600690)', relation: '上市子公司', note: '集团核心，正推行全集团云原生标准' },
+        { name: '卡奥斯 COSMOPlat', relation: '全资子公司', note: '工业互联网双跨平台，数字化投入最大' },
+        { name: '海尔生物', relation: '控股子公司', note: '生物医疗，冷链数字化' },
+        { name: '日日顺物流', relation: '控股子公司', note: '大件物流，已在用云原生方案' },
+      ],
+      supplyChain: [
+        { name: '日日顺物流', relation: '下游物流', note: '战略伙伴，可作为内部引荐通道' },
+        { name: '华为云', relation: '上游供应商', note: '当前混合云供应商，关系稳固' },
+        { name: '某芯片厂商', relation: '上游供应商', note: '核心客户，有联合研发关系' },
+      ],
+      competitors: [
+        { name: '美的集团', status: '已全面上云', threat: '美云智数100%容器化，工业互联网领先' },
+        { name: '格力电器', status: '正在招标', threat: '智能制造投入大，数字化追赶中' },
+      ],
+      strategyInsights: [
+        '以卡奥斯(COSMOPlat)为切入点，先与子公司技术团队沟通，他们对云原生的渴望最高，可作为内部"内线"向集团推方案',
+        '通过日日顺物流CIO引荐，分享物流节点的成功数据，打消海尔总部对迁移稳定性的顾虑',
+        '在建议书中增加"竞对方案对比"章节，强调美的已实现的部署效率，利用"标杆落后焦虑"加速合同审批',
+      ],
+    },
+  },
   '国家电网': {
     customerName: '国家电网',
     industry: '能源/电力', revenue: '¥3.5万亿', revenueGrowth: '+5%', employees: '1,500,000+', rank: '全球最大电力公司',
