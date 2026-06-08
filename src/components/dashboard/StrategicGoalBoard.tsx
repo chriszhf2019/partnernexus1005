@@ -13,7 +13,7 @@ interface StrategicGoalBoardProps {
 }
 
 export const StrategicGoalBoard = ({ revenue, insights, onNavigate }: StrategicGoalBoardProps) => {
-  const achievementRate = revenue.achievements.quarterly.rate;
+  const achievementRate = revenue?.achievements?.quarterly?.rate ?? 0;
   const isAtRisk = achievementRate < 60;
 
   const conclusion = achievementRate >= 80
