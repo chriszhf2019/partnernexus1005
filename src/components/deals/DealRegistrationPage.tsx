@@ -459,11 +459,12 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
               <p className="text-[10px] text-neutral-400 mt-1">{s.sub}</p>
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-700">
                 <span className="text-[10px] text-neutral-400">{s.trend}</span>
-                <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">详情 →</span>
+                <button className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">查看详情 →</button>
               </div>
             </div>
-            <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs leading-relaxed rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[280px] text-center shadow-lg">
-              {s.tip}
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs leading-relaxed rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[300px] text-center shadow-lg">
+              <p className="mb-1.5">{s.tip}</p>
+              <p className="text-blue-400 dark:text-blue-600 font-semibold">点击查看详情 →</p>
               <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
             </div>
           </Card>
