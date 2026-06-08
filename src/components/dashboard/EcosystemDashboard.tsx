@@ -3,7 +3,7 @@ import { useState, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Target, Activity, Clock,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Zap, CheckCircle2,
-  MapPin, Building2, Layers, Info, BarChart3,
+  MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles,
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -315,29 +315,168 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
         </div>
       </section>
 
-      {/* Part 3: 深度洞察 */}
+      {/* Part 3: 深度洞察与行动 */}
       <section>
-        <SectionHeader number="3" title="渠道深度洞察与行动建议" subtitle="相关性分析、生命周期管理与健康度诊断" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {insights?.map((insight, i) => (
-            <Card key={i} hover onClick={() => onViewChange(insight.actionId === 'pmdf' ? 'marketing' : insight.actionId === 'training' ? 'enablement' : 'analytics')}>
-              <div className="flex items-start gap-3">
-                <div className={cn('w-9 h-9 rounded-lg flex items-center justify-center shrink-0', insight.type === 'trend' ? 'bg-blue-50 dark:bg-blue-900/20' : insight.type === 'risk' ? 'bg-amber-50 dark:bg-amber-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20')}>
-                  {insight.type === 'trend' ? <TrendingUp className="w-4 h-4 text-blue-600" /> : insight.type === 'risk' ? <AlertTriangle className="w-4 h-4 text-amber-600" /> : <Zap className="w-4 h-4 text-emerald-600" />}
-                </div>
-                <div className="flex-1 min-w-0"><p className="text-sm font-semibold">{insight.title}</p><p className="text-xs text-neutral-500 mt-1">{insight.content}</p></div>
-              </div>
-            </Card>
-          ))}
-        </div>
-      </section>
+        <SectionHeader number="3" title="渠道深度洞察与行动建议" subtitle="相关性分析 · 生命周期管理 · 健康度诊断 · AI行动处方" />
 
-      <section>
-        <div className="flex items-center gap-4 mb-6">
-          <div className="w-9 h-9 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0"><Clock className="w-4 h-4 text-neutral-500" /></div>
-          <div><h2 className="text-lg font-semibold">历史趋势</h2></div>
-          <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800 ml-4" /></div>
-        <HistoricalTrendChart />
+        {/* Row 1: Anomaly Trend + ROI Correlation */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Anomaly Detection Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>📈 业绩趋势与异常诊断</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="h-48">
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={revenue?.monthly_data || []}>
+                    <SafeGrid />
+                    <Area type="monotone" dataKey="value" stroke="#2563eb" fill="url(#trendArea)" strokeWidth={2} />
+                    <Line type="monotone" dataKey="value" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="5 5" dot={false} />
+                    <defs><linearGradient id="trendArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#2563eb" stopOpacity={0.12} /><stop offset="100%" stopColor="#2563eb" stopOpacity={0} /></linearGradient></defs>
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+                {[
+                  { label: 'Q1 政策调整', color: 'bg-amber-400', desc: '激励门槛降低后报备量+30%', action: 'incentives' },
+                  { label: 'Q2 新品发布', color: 'bg-blue-400', desc: '云原生平台拉动大单增长', action: 'analytics' },
+                  { label: 'Q3 预测缺口', color: 'bg-red-400', desc: '按当前趋势季末差¥500万', action: 'deals' },
+                ].map((ev, i) => (
+                  <button key={i} onClick={() => onViewChange(ev.action)} className="flex items-start gap-2 p-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-left transition-colors">
+                    <span className={cn('w-2 h-2 rounded-full mt-1 shrink-0', ev.color)} />
+                    <div><p className="font-semibold text-neutral-700 dark:text-neutral-300">{ev.label}</p><p className="text-neutral-400">{ev.desc}</p></div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ROI Correlation */}
+          <Card>
+            <CardHeader>
+              <CardTitle>📊 投入产出相关性</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {[
+                  { label: '高激励·高产出', pct: 45, color: 'bg-emerald-500', detail: '12家伙伴 · 平均ROI 3.2x', action: 'incentives', tag: '重点维护' },
+                  { label: '高激励·低产出', pct: 15, color: 'bg-red-500', detail: '4家伙伴 · 需诊断原因', action: 'partners', tag: '需干预' },
+                  { label: '低激励·高产出', pct: 25, color: 'bg-blue-500', detail: '8家伙伴 · 自然增长强劲', action: 'partners', tag: '潜力股' },
+                  { label: '低激励·低产出', pct: 15, color: 'bg-neutral-400', detail: '6家伙伴 · 需激活或淘汰', action: 'enablement', tag: '休眠' },
+                ].map((r, i) => (
+                  <button key={i} onClick={() => onViewChange(r.action)} className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-left">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs font-semibold">{r.label}</span>
+                        <Badge size="sm" variant={r.tag === '需干预' ? 'danger' : r.tag === '休眠' ? 'default' : r.tag === '潜力股' ? 'info' : 'success'}>{r.tag}</Badge>
+                      </div>
+                      <div className="h-1.5 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden">
+                        <div className={cn('h-full rounded-full', r.color)} style={{ width: `${r.pct}%` }} />
+                      </div>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">{r.detail}</p>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 2: Lifecycle Funnel + Health Scorecards */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Partner Lifecycle */}
+          <Card>
+            <CardHeader>
+              <CardTitle>🔄 伙伴生命周期分布</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-4 gap-2 text-center">
+                {[
+                  { stage: '导入期', count: 3, color: 'bg-blue-100 text-blue-700', desc: '新签·待激活', action: 'enablement' },
+                  { stage: '成长期', count: 8, color: 'bg-emerald-100 text-emerald-700', desc: '增速>30%', action: 'incentives' },
+                  { stage: '成熟期', count: 9, color: 'bg-purple-100 text-purple-700', desc: '贡献主力', action: 'partners' },
+                  { stage: '衰退期', count: 2, color: 'bg-red-100 text-red-700', desc: '活跃下降', action: 'partners' },
+                ].map((s) => (
+                  <button key={s.stage} onClick={() => onViewChange(s.action)} className={cn('p-3 rounded-xl transition-all hover:scale-105 cursor-pointer', s.color)}>
+                    <p className="text-2xl font-extrabold">{s.count}</p>
+                    <p className="text-xs font-semibold mt-1">{s.stage}</p>
+                    <p className="text-[9px] opacity-75">{s.desc}</p>
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-[11px] flex items-center gap-2">
+                <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="text-amber-700 dark:text-amber-300">2家伙伴进入衰退期，活跃度连续下降超3个月</span>
+                <button onClick={() => onViewChange('partners')} className="ml-auto text-amber-600 hover:underline text-[10px] whitespace-nowrap">处理 →</button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Health Scorecards */}
+          <Card>
+            <CardHeader>
+              <CardTitle>💚 渠道健康度 360°</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {[
+                  { label: '商机储备率', value: 72, target: 80, color: '#d97706', icon: Target, detail: 'Pipeline覆盖目标72%，缺口需补', action: 'deals' },
+                  { label: '能力饱和度', value: 45, target: 70, color: '#dc2626', icon: Shield, detail: '认证工程师人均覆盖不足', action: 'enablement' },
+                  { label: '伙伴依赖度', value: 85, target: 70, color: '#059669', icon: Users, detail: 'Top3贡献32%，结构健康', action: 'partners' },
+                ].map((h) => (
+                  <button key={h.label} onClick={() => onViewChange(h.action)} className="w-full flex items-center gap-4 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors text-left">
+                    <div className="relative w-14 h-14 shrink-0">
+                      <svg className="w-full h-full -rotate-90" viewBox="0 0 60 60">
+                        <circle cx="30" cy="30" r="24" fill="none" stroke="#e5e7eb" strokeWidth="5" />
+                        <circle cx="30" cy="30" r="24" fill="none" stroke={h.color} strokeWidth="5" strokeLinecap="round"
+                          strokeDasharray="150.8" strokeDashoffset={150.8 - (h.value / 100) * 150.8} />
+                      </svg>
+                      <span className="absolute inset-0 flex items-center justify-center text-sm font-extrabold">{h.value}%</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2"><h.icon className="w-3.5 h-3.5" /><span className="text-sm font-semibold">{h.label}</span></div>
+                      <p className="text-[10px] text-neutral-400 mt-0.5">{h.detail}</p>
+                    </div>
+                    <span className={cn('px-2 py-0.5 rounded-full text-[9px] font-bold', h.value >= h.target ? 'bg-emerald-100 text-emerald-700' : h.value >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700')}>
+                      {h.value >= h.target ? '达标' : `差${h.target - h.value}%`}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Row 3: AI Action Prescriptions (full width) */}
+        <div>
+          <h3 className="text-sm font-bold mb-4 flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" />AI 行动建议</h3>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {[
+              { title: '华南伙伴激活', desc: '20家白银伙伴连续3月无报备，建议发布"破冰奖励"激励政策。', icon: Zap, color: 'bg-amber-50 border-amber-200', action: 'incentives', btn: '前往激励政策 →' },
+              { title: '大单停滞预警', desc: '海尔大单停滞在方案环节20天，相关性显示该伙伴缺乏售前能力。', icon: AlertTriangle, color: 'bg-red-50 border-red-200', action: 'enablement', btn: '安排专家支持 →' },
+              { title: 'Q4业绩缺口', desc: 'Q4营收缺口约¥5000万，建议针对"金融行业"发起联合获客活动。', icon: TrendingUp, color: 'bg-blue-50 border-blue-200', action: 'marketing', btn: '发起营销活动 →' },
+            ].map((task, i) => (
+              <Card key={i} className={cn('border', task.color)}>
+                <CardContent>
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', task.color)}>
+                      <task.icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold">{task.title}</p>
+                      <p className="text-xs text-neutral-500 mt-1">{task.desc}</p>
+                    </div>
+                  </div>
+                  <Button variant="brand" size="sm" className="w-full text-[11px]" onClick={() => onViewChange(task.action)}>
+                    {task.btn}
+                  </Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </section>
     </div>
   );
