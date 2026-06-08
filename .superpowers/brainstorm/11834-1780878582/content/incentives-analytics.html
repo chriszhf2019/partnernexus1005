@@ -1,0 +1,141 @@
+<h2>📊 效果分析 v4 — 当前 vs 决策级看板</h2>
+<p class="subtitle">从事后报表升级为事中纠偏指挥塔：Sparkline趋势+漏斗转化+象限分析+AI归因+行动闭环</p>
+
+<div class="split">
+  <!-- CURRENT -->
+  <div class="mockup">
+    <div class="mockup-header">当前 — 静态数字 + 基本进度条</div>
+    <div class="mockup-body" style="font-size:9px;padding:8px;">
+      <div style="padding:6px;background:#fefce8;border-radius:6px;margin-bottom:6px;"><span style="font-size:8px;font-weight:600;">效果评估层</span><br><span style="font-size:7px;color:#888;">Pipeline转化看板 · ROI分析 · 伙伴活跃度洞察</span></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:4px;">
+        <div style="padding:6px;background:#fff;border:1px solid #eee;border-radius:6px;">
+          <div style="font-size:8px;font-weight:600;">投入产出分析</div>
+          <div style="font-size:16px;font-weight:800;color:#059669;">2.6x</div>
+          <div style="font-size:7px;color:#888;">总投入 ¥267万 · 总预算 ¥765万</div>
+        </div>
+        <div style="padding:6px;background:#fff;border:1px solid #eee;border-radius:6px;">
+          <div style="font-size:8px;font-weight:600;">预算使用情况</div>
+          <div style="font-size:7px;">Q2 渠道开门红 ████ 42%</div>
+          <div style="font-size:7px;">Q3 医疗冲刺 ████████ 97%</div>
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:3px;margin-bottom:4px;">
+        <div style="padding:4px;background:#eff6ff;border-radius:4px;text-align:center;"><div style="font-size:7px;">目标</div><div style="font-size:12px;font-weight:800;">50</div></div>
+        <div style="padding:4px;background:#f0fdf6;border-radius:4px;text-align:center;"><div style="font-size:7px;">已报备</div><div style="font-size:12px;font-weight:800;">225</div></div>
+        <div style="padding:4px;background:#fef9f0;border-radius:4px;text-align:center;"><div style="font-size:7px;">缺口</div><div style="font-size:12px;font-weight:800;color:#d97706;">0</div></div>
+      </div>
+      <div style="text-align:center;font-size:7px;color:#bbb;">❌ 无趋势 · 无漏斗 · 无象限 · 无归因 · 无Sparkline · 无行动</div>
+    </div>
+  </div>
+
+  <!-- OPTIMIZED -->
+  <div class="mockup">
+    <div class="mockup-header">v4 — Sparkline趋势+漏斗+象限+AI归因+行动闭环</div>
+    <div class="mockup-body" style="font-size:9px;padding:8px;">
+      <!-- AI Diagnosis Banner -->
+      <div style="padding:4px 6px;background:linear-gradient(135deg,#eff6ff,#faf8ff);border-radius:4px;border:1px solid #bfdbfe;margin-bottom:5px;font-size:7px;">
+        <span style="font-weight:600;color:#2563eb;">🧠 AI诊断：</span>「新一代AI智算」转化漏斗在报备环节卡住(转化率仅12%)，建议优化准入门槛；「国产化替代」预算仅用40%但贡献65%新客，建议追加投入。
+      </div>
+
+      <!-- Top row: 4 KPI cards with Sparklines -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-bottom:5px;">
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:7px;color:#999;">累计ROI</div>
+          <div style="font-size:16px;font-weight:800;color:#059669;">2.6x <span style="font-size:7px;">↑15%</span></div>
+          <svg width="50" height="16"><polyline points="0,12 12,10 25,6 38,4 50,2" fill="none" stroke="#059669" stroke-width="1.5"/></svg>
+        </div>
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:7px;color:#999;">商机转化率</div>
+          <div style="font-size:16px;font-weight:800;">34% <span style="font-size:7px;color:#059669;">↑8%</span></div>
+          <svg width="50" height="16"><polyline points="0,10 15,12 30,8 50,4" fill="none" stroke="#059669" stroke-width="1.5"/></svg>
+        </div>
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:7px;color:#999;">活跃伙伴</div>
+          <div style="font-size:16px;font-weight:800;">225 <span style="font-size:7px;color:#dc2626;">↓5</span></div>
+          <svg width="50" height="16"><polyline points="0,3 15,5 30,8 50,10" fill="none" stroke="#dc2626" stroke-width="1.5"/></svg>
+        </div>
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:7px;color:#999;">平均成交周期</div>
+          <div style="font-size:16px;font-weight:800;">18天 <span style="font-size:7px;color:#059669;">↓3天</span></div>
+          <svg width="50" height="16"><polyline points="0,3 15,5 30,9 50,14" fill="none" stroke="#059669" stroke-width="1.5"/></svg>
+        </div>
+      </div>
+
+      <!-- Middle row: Funnel + Spending pie + Correlation -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:5px;">
+        <!-- Funnel -->
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:8px;font-weight:600;margin-bottom:4px;">📊 转化漏斗</div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+            <div style="width:90%;background:#2563eb;color:#fff;text-align:center;padding:4px 0;border-radius:3px;font-size:7px;">触达 450 伙伴</div>
+            <div style="font-size:8px;color:#888;">↓ 100%</div>
+            <div style="width:65%;background:#3b82f6;color:#fff;text-align:center;padding:4px 0;border-radius:3px;font-size:7px;">报备 225 商机</div>
+            <div style="font-size:8px;color:#888;">↓ 50%</div>
+            <div style="width:35%;background:#059669;color:#fff;text-align:center;padding:4px 0;border-radius:3px;font-size:7px;">赢单 78 商机</div>
+            <div style="font-size:7px;color:#059669;">转化率 34% · 周期18天</div>
+          </div>
+        </div>
+        <!-- Spending Pie -->
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;text-align:center;">
+          <div style="font-size:8px;font-weight:600;margin-bottom:3px;">🥧 支出构成</div>
+          <svg width="70" height="70" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="15" fill="#2563eb" stroke="#fff" stroke-width="2"
+              stroke-dasharray="56.5 94.2" stroke-dashoffset="0" transform="rotate(-90 20 20)"/>
+            <circle cx="20" cy="20" r="15" fill="#059669" stroke="#fff" stroke-width="2"
+              stroke-dasharray="18.8 94.2" stroke-dashoffset="-56.5" transform="rotate(-90 20 20)"/>
+            <circle cx="20" cy="20" r="15" fill="#7c3aed" stroke="#fff" stroke-width="2"
+              stroke-dasharray="18.8 94.2" stroke-dashoffset="-75.3" transform="rotate(-90 20 20)"/>
+          </svg>
+          <div style="display:flex;justify-content:center;gap:6px;font-size:7px;">
+            <span>🔵 返点60%</span><span>🟢 补贴20%</span><span>🟣 服务20%</span>
+          </div>
+        </div>
+        <!-- Correlation scatter -->
+        <div style="padding:5px;background:#fff;border-radius:6px;border:1px solid #eee;text-align:center;">
+          <div style="font-size:8px;font-weight:600;margin-bottom:3px;">🎯 效率象限</div>
+          <div style="position:relative;width:70px;height:70px;margin:0 auto;border-left:1px solid #ddd;border-bottom:1px solid #ddd;">
+            <div style="position:absolute;left:2px;top:2px;background:#059669;width:5px;height:5px;border-radius:50%;" title="高ROI 低消耗"></div>
+            <div style="position:absolute;right:2px;bottom:2px;background:#dc2626;width:5px;height:5px;border-radius:50%;" title="低ROI 高消耗"></div>
+            <div style="position:absolute;left:8px;bottom:10px;background:#d97706;width:5px;height:5px;border-radius:50%;" title="中ROI 中消耗"></div>
+            <span style="position:absolute;left:2px;top:30px;font-size:5px;color:#059669;">高效区</span>
+            <span style="position:absolute;right:2px;bottom:30px;font-size:5px;color:#dc2626;">低效区</span>
+          </div>
+          <div style="font-size:6px;color:#888;">横轴=消耗率 · 纵轴=商机</div>
+        </div>
+      </div>
+
+      <!-- Partner quadrant -->
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:3px;margin-bottom:5px;">
+        <div style="padding:4px;background:#f0fdf6;border-radius:4px;text-align:center;cursor:pointer;">
+          <div style="font-size:7px;font-weight:600;color:#059669;">🦾 铁杆伙伴</div><div style="font-size:14px;font-weight:800;">48</div>
+          <div style="font-size:6px;color:#888;">高活跃·高贡献</div><button style="font-size:6px;padding:1px 4px;background:#059669;color:#fff;border:none;border-radius:2px;margin-top:2px;">表彰</button>
+        </div>
+        <div style="padding:4px;background:#eff6ff;border-radius:4px;text-align:center;cursor:pointer;">
+          <div style="font-size:7px;font-weight:600;color:#2563eb;">🚀 高潜伙伴</div><div style="font-size:14px;font-weight:800;">67</div>
+          <div style="font-size:6px;color:#888;">高活跃·待转化</div><button style="font-size:6px;padding:1px 4px;background:#2563eb;color:#fff;border:none;border-radius:2px;margin-top:2px;">激活</button>
+        </div>
+        <div style="padding:4px;background:#fef9f0;border-radius:4px;text-align:center;cursor:pointer;">
+          <div style="font-size:7px;font-weight:600;color:#d97706;">😴 沉睡伙伴</div><div style="font-size:14px;font-weight:800;">82</div>
+          <div style="font-size:6px;color:#888;">低活跃·低贡献</div><button style="font-size:6px;padding:1px 4px;background:#d97706;color:#fff;border:none;border-radius:2px;margin-top:2px;">推送</button>
+        </div>
+        <div style="padding:4px;background:#fef2f2;border-radius:4px;text-align:center;cursor:pointer;">
+          <div style="font-size:7px;font-weight:600;color:#dc2626;">📉 边缘伙伴</div><div style="font-size:14px;font-weight:800;">28</div>
+          <div style="font-size:6px;color:#888;">低活跃·高流失风险</div><button style="font-size:6px;padding:1px 4px;background:#dc2626;color:#fff;border:none;border-radius:2px;margin-top:2px;">干预</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content"><h3>全部采纳</h3><p>AI诊断+Sparkline趋势+漏斗转化+支出饼图+效率象限+伙伴象限+行动按钮</p></div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content"><h3>部分调整（终端说明）</h3></div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">v4核心：①AI诊断Banner自动归因 ②4张KPI带Sparkline(↑15%/↓5/↑8%/↓3天) ③转化漏斗(触达→报备→赢单) ④支出构成饼图(返点/补贴/服务) ⑤效率象限(消耗率×商机额) ⑥伙伴四象限(铁杆/高潜/沉睡/边缘)+行动按钮(表彰/激活/推送/干预)</p>

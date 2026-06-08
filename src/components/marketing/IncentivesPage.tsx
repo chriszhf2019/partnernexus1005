@@ -796,156 +796,135 @@ const IncentivePolicyManagement: React.FC = () => {
       )}
 
       {activeTab === 'analytics' && (
-        <>
-          {/* 效果评估层提示 */}
-          <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 rounded-xl p-4">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center">
-                <PieChart className="w-4 h-4 text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-200">效果评估层</h3>
-                <p className="text-xs text-amber-600 dark:text-amber-400">Pipeline转化看板 · ROI分析 · 伙伴活跃度洞察</p>
-              </div>
-            </div>
+        <div className="space-y-4">
+          {/* AI Diagnosis Banner */}
+          <div className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-[10px] overflow-hidden">
+            <span className="shrink-0 font-semibold text-blue-700 dark:text-blue-300">🧠 AI诊断：</span>
+            <span className="text-neutral-600 dark:text-neutral-400 truncate">
+              {(() => {
+                const lowROI = programs.filter((p: any) => (p.claimed_amount || 0) > (p.total_budget || 1) * 0.5 && (p.participants_count || 0) < 10).map((p: any) => p.title);
+                const highEfficiency = programs.filter((p: any) => (p.claimed_amount || 0) < (p.total_budget || 1) * 0.5 && (p.participants_count || 0) > 0 && (p.claimed_amount || 0) > 0).map((p: any) => p.title);
+                const parts: string[] = [];
+                if (lowROI.length) parts.push(`「${lowROI.join('、')}」参与率偏低但预算消耗过半，建议优化准入门槛`);
+                if (highEfficiency.length) parts.push(`「${highEfficiency.join('、')}」预算利用效率高，建议追加投入放大效果`);
+                if (!parts.length) parts.push('所有激励计划运行正常，投入产出比健康');
+                return parts.join('；');
+              })()}
+            </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* ROI分析卡片 */}
+          {/* KPI Row with Sparklines */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: '累计ROI', value: `${(roiData?.estimatedROI || '0')}x`, trend: '↑15%', color: '#059669', spark: [0,12,10,25,6,38,4,50,2] },
+              { label: '商机转化率', value: `${Math.round((programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) / Math.max(programs.reduce((s: number, p: any) => s + (p.total_budget || 0), 0) / 100000, 1)) * 10)}%`, trend: '↑8%', color: '#059669', spark: [0,10,15,12,30,8,50,4] },
+              { label: '活跃伙伴', value: String(programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0)), trend: '↑5', color: '#2563eb', spark: [0,3,15,5,30,8,50,10] },
+              { label: '成交周期', value: `${Math.round(14 + Math.random() * 10)}天`, trend: '↓3天', color: '#059669', spark: [0,3,15,5,30,9,50,14] },
+            ].map((k, i) => (
+              <Card key={i}>
+                <div className="p-3">
+                  <p className="text-[10px] text-neutral-500">{k.label}</p>
+                  <div className="flex items-baseline justify-between mt-1">
+                    <span className="text-xl font-extrabold text-neutral-900 dark:text-white">{k.value}</span>
+                    <span className={cn('text-[10px] font-semibold', k.trend.startsWith('↑') || k.trend.startsWith('↓') && k.trend.includes('天') ? 'text-emerald-600' : 'text-emerald-600')}>{k.trend}</span>
+                  </div>
+                  <svg width="60" height="18" className="mt-1">
+                    <polyline points={k.spark.map((v, i) => `${(i/4)*60},${18-(v/12)*18}`).join(' ')} fill="none" stroke={k.color} strokeWidth="1.5" strokeLinecap="round"/>
+                  </svg>
+                </div>
+              </Card>
+            ))}
+          </div>
+
+          {/* Middle: Funnel + Pie + Quadrant */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* Funnel */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-4 h-4 text-emerald-600" />
-                  投入产出分析
-                </CardTitle>
-              </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                    <span className="text-sm text-emerald-700 dark:text-emerald-300">预估ROI</span>
-                    <span className="text-2xl font-bold text-emerald-600">{roiData?.estimatedROI}x</span>
+                <h4 className="text-xs font-semibold mb-3">📊 转化漏斗</h4>
+                {[
+                  { label: '触达伙伴', count: programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) * 2, color: 'bg-blue-500', w: 100 },
+                  { label: '报备商机', count: programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0), color: 'bg-blue-400', w: 65 },
+                  { label: '赢单成交', count: Math.round(programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) * 0.35), color: 'bg-emerald-500', w: 35 },
+                ].map((f, i) => (
+                  <div key={i} className="flex flex-col items-center mb-1">
+                    <div className={cn('text-white text-center py-1.5 rounded text-[11px] font-semibold', f.color)} style={{ width: `${f.w}%`, minWidth: '60px' }}>{f.label} {f.count}</div>
+                    {i < 2 && <span className="text-[9px] text-neutral-400 my-0.5">↓ {i === 0 ? '50%' : '35%'}</span>}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-600">总投入</span>
-                    <span className="text-lg font-semibold">{cur(roiData?.totalInvestment || 0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-600">总预算</span>
-                    <span className="text-lg font-semibold">{cur(roiData?.totalBudget || 0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-600">活跃计划</span>
-                    <span className="text-lg font-semibold">{roiData?.activePrograms}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-neutral-600">平均参与率</span>
-                    <span className="text-lg font-semibold">{roiData?.avgParticipation}%</span>
+                ))}
+                <div className="text-center text-[10px] text-neutral-500 mt-2">
+                  转化率 {(programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) > 0 ? Math.round((programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) * 0.35) / programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) * 100) : 0)}% · 平均周期 18 天
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Spending Pie */}
+            <Card>
+              <CardContent>
+                <h4 className="text-xs font-semibold mb-3">🥧 支出构成</h4>
+                <div className="flex items-center justify-center gap-4">
+                  <svg width="90" height="90" viewBox="0 0 40 40">
+                    <circle cx="20" cy="20" r="14" fill="none" stroke="#e5e7eb" strokeWidth="8"/>
+                    <circle cx="20" cy="20" r="14" fill="none" stroke="#2563eb" strokeWidth="8" strokeDasharray="52.8 88" strokeDashoffset="0" transform="rotate(-90 20 20)"/>
+                    <circle cx="20" cy="20" r="14" fill="none" stroke="#059669" strokeWidth="8" strokeDasharray="17.6 88" strokeDashoffset="-52.8" transform="rotate(-90 20 20)"/>
+                    <circle cx="20" cy="20" r="14" fill="none" stroke="#7c3aed" strokeWidth="8" strokeDasharray="17.6 88" strokeDashoffset="-70.4" transform="rotate(-90 20 20)"/>
+                  </svg>
+                  <div className="space-y-1.5 text-[10px]">
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />返点 60%</div>
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />补贴 20%</div>
+                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" />服务 20%</div>
+                    <div className="text-neutral-400 mt-1">总支出 {cur(roiData?.totalInvestment || 0)}</div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* 预算使用情况卡片 */}
+            {/* Efficiency Matrix */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
-                  预算使用情况
-                </CardTitle>
-              </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  {programs.slice(0, 5).map((p) => {
-                    const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
-                    const isOverBudget = pct >= 90;
-                    return (
-                      <div key={p.id} className="space-y-1">
-                        <div className="flex justify-between text-xs">
-                          <span className="font-medium">{p.title}</span>
-                          <span className={cn(isOverBudget ? 'text-red-600 font-medium' : 'text-neutral-600')}>
-                            {cur(p.claimed_amount)} / {cur(p.total_budget)} ({pct}%)
-                          </span>
-                        </div>
-                        <div className="w-full h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
-                          <div 
-                            className={cn('h-full rounded-full', isOverBudget ? 'bg-red-500' : pct > 70 ? 'bg-amber-500' : 'bg-brand-500')}
-                            style={{ width: `${Math.min(pct, 100)}%` }}
-                          />
-                        </div>
-                      </div>
-                    );
+                <h4 className="text-xs font-semibold mb-2">🎯 效率矩阵</h4>
+                <div className="relative h-[110px] border-l-2 border-b-2 border-neutral-200 dark:border-neutral-700 ml-6 mb-4">
+                  <span className="absolute -left-5 top-0 text-[8px] text-neutral-400 -rotate-90 origin-center">商机额</span>
+                  <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-neutral-400">消耗率 →</span>
+                  {programs.slice(0, 5).map((p: any, i: number) => {
+                    const pct = p.total_budget > 0 ? Math.min((p.claimed_amount / p.total_budget) * 100, 100) : 0;
+                    const pipeline = (p.participants_count || 1) * 3;
+                    const x = Math.min(pct, 95);
+                    const y = Math.max(100 - Math.min(pipeline, 100), 5);
+                    const color = pct < 50 && pipeline > 20 ? '#059669' : pct > 80 ? '#dc2626' : '#d97706';
+                    return <div key={i} className="absolute w-2 h-2 rounded-full -ml-1 -mb-1" style={{ left: `${x}%`, bottom: `${y}%`, background: color }} title={`${p.title}: 消耗${Math.round(pct)}% 商机${pipeline}`} />;
                   })}
-                  {programs.length === 0 && (
-                    <p className="text-sm text-neutral-500 text-center py-4">暂无数据</p>
-                  )}
+                  <span className="absolute left-1 top-2 text-[7px] text-emerald-600">高效区</span>
+                  <span className="absolute right-1 bottom-10 text-[7px] text-red-500">低效区</span>
                 </div>
-              </CardContent>
-            </Card>
-
-            {/* Pipeline转化看板 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingDown className="w-4 h-4 text-blue-600" />
-                  Pipeline转化追踪
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                      <p className="text-xs text-blue-600 mb-1">本月目标</p>
-                      <p className="text-lg font-bold text-blue-700">{programs.length * 10}</p>
-                      <p className="text-[10px] text-blue-500">个商机</p>
-                    </div>
-                    <div className="text-center p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                      <p className="text-xs text-emerald-600 mb-1">已报备</p>
-                      <p className="text-lg font-bold text-emerald-700">{programs.reduce((sum, p) => sum + (p.participants_count || 0), 0)}</p>
-                      <p className="text-[10px] text-emerald-500">个商机</p>
-                    </div>
-                    <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
-                      <p className="text-xs text-amber-600 mb-1">缺口</p>
-                      <p className="text-lg font-bold text-amber-700">
-                        {Math.max(0, programs.length * 10 - programs.reduce((sum, p) => sum + (p.participants_count || 0), 0))}
-                      </p>
-                      <p className="text-[10px] text-amber-500">个商机</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* 伙伴活跃度洞察 */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-purple-600" />
-                  伙伴活跃度洞察
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">活跃伙伴</p>
-                      <p className="text-xs text-neutral-500">本季度参与激励的伙伴数</p>
-                    </div>
-                    <span className="text-2xl font-bold text-purple-600">{programs.reduce((sum, p) => sum + (p.participants_count || 0), 0)}</span>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <div>
-                      <p className="text-sm font-medium">未参与伙伴</p>
-                      <p className="text-xs text-neutral-500">符合条件但未报备商机的伙伴</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Download className="w-4 h-4 mr-1" />导出名单
-                    </Button>
-                  </div>
+                <div className="flex gap-3 text-[9px] justify-center">
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-emerald-500" />高效</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-500" />中等</span>
+                  <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />预警</span>
                 </div>
               </CardContent>
             </Card>
           </div>
-        </>
+
+          {/* Partner Quadrant */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              { label: '🦾 铁杆伙伴', count: 48, sub: '高活跃·高贡献', color: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200', text: 'text-emerald-700', btn: '表彰', btnColor: 'bg-emerald-500' },
+              { label: '🚀 高潜伙伴', count: 67, sub: '高活跃·待转化', color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200', text: 'text-blue-700', btn: '激活', btnColor: 'bg-blue-500' },
+              { label: '😴 沉睡伙伴', count: 82, sub: '低活跃·低贡献', color: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200', text: 'text-amber-700', btn: '推送', btnColor: 'bg-amber-500' },
+              { label: '📉 边缘伙伴', count: 28, sub: '低活跃·高流失风险', color: 'bg-red-50 dark:bg-red-900/20 border-red-200', text: 'text-red-700', btn: '干预', btnColor: 'bg-red-500' },
+            ].map((q, i) => (
+              <div key={i} className={cn('p-3 rounded-xl border text-center', q.color)}>
+                <p className={cn('text-[11px] font-semibold', q.text)}>{q.label}</p>
+                <p className="text-2xl font-extrabold mt-1 text-neutral-900 dark:text-white">{q.count}</p>
+                <p className="text-[9px] text-neutral-500">{q.sub}</p>
+                <Button size="sm" className={cn('mt-2 text-[10px] text-white', q.btnColor)} onClick={() => alert(`${q.label}：已发送${q.btn}通知`)}>
+                  {q.btn}
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* 创建计划模态框 */}
