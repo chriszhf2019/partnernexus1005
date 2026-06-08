@@ -1,10 +1,11 @@
+import { SafeGrid } from '../../lib/safeRecharts';
 import { useState, useEffect, useMemo, useDeferredValue } from 'react';
 import {
   DollarSign, TrendingUp, MousePointerClick, Activity, ArrowUpRight,
   ArrowDownRight, MoreHorizontal, ExternalLink, Calendar, Download,
   Target, Users, Filter, Globe, Zap, BarChart3,
 } from 'lucide-react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { cn, formatCurrency } from '../../lib/utils';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Badge } from '../ui/Badge';
@@ -256,10 +257,9 @@ export const ChannelDashboard = () => {
                   <linearGradient id="spendGrad2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18181b" stopOpacity={0.12} /><stop offset="100%" stopColor="#18181b" stopOpacity={0} /></linearGradient>
                   <linearGradient id="leadsGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#a1a1aa" stopOpacity={0.08} /><stop offset="100%" stopColor="#a1a1aa" stopOpacity={0} /></linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                <SafeGrid />
                 <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} dy={8} />
                 <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fontWeight: 500, fill: '#a1a1aa' }} tickFormatter={(v) => formatCurrency(v)} dx={-4} />
-                <Tooltip contentStyle={{ fontSize: 12, fontWeight: 500, borderRadius: 12, border: '1px solid #e4e4e7', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.05)', padding: '10px 14px' }} formatter={(value: number) => [formatCurrency(value), '']} />
                 <Area type="monotone" dataKey="leads" stroke="#a1a1aa" strokeWidth={2} fill="url(#leadsGrad)" dot={false} name="线索" />
                 <Area type="monotone" dataKey="spend" stroke="#18181b" strokeWidth={2} fill="url(#spendGrad2)" dot={false} name="支出" />
               </AreaChart>
@@ -325,7 +325,7 @@ export const ChannelDashboard = () => {
             {channelData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={channelData.slice(0, 6)} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                  <SafeGrid />
                   <XAxis type="number" hide />
                   <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 10, fontWeight: 500, fill: '#a1a1aa' }} width={80} />
                   <Bar dataKey="spend" radius={[0, 4, 4, 0]} barSize={12}>

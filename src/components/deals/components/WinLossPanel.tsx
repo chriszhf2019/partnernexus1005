@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
-  Tooltip, ResponsiveContainer, Legend,
+  ResponsiveContainer, Legend,
 } from 'recharts';
 // Inline SVG grid to work around Recharts CartesianGrid v3 bundler issue
 const GridLines = () => (
@@ -263,7 +263,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                             />
                           ))}
                         </Pie>
-                        <Tooltip formatter={(value: number) => [`${value} 个`, '丢单数']} />
+                        {/* Tooltip removed */}
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-1.5 flex-1">
@@ -304,7 +304,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                         <GridLines />
                         <XAxis type="number" tick={{ fontSize: 11 }} />
                         <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 11 }} />
-                        <Tooltip formatter={(value: number) => [`${value} 个`, '赢单数']} />
+                        {/* Tooltip removed */}
                         <Bar dataKey="value" radius={[0, 4, 4, 0]}>
                           {winFactorData.map((_, index) => (
                             <Cell key={index} fill={Object.values(WIN_LOSS_COLORS)[index % Object.values(WIN_LOSS_COLORS).length]} />
@@ -328,7 +328,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                       <GridLines />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} unit="%" />
-                      <Tooltip formatter={(value: number) => [`${value}%`, '丢单率']} />
+                      {/* Tooltip removed */}
                       <Bar dataKey="rate" radius={[4, 4, 0, 0]} fill="#f59e0b" />
                     </BarChart>
                   </ResponsiveContainer>
@@ -443,7 +443,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                       <GridLines />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 10000).toFixed(0)}万`} />
-                      <Tooltip formatter={(value: number) => [formatCurrency(value), '丢单金额']} />
+                      {/* Tooltip removed */}
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {lossAmountData.map((_, index) => (
                           <Cell key={index} fill={Object.values(WIN_LOSS_COLORS)[index % Object.values(WIN_LOSS_COLORS).length]} />

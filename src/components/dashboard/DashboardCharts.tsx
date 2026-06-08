@@ -1,11 +1,12 @@
+import { SafeGrid } from '../../lib/safeRecharts';
 import React from 'react';
 import { 
   AreaChart, 
   Area, 
   XAxis, 
   YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+  
+  
   ResponsiveContainer,
   BarChart,
   Bar,
@@ -57,7 +58,7 @@ export const RevenueTrendChart: React.FC = () => {
               <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+          <SafeGrid />
           <XAxis 
             dataKey="month" 
             axisLine={false} 
@@ -65,13 +66,10 @@ export const RevenueTrendChart: React.FC = () => {
             tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
             dy={10}
           />
-          <YAxis 
-            axisLine={false} 
-            tickLine={false} 
+          <YAxis
+            axisLine={false}
+            tickLine={false}
             tick={{ fontSize: 10, fontWeight: 700, fill: '#94a3b8' }}
-          />
-          <Tooltip 
-            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
           />
           <Area type="monotone" dataKey="revenue" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorRev)" />
           <Area type="monotone" dataKey="target" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="5 5" fill="none" />
@@ -101,9 +99,6 @@ export const PartnerTierChart: React.FC = () => {
               <Cell key={`cell-${index}`} fill={entry.color} />
             ))}
           </Pie>
-          <Tooltip 
-            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
-          />
           <Legend 
             verticalAlign="bottom" 
             height={36} 
@@ -123,9 +118,6 @@ export const PipelineFunnelChart: React.FC = () => {
       <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">{t('charts.pipelineFunnel')}</h3>
       <ResponsiveContainer width="100%" height="100%">
         <FunnelChart>
-          <Tooltip 
-            contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px', fontWeight: 'bold' }}
-          />
           <Funnel
             dataKey="value"
             data={FUNNEL_DATA}

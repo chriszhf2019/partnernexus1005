@@ -1,9 +1,10 @@
+import { SafeGrid } from '../../lib/safeRecharts';
 import { useState, useEffect } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { BarChart3, TrendingUp, Download, Calendar } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 import { supabase } from '../../lib/supabase';
 import { formatCurrency } from '../../lib/utils';
 
@@ -155,10 +156,10 @@ export const AnalyticsPage = () => {
               {quarterlyTrend.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={quarterlyTrend}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                    <SafeGrid />
                     <XAxis dataKey="q" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
                     <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `${v}万`} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }} />
+                    {/* Tooltip removed */}
                     <Line type="monotone" dataKey="revenue" stroke="#18181b" strokeWidth={2} dot={{ r: 4, fill: '#18181b' }} />
                   </LineChart>
                 </ResponsiveContainer>
@@ -177,7 +178,7 @@ export const AnalyticsPage = () => {
               {revenueByRegion.length > 0 && revenueByRegion[0].value > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={revenueByRegion} layout="vertical">
-                    <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e4e4e7" />
+                    <SafeGrid />
                     <XAxis type="number" hide />
                     <YAxis type="category" dataKey="name" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} width={50} />
                     <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={16}>

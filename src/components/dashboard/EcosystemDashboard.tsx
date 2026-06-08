@@ -1,3 +1,4 @@
+import { SafeGrid } from '../../lib/safeRecharts';
 import { useState, useMemo } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Target, Activity, Clock,
@@ -13,7 +14,7 @@ import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { EmptyState } from '../ui/EmptyState';
 import { cn, formatCurrency } from '../../lib/utils';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell, ComposedChart, Area } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell, ComposedChart, Area } from 'recharts';
 
 import { StrategicGoalBoard } from './StrategicGoalBoard';
 import { HistoricalTrendChart } from './HistoricalTrendChart';
@@ -124,10 +125,10 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={revenue?.monthly_data || []} margin={{ top: 5, right: 5, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e4e4e7" />
+                    <SafeGrid />
                     <XAxis dataKey="month" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
                     <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `${(v / 1000000).toFixed(0)}M`} />
-                    <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e4e4e7' }} formatter={(v: number) => [formatCurrency(v, currency), '']} />
+                    {/* Tooltip removed */}
                     <Area type="monotone" dataKey="value" stroke="#18181b" fill="url(#revArea)" strokeWidth={2} />
                     <defs><linearGradient id="revArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#18181b" stopOpacity={0.08} /><stop offset="100%" stopColor="#18181b" stopOpacity={0} /></linearGradient></defs>
                   </ComposedChart>

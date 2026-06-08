@@ -1,5 +1,6 @@
+import { SafeGrid } from '../../lib/safeRecharts';
 import { useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer } from 'recharts';
 import { cn } from '../../lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 
@@ -62,11 +63,11 @@ export const HistoricalTrendChart = () => {
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+            <SafeGrid />
             <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 700 }} stroke="#94a3b8" />
             <YAxis yAxisId="left" tick={{ fontSize: 10 }} stroke="#94a3b8" />
             <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} stroke="#94a3b8" />
-            <Tooltip />
+            {/* Tooltip removed */}
             {showPerformance && <Line yAxisId="left" type="monotone" dataKey="rev" stroke="#1d1d1f" strokeWidth={2} dot={false} />}
             {showOrders && <Line yAxisId="right" type="monotone" dataKey="orders" stroke="#3b82f6" strokeWidth={2} dot={false} />}
           </LineChart>

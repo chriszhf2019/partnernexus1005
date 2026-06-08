@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, Cell } from 'recharts';
 import { Target, TrendingUp, Users, UserCheck, DollarSign, Send, QrCode, Copy, Phone, Mail, X, RefreshCw } from 'lucide-react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
