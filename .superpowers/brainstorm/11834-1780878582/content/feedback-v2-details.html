@@ -1,0 +1,191 @@
+<h2>📊 反馈分析 — 关键交互细化</h2>
+<p class="subtitle">AI 标签系统 · 回复闭环 · 情绪分析 · 预警联动</p>
+
+<div class="section">
+<h3>① AI 语义标签 — 自动分类 + 颜色编码</h3>
+
+<div class="mockup">
+  <div class="mockup-header">标签系统设计（前端规则匹配，无需后端 AI）</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;">
+      <!-- Positive tags -->
+      <div style="padding:8px;background:#f0fdf6;border-radius:8px;">
+        <div style="font-size:9px;font-weight:700;color:#059669;margin-bottom:6px;">🟢 正面标签</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;">
+          <span style="font-size:8px;padding:2px 6px;background:#dcfce7;color:#059669;border-radius:4px;">讲解清晰</span>
+          <span style="font-size:8px;padding:2px 6px;background:#dcfce7;color:#059669;border-radius:4px;">实用性强</span>
+          <span style="font-size:8px;padding:2px 6px;background:#dcfce7;color:#059669;border-radius:4px;">案例丰富</span>
+          <span style="font-size:8px;padding:2px 6px;background:#dcfce7;color:#059669;border-radius:4px;">上手快</span>
+          <span style="font-size:8px;padding:2px 6px;background:#dcfce7;color:#059669;border-radius:4px;">强烈推荐</span>
+        </div>
+        <div style="font-size:7px;color:#888;margin-top:4px;">匹配词: 清晰、实用、丰富、推荐、透彻、上手</div>
+      </div>
+      <!-- Neutral tags -->
+      <div style="padding:8px;background:#fef9f0;border-radius:8px;">
+        <div style="font-size:9px;font-weight:700;color:#d97706;margin-bottom:6px;">🟠 中性/建议标签</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;">
+          <span style="font-size:8px;padding:2px 6px;background:#fef3c7;color:#d97706;border-radius:4px;">时长偏长</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fef3c7;color:#d97706;border-radius:4px;">重复率高</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fef3c7;color:#d97706;border-radius:4px;">缺少练习</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fef3c7;color:#d97706;border-radius:4px;">需要更新</span>
+        </div>
+        <div style="font-size:7px;color:#888;margin-top:4px;">匹配词: 偏长、重复、缺少、建议、希望、更新</div>
+      </div>
+      <!-- Negative tags -->
+      <div style="padding:8px;background:#fef2f2;border-radius:8px;">
+        <div style="font-size:9px;font-weight:700;color:#dc2626;margin-bottom:6px;">🔴 负面/问题标签</div>
+        <div style="display:flex;flex-wrap:wrap;gap:3px;">
+          <span style="font-size:8px;padding:2px 6px;background:#fee2e2;color:#dc2626;border-radius:4px;">内容过时</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fee2e2;color:#dc2626;border-radius:4px;">录音不清</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fee2e2;color:#dc2626;border-radius:4px;">版本滞后</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fee2e2;color:#dc2626;border-radius:4px;">无法打开</span>
+          <span style="font-size:8px;padding:2px 6px;background:#fee2e2;color:#dc2626;border-radius:4px;">实验卡顿</span>
+        </div>
+        <div style="font-size:7px;color:#888;margin-top:4px;">匹配词: 过时、不清、滞后、无法、卡顿、错误</div>
+      </div>
+    </div>
+    <div style="margin-top:8px;padding:8px;background:#f8fafc;border-radius:6px;font-size:9px;">
+      <b>实现方式：</b>前端关键词匹配规则表（~30个关键词），无需 AI API。先匹配负面→再匹配正面→默认中性。未来可扩展接入 AI 语义分析替换规则引擎。
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>② 回复闭环 — 管理员回复 + 标记已处理</h3>
+
+<div class="mockup">
+  <div class="mockup-header">点击「回复」展开内联回复框</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="background:#fff;border:1px solid #eee;border-radius:8px;overflow:hidden;">
+      <!-- Feedback row -->
+      <div style="display:flex;align-items:center;padding:6px 8px;font-size:9px;background:#fff5f5;border-bottom:2px solid #2563eb;">
+        <span style="width:45px;font-weight:600;">周丽</span><span style="width:50px;color:#999;">华为云</span><span style="width:65px;color:#999;">云原生架构</span>
+        <span style="width:25px;color:#dc2626;">⭐</span>
+        <span style="flex:1;color:#666;">课程内容严重过时，ServiceMesh部分还在讲Istio 1.5...</span>
+        <span style="width:50px;"><span style="background:#fee2e2;color:#dc2626;padding:1px 4px;border-radius:3px;font-size:7px;">内容过时</span></span>
+        <span style="width:45px;color:#bbb;">06-07</span>
+        <span style="width:55px;color:#2563eb;font-weight:600;">▲ 收起</span>
+      </div>
+      <!-- Reply box -->
+      <div style="padding:8px;background:#fafafa;border-bottom:1px solid #eee;">
+        <textarea placeholder="回复周丽..." style="width:100%;padding:6px;border:1px solid #ddd;border-radius:4px;font-size:9px;resize:none;" rows="2">感谢反馈！云原生架构课程将在下个迭代中更新到 Istio 1.30 + Ambient Mesh，预计 7 月初上线。</textarea>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">
+          <label style="font-size:8px;color:#888;display:flex;align-items:center;gap:3px;">
+            <input type="checkbox" checked /> 标记为「已处理」
+          </label>
+          <div style="display:flex;gap:4px;">
+            <button style="font-size:8px;padding:3px 10px;border:1px solid #ddd;border-radius:4px;background:#fff;">取消</button>
+            <button style="font-size:8px;padding:3px 10px;background:#2563eb;color:#fff;border:none;border-radius:4px;">发送回复</button>
+          </div>
+        </div>
+      </div>
+      <!-- Admin reply shown -->
+      <div style="padding:8px;background:#eff6ff;border-bottom:1px solid #bfdbfe;font-size:9px;">
+        <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px;">
+          <span style="font-weight:700;color:#2563eb;">管理员回复</span>
+          <span style="color:#999;font-size:7px;">06-08 10:30</span>
+          <span style="margin-left:auto;font-size:7px;padding:1px 5px;background:#dcfce7;color:#059669;border-radius:3px;">✓ 已处理</span>
+        </div>
+        <p style="color:#555;font-size:8px;margin:0;">感谢反馈！云原生架构课程将在下个迭代中更新到 Istio 1.30 + Ambient Mesh，预计 7 月初上线。</p>
+      </div>
+    </div>
+    <div style="font-size:8px;color:#888;margin-top:4px;">回复数据存储到 course_feedback 表的 admin_reply / admin_reply_at / status 字段</div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>③ 预警联动 — KPI → 反馈标签页穿透</h3>
+
+<div class="mockup">
+  <div class="mockup-header">管理员 KPI 预警中心点击 → 自动跳转反馈标签页 + 预筛选低分</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <!-- KPI card click -->
+      <div style="padding:8px;background:linear-gradient(135deg,#fef2f2,#fff);border:2px solid #fca5a5;border-radius:8px;cursor:pointer;text-align:center;width:120px;">
+        <div style="font-size:8px;color:#999;">⚠️ 预警中心</div>
+        <div style="font-size:20px;font-weight:800;color:#dc2626;">4</div>
+        <div style="font-size:7px;color:#ef4444;">2 人滞后 · 2 课程低分</div>
+        <div style="font-size:7px;color:#2563eb;margin-top:2px;">点击处理 →</div>
+      </div>
+      <span style="font-size:16px;">→</span>
+      <!-- Jumps to feedback tab with pre-filter -->
+      <div style="flex:1;padding:8px;background:#fff;border:2px solid #2563eb;border-radius:8px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span style="font-size:9px;font-weight:700;">📊 学员反馈</span>
+          <span style="font-size:7px;padding:2px 6px;background:#eff6ff;color:#2563eb;border-radius:3px;">低分自动筛选</span>
+          <span style="font-size:7px;padding:2px 6px;background:#fef2f2;color:#dc2626;border-radius:3px;">负面情绪 18%</span>
+        </div>
+        <div style="font-size:8px;color:#666;margin-top:4px;">已自动筛选 ≤2⭐ 评价 · 2 条待处理 · 点击查看详情</div>
+        <div style="display:flex;gap:4px;margin-top:6px;">
+          <div style="padding:3px 6px;background:#fee2e2;border-radius:4px;font-size:7px;color:#dc2626;">📌 内容过时 ×2</div>
+          <div style="padding:3px 6px;background:#fee2e2;border-radius:4px;font-size:7px;color:#dc2626;">📌 版本滞后 ×1</div>
+          <button style="margin-left:auto;font-size:7px;padding:2px 8px;background:#dc2626;color:#fff;border:none;border-radius:3px;">处理全部</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="section">
+<h3>④ 导出 & 布局比例</h3>
+
+<div class="mockup">
+  <div class="mockup-header">导出 Excel 内容预览 + 优化后布局比例</div>
+  <div class="mockup-body" style="font-size:10px;padding:10px;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div>
+        <div style="font-size:9px;font-weight:700;margin-bottom:4px;">📥 导出 Excel 包含字段</div>
+        <div style="font-size:8px;color:#666;background:#fff;padding:8px;border-radius:6px;border:1px solid #eee;">
+          <table style="width:100%;font-size:8px;border-collapse:collapse;">
+            <tr style="background:#f5f5f5;"><td style="padding:2px 4px;font-weight:600;">学员</td><td style="padding:2px 4px;font-weight:600;">公司</td><td style="padding:2px 4px;font-weight:600;">课程</td><td style="padding:2px 4px;font-weight:600;">评分</td><td style="padding:2px 4px;font-weight:600;">内容</td><td style="padding:2px 4px;font-weight:600;">标签</td><td style="padding:2px 4px;font-weight:600;">时间</td><td style="padding:2px 4px;font-weight:600;">状态</td></tr>
+            <tr><td style="padding:2px 4px;">周丽</td><td style="padding:2px 4px;">华为云</td><td style="padding:2px 4px;">云原生架构</td><td style="padding:2px 4px;">1</td><td style="padding:2px 4px;">内容严重过时...</td><td style="padding:2px 4px;">内容过时</td><td style="padding:2px 4px;">06-07</td><td style="padding:2px 4px;color:#dc2626;">待处理</td></tr>
+            <tr><td style="padding:2px 4px;">王芳</td><td style="padding:2px 4px;">中科软</td><td style="padding:2px 4px;">市场策划</td><td style="padding:2px 4px;">5</td><td style="padding:2px 4px;">讲解透彻...</td><td style="padding:2px 4px;">讲解清晰</td><td style="padding:2px 4px;">06-07</td><td style="padding:2px 4px;color:#059669;">已处理</td></tr>
+          </table>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:700;margin-bottom:4px;">📐 优化布局比例</div>
+        <div style="font-size:8px;color:#666;background:#fff;padding:8px;border-radius:6px;border:1px solid #eee;">
+          <div style="margin-bottom:4px;">
+            <b>上层（图表区 ~40%）：</b><br>
+            <span style="color:#888;">左 1/3：</span>评分分布 + 趋势 + 情绪比例<br>
+            <span style="color:#888;">右 2/3：</span>交互关键词云 + TOP5 问题列表
+          </div>
+          <div>
+            <b>下层（列表区 ~60%）：</b><br>
+            <span style="color:#888;">全宽：</span>反馈详情列表（搜索 + 筛选 + 排序 + 分页）
+          </div>
+          <div style="margin-top:4px;padding:4px;background:#f0fdf6;border-radius:4px;">
+            <span style="font-size:7px;color:#059669;">关键词云从 2/3 宽缩小，右侧增加「高频问题 TOP5」列表</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>全部确认，出设计规格</h3>
+      <p>AI标签(规则匹配) + 回复闭环 + 预警联动 + 导出 + 新布局比例</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>部分调整（终端说明）</h3>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">
+① AI标签：前端规则匹配 ~30关键词 · 三色编码 · 无需后端AI<br>
+② 回复闭环：内联回复框 + 标记已处理 + 数据存 course_feedback 表<br>
+③ 预警联动：KPI预警中心点击 → 跳转反馈tab + 预筛选低分<br>
+④ 布局：上层图表40%(左1/3评分+右2/3词云+TOP5) + 下层列表60%全宽</p>

@@ -1,0 +1,153 @@
+<h2>📊 学员反馈分析 — 当前 vs 优化</h2>
+<p class="subtitle">从静态报告页升级为主动管理工具：筛选联动 + 反馈列表 + 交互词云 + 情绪分析</p>
+
+<div class="split">
+  <!-- CURRENT -->
+  <div class="mockup">
+    <div class="mockup-header">当前版本 — 图表 + 关键词 + 低分区</div>
+    <div class="mockup-body" style="font-size:9px;padding:8px;">
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-bottom:6px;">
+        <div style="padding:6px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:9px;font-weight:600;">评分分布</div>
+          <div style="font-size:8px;">⭐⭐⭐⭐⭐ ████ 3条</div>
+          <div style="font-size:8px;">⭐⭐⭐⭐ ███ 4条</div>
+          <div style="font-size:8px;">⭐⭐⭐ ██ 2条</div>
+          <div style="font-size:8px;">⭐⭐ █ 1条</div>
+          <div style="font-size:8px;">⭐ █ 1条</div>
+          <div style="text-align:center;font-size:9px;margin-top:4px;">综合评分 4.3/5 · 11条</div>
+        </div>
+        <div style="padding:6px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:9px;font-weight:600;">关键词分析</div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;min-height:60px;align-items:center;justify-content:center;">
+            <span style="font-size:14px;font-weight:800;color:#2563eb;">实用</span>
+            <span style="font-size:11px;font-weight:600;">上手快</span>
+            <span style="font-size:10px;">案例丰富</span>
+            <span style="font-size:9px;">难度适中</span>
+            <span style="font-size:12px;color:#dc2626;">时长偏长</span>
+            <span style="font-size:9px;color:#999;">录音不清</span>
+          </div>
+          <div style="font-size:7px;color:#bbb;text-align:center;margin-top:4px;">字号=频率（仅展示，不可交互）</div>
+        </div>
+      </div>
+      <div style="padding:6px;background:#fff5f5;border:1px solid #fca5a5;border-radius:6px;">
+        <div style="font-size:9px;font-weight:600;color:#dc2626;">⚠ 需关注的低分反馈</div>
+        <div style="font-size:8px;color:#666;margin-top:2px;">"K8s版本更新不及时..." — 孙浩 ⭐⭐</div>
+        <div style="font-size:8px;color:#666;">"课程内容严重过时..." — 周丽 ⭐</div>
+      </div>
+      <div style="text-align:center;font-size:7px;color:#bbb;margin-top:6px;">❌ 无筛选 · ❌ 无反馈列表 · ❌ 词云不可交互 · ❌ 无导出</div>
+    </div>
+  </div>
+
+  <!-- OPTIMIZED -->
+  <div class="mockup">
+    <div class="mockup-header">优化方案 — 筛选 + 列表 + 交互词云 + 情绪 + 导出</div>
+    <div class="mockup-body" style="font-size:9px;padding:8px;">
+      <!-- Filter bar -->
+      <div style="display:flex;gap:4px;align-items:center;padding:4px 6px;background:#fff;border-radius:6px;border:1px solid #eee;margin-bottom:6px;">
+        <select style="font-size:8px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;"><option>近30天</option><option>近7天</option><option>全部</option></select>
+        <select style="font-size:8px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;"><option>全部课程</option><option>云原生架构</option><option>销售基础</option></select>
+        <select style="font-size:8px;padding:2px 6px;border:1px solid #ddd;border-radius:4px;"><option>全部公司</option><option>神州数码</option><option>东软集团</option></select>
+        <span style="margin-left:auto;font-size:8px;color:#888;">11 条结果</span>
+        <button style="font-size:7px;padding:2px 6px;background:#059669;color:#fff;border:none;border-radius:3px;">📥 导出</button>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:grid;grid-template-columns:1fr 2fr;gap:6px;margin-bottom:6px;">
+        <!-- Left: Score distribution + trend -->
+        <div style="padding:6px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="font-size:9px;font-weight:600;">评分分布</div>
+          <div style="font-size:8px;">⭐⭐⭐⭐⭐ ████ 3条</div>
+          <div style="font-size:8px;">⭐⭐⭐⭐ ███ 4条</div>
+          <div style="font-size:8px;">⭐⭐⭐ ██ 2条</div>
+          <div style="font-size:8px;">⭐⭐ █ 1条</div>
+          <div style="font-size:8px;">⭐ █ 1条</div>
+          <div style="text-align:center;font-size:9px;margin-top:2px;">
+            综合评分 <b>4.3</b> <span style="font-size:7px;color:#888;">/5</span>
+            <span style="color:#059669;font-size:7px;">↑0.2 较上月</span>
+          </div>
+        </div>
+        <!-- Right: Interactive word cloud + sentiment -->
+        <div style="padding:6px;background:#fff;border-radius:6px;border:1px solid #eee;">
+          <div style="display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:9px;font-weight:600;">关键词分析</span>
+            <span style="font-size:7px;padding:1px 5px;background:#fef2f2;color:#dc2626;border-radius:3px;">负面 18%</span>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:3px;min-height:55px;align-items:center;justify-content:center;margin-top:2px;">
+            <span style="font-size:14px;font-weight:800;color:#059669;cursor:pointer;border-bottom:1px dashed #059669;">实用</span>
+            <span style="font-size:11px;font-weight:600;color:#059669;cursor:pointer;">上手快</span>
+            <span style="font-size:10px;color:#059669;cursor:pointer;">案例丰富</span>
+            <span style="font-size:12px;color:#dc2626;cursor:pointer;">版本过时</span>
+            <span style="font-size:11px;color:#dc2626;cursor:pointer;">录音不清</span>
+            <span style="font-size:10px;color:#d97706;cursor:pointer;">时长偏长</span>
+            <span style="font-size:9px;color:#888;">难度适中</span>
+          </div>
+          <div style="font-size:7px;color:#2563eb;text-align:center;margin-top:4px;">🟢 正面 · 🟠 中性 · 🔴 负面 | 点击筛选</div>
+        </div>
+      </div>
+
+      <!-- Feedback feed table -->
+      <div style="background:#fff;border-radius:8px;border:1px solid #eee;overflow:hidden;">
+        <div style="display:flex;align-items:center;padding:6px 8px;background:#fafafa;border-bottom:1px solid #eee;font-size:8px;font-weight:600;color:#888;">
+          <span style="width:50px;">学员</span><span style="width:55px;">公司</span><span style="width:70px;">课程</span><span style="width:30px;">评分</span>
+          <span style="flex:1;">评价内容</span><span style="width:60px;">AI标签</span><span style="width:55px;">时间</span><span style="width:40px;">操作</span>
+        </div>
+        <!-- Row 1: Low score -->
+        <div style="display:flex;align-items:center;padding:5px 8px;border-bottom:1px solid #f5f5f5;font-size:8px;background:#fff5f5;">
+          <span style="width:50px;font-weight:600;">周丽</span><span style="width:55px;color:#999;">华为云</span><span style="width:70px;color:#999;">云原生架构</span>
+          <span style="width:30px;color:#dc2626;">⭐</span>
+          <span style="flex:1;color:#666;">课程内容严重过时，ServiceMesh部分还在讲Istio 1.5...</span>
+          <span style="width:60px;"><span style="background:#fee2e2;color:#dc2626;padding:1px 4px;border-radius:3px;font-size:7px;">内容过时</span></span>
+          <span style="width:55px;color:#bbb;">06-07</span>
+          <span style="width:40px;color:#2563eb;cursor:pointer;">回复</span>
+        </div>
+        <!-- Row 2 -->
+        <div style="display:flex;align-items:center;padding:5px 8px;border-bottom:1px solid #f5f5f5;font-size:8px;background:#fff5f5;">
+          <span style="width:50px;font-weight:600;">孙浩</span><span style="width:55px;color:#999;">浪潮</span><span style="width:70px;color:#999;">云原生架构</span>
+          <span style="width:30px;color:#dc2626;">⭐⭐</span>
+          <span style="flex:1;color:#666;">K8s版本更新不及时，还在用1.24...</span>
+          <span style="width:60px;"><span style="background:#fee2e2;color:#dc2626;padding:1px 4px;border-radius:3px;font-size:7px;">版本滞后</span></span>
+          <span style="width:55px;color:#bbb;">06-07</span>
+          <span style="width:40px;color:#2563eb;cursor:pointer;">回复</span>
+        </div>
+        <!-- Row 3: Positive -->
+        <div style="display:flex;align-items:center;padding:5px 8px;border-bottom:1px solid #f5f5f5;font-size:8px;">
+          <span style="width:50px;font-weight:600;">王芳</span><span style="width:55px;color:#999;">中科软</span><span style="width:70px;color:#999;">市场策划</span>
+          <span style="width:30px;color:#059669;">⭐⭐⭐⭐⭐</span>
+          <span style="flex:1;color:#666;">从策划到执行的全流程讲解透彻，配套模板可以直接用...</span>
+          <span style="width:60px;"><span style="background:#dcfce7;color:#059669;padding:1px 4px;border-radius:3px;font-size:7px;">讲解清晰</span></span>
+          <span style="width:55px;color:#bbb;">06-07</span>
+          <span style="width:40px;color:#2563eb;cursor:pointer;">回复</span>
+        </div>
+        <!-- Row 4 -->
+        <div style="display:flex;align-items:center;padding:5px 8px;font-size:8px;">
+          <span style="width:50px;font-weight:600;">刘娜</span><span style="width:55px;color:#999;">华为云</span><span style="width:70px;color:#999;">销售基础</span>
+          <span style="width:30px;color:#d97706;">⭐⭐⭐</span>
+          <span style="flex:1;color:#666;">基础内容较多，对新人友好但对有经验的销售重复率高...</span>
+          <span style="width:60px;"><span style="background:#fef9f0;color:#d97706;padding:1px 4px;border-radius:3px;font-size:7px;">重复率高</span></span>
+          <span style="width:55px;color:#bbb;">06-07</span>
+          <span style="width:40px;color:#2563eb;cursor:pointer;">回复</span>
+        </div>
+      </div>
+      <div style="text-align:center;font-size:7px;color:#999;margin-top:2px;">显示 4/11 条 | 点击关键词自动筛选 | 支持回复/标记已处理</div>
+    </div>
+  </div>
+</div>
+
+<div class="options">
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>方向正确，进入细节细化</h3>
+      <p>筛选+列表+交互词云+AI标签+情绪分析的框架认可</p>
+    </div>
+  </div>
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>部分调整</h3>
+      <p>方向对但某些布局或功能需要调整（请在终端说明）</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:16px;">左侧是当前版本（图表+关键词+低分区），右侧是优化方案：顶部筛选栏(时间/课程/公司) + 评分分布带趋势 + 交互词云(颜色区分正负+点击筛选) + 反馈详情列表(AI标签+回复操作) + 导出按钮。</p>
