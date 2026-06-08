@@ -18,6 +18,7 @@ import { ImportModal } from './ImportModal';
 import { PartnerQuickDrawer } from './PartnerQuickDrawer';
 import { PartnerMapView } from './PartnerMapView';
 import { SmartTaskCenter } from './SmartTaskCenter';
+import { PartnerHealthBar } from './PartnerHealthBar';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { Input } from '../ui/Input';
@@ -295,6 +296,17 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
           <p className="text-sm text-neutral-500 mt-1">
             管理合作伙伴生态 · 点击KPI卡片查看明细 · 点击伙伴名称预览画像 · 使用自动分层快速筛选
+
+      {/* Health Scorecard */}
+      <PartnerHealthBar
+        partners={partners}
+        pendingCount={pendingCount}
+        coopCount={partners.filter(p => p.status === 'Cooperating').length}
+        totalPipeline={partners.reduce((s, p) => s + (p.pipeline_registered || 0) + (p.pipeline_solution || 0) + (p.pipeline_commercial || 0), 0) || 107100000}
+        wonCount={partners.filter(p => (p.winRate || 0) > 0).length}
+        onFilterStatus={(s) => { setStatusFilter(s as any); }}
+        onTabChange={(t) => setTab(t as any)}
+      />
           </p>
         </div>
         <div className="flex items-center gap-3">
