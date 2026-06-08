@@ -18,6 +18,7 @@ import { AdminCourseList } from './enablement/AdminCourseList';
 import { CompanyView } from './enablement/CompanyView';
 import { FeedbackAnalysis } from './enablement/FeedbackAnalysis';
 import { CourseRanking } from './enablement/CourseRanking';
+import { CourseCatalog } from './enablement/CourseCatalog';
 import { getUserProfile } from './enablement/userProfiles';
 
 const FRAMEWORK: Record<string, { icon: any; color: string; bg: string; desc: string }> = {
@@ -476,8 +477,35 @@ export const EnablementPage = () => {
         </div>
       )}
 
-      {/* Course Framework */}
-      {activeTab === 'framework' && (
+      {/* Course Framework — learner: browse catalog / admin: manage courses */}
+      {activeTab === 'framework' && mode === 'learner' && (
+        <CourseCatalog
+          courses={programs.map((p: any) => {
+            const enr = myEnrollments.find((e: any) => e.program_name === p.name);
+            const cs = courseStats.find(c => c.id === p.id);
+            return {
+              id: p.id,
+              name: p.name,
+              category: p.category,
+              level: p.level,
+              points: p.points,
+              duration: p.duration,
+              isRequired: p.is_required,
+              description: p.description || '',
+              enrollmentCount: cs?.enrollmentCount || 0,
+              avgRating: cs?.avgRating || 0,
+              isEnrolled: !!enr,
+              enrollmentProgress: enr?.progress || 0,
+              enrollmentStatus: enr?.status,
+            };
+          })}
+          onSelectCourse={(id) => {
+            const p = programs.find((prog: any) => prog.id === id);
+            alert(`课程详情: ${p?.name}\n\n${p?.description || ''}\n\n等级: ${p?.level} | 积分: ${p?.points} | 时长: ${p?.duration}h`);
+          }}
+        />
+      )}
+      {activeTab === 'framework' && mode === 'admin' && (
         <CourseRanking
           courses={programs.map((p: any) => {
             const cs = courseStats.find(c => c.id === p.id);
