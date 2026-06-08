@@ -728,7 +728,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
           <Button variant="secondary" size="sm" onClick={() => navigate(`/deals?partner=${partner.id}`)}>{t('common.deals')}</Button>
           <Button variant="secondary" size="sm" onClick={() => navigate(`/marketing?partner=${partner.id}`)}>{t('common.mdf')}</Button>
           <Button variant="secondary" size="sm" onClick={() => navigate(`/enablement?partner=${partner.id}`)}>{t('common.enablement')}</Button>
-          <Button variant="brand" size="sm" onClick={() => setShowJBPForm(true)}>{t('profile.initiateJBP')}</Button>
+          <Button variant="brand" size="sm" data-jbp-trigger onClick={() => setShowJBPForm(true)}>{t('profile.initiateJBP')}</Button>
         </div>
       </div>
 

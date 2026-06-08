@@ -180,6 +180,12 @@ function PartnerProfileRoute() {
             partner={partner}
             relatedDeals={relatedDeals}
             contacts={partner.contacts}
+            onScheduleJBP={() => {
+              // Scroll to PartnerProfile and trigger JBP via a custom approach
+              const btn = document.querySelector('[data-jbp-trigger]') as HTMLElement;
+              if (btn) btn.click();
+              else alert(`即将为 ${partner.name} 发起 JBP 联合业务规划会议...\n\n📅 建议时间：2周内\n⏱ 建议时长：90分钟\n👥 参会方：双方销售+技术负责人\n📋 议题：业务回顾 · 市场拓展 · 目标设定\n\n会议邀请将通过系统发送。`);
+            }}
           />
           <PartnerProfile
             partner={partnerDetails}
