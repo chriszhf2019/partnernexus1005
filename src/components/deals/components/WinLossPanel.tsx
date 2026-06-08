@@ -1,9 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
-  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+// Inline SVG grid to work around Recharts CartesianGrid v3 bundler issue
+const GridLines = () => (
+  <g>
+    {[0, 1, 2, 3, 4].map(i => (
+      <line key={i} x1="0" y1={`${i * 25}%`} x2="100%" y2={`${i * 25}%`}
+        stroke="#e5e7eb" strokeDasharray="3 3" strokeWidth={0.5} />
+    ))}
+  </g>
+);
 import {
   X, TrendingDown, TrendingUp, Target, DollarSign, Download,
   ChevronRight, AlertCircle,
@@ -292,7 +301,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                   {winFactorData.length > 0 ? (
                     <ResponsiveContainer width="100%" height={180}>
                       <BarChart data={winFactorData} layout="vertical">
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                        <GridLines />
                         <XAxis type="number" tick={{ fontSize: 11 }} />
                         <YAxis type="category" dataKey="name" width={70} tick={{ fontSize: 11 }} />
                         <Tooltip formatter={(value: number) => [`${value} 个`, '赢单数']} />
@@ -316,7 +325,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                 <CardContent>
                   <ResponsiveContainer width="100%" height={160}>
                     <BarChart data={stageLossData}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <GridLines />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} unit="%" />
                       <Tooltip formatter={(value: number) => [`${value}%`, '丢单率']} />
@@ -431,7 +440,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                 {lossAmountData.length > 0 ? (
                   <ResponsiveContainer width="100%" height={200}>
                     <BarChart data={lossAmountData}>
-                      <CartesianGrid strokeDasharray="3 3" />
+                      <GridLines />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 10000).toFixed(0)}万`} />
                       <Tooltip formatter={(value: number) => [formatCurrency(value), '丢单金额']} />
