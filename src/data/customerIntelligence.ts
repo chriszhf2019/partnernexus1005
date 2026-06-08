@@ -29,16 +29,15 @@ export interface CustomerIntel {
   };
   aiFindings: string[];
   sources: string[];
-  ecosystem?: {
-    coverageRate: number;
-    synergyScore: number;
-    supplyChainScore: number;
-    investmentScore: number;
-    competitivePressure: number;
-    subsidiaries: Array<{ name: string; relation: string; note: string }>;
-    supplyChain: Array<{ name: string; relation: string; note: string }>;
-    competitors: Array<{ name: string; status: string; threat: string }>;
-    strategyInsights: string[];
+  ecosystem?: { /* ... same as before ... */ coverageRate: number; synergyScore: number; supplyChainScore: number; investmentScore: number; competitivePressure: number; subsidiaries: Array<{ name: string; relation: string; note: string }>; supplyChain: Array<{ name: string; relation: string; note: string }>; competitors: Array<{ name: string; status: string; threat: string }>; strategyInsights: string[]; };
+  attackPlan?: {
+    winProbability: number;
+    coreIssue: string;
+    mustWin: string;
+    procurement: { policy: string; compliance: string; payPref: string; aiStrategy: string; };
+    battlefield: Array<{ name: string; role: string; share: string; strength: string; weakness: string; ourEdge: string; aiAttack: string; }>;
+    powerMap: Array<{ name: string; title: string; stance: 'champion' | 'gatekeeper' | 'detractor' | 'neutral'; influence: number; note: string; approach: string; }>;
+    channelPartner: { name: string; background: string; rating: number; value: string; strategy: string; };
   };
 }
 
@@ -158,6 +157,32 @@ const intel: Record<string, CustomerIntel> = {
         '通过日日顺物流CIO引荐，分享物流节点的成功数据，打消海尔总部对迁移稳定性的顾虑',
         '在建议书中增加"竞对方案对比"章节，强调美的已实现的部署效率，利用"标杆落后焦虑"加速合同审批',
       ],
+    },
+    attackPlan: {
+      winProbability: 45,
+      coreIssue: '产品契合度极高，但采购决策权发生偏移，且目前缺乏集团财务总部的"关键赞成票"。',
+      mustWin: '海尔集团当前在推"卡奥斯"平台出海，能否解决"海外节点部署效率"是该单胜负的唯一"一票否决权"指标。',
+      procurement: {
+        policy: '集团集采 + 事业部垂直预算 (双层博弈)',
+        compliance: '必须满足 2024 年新增的"全链路国产化"合规要求，否则无法进入最终供应商短名单。',
+        payPref: '偏好 OPEX (服务订阅) 模式而非 CAPEX (买断式)',
+        aiStrategy: '建议提供"分阶段订阅"方案，以匹配其事业部 Q3 的零散预算，避开高层繁琐的固定资产审批流程。',
+      },
+      battlefield: [
+        { name: '华为云', role: '在位者 Incumbent', share: '40%', strength: '存量关系稳固 · 全栈产品线', weakness: '报价高昂 · 近期响应速度下降 · 闭环架构', ourEdge: '架构开放性 · 适配用友 ERP · 迁移成本最低', aiAttack: '利用海尔对"供应商锁定"的恐惧，主推我们的"多云兼容"能力，针对性打击华为的闭环架构' },
+        { name: '阿里云', role: '挑战者 Challenger', share: '15%', strength: '低价策略 · 电商资源置换', weakness: '制造业 Know-how 不足 · 服务定制化弱', ourEdge: '制造业深耕经验 · 用友生态协同', aiAttack: '强调阿里在制造业缺乏标杆案例，我们的制造行业解决方案已落地 50+ 工厂' },
+      ],
+      powerMap: [
+        { name: '刘建国', title: 'CIO', stance: 'champion', influence: 85, note: '技术派，关注架构领先性', approach: '由用友高层直接对接进行技术对齐，展示我们的云原生路线图与卡奥斯的技术契合度' },
+        { name: '王处长', title: '集团采购处长', stance: 'gatekeeper', influence: 75, note: '极其看重合规和历史采购价格', approach: '邀请参加下月"生态伙伴合规研讨会"，提供详细的合规清单和历史价格对比' },
+        { name: '李运维', title: 'IT 运维主管', stance: 'detractor', influence: 55, note: '习惯华为界面，害怕改变导致工作量增加', approach: '绕过运维主管，提供"无感迁移"方案和驻场运维支持，打消工作量顾虑' },
+        { name: '张财务', title: '集团财务总监', stance: 'neutral', influence: 70, note: '关注 TCO 和 ROI', approach: '提供5年TCO对比分析报告，展示分阶段订阅如何匹配预算周期' },
+      ],
+      channelPartner: {
+        name: '用友网络', background: '拥有该客户 15 年 ERP 服务背景', rating: 5,
+        value: '具备带单入局、代收货款、一线售前支持能力',
+        strategy: '利用用友与海尔财务部的深度报表合作，反向测算我们的方案能为其节省的具体运维人力成本，将技术方案转化为"省钱报告"。',
+      },
     },
   },
   '国家电网': {

@@ -11,7 +11,7 @@ import {
   ArrowLeft, Building2, Users, Target, TrendingUp, AlertTriangle, Shield,
   DollarSign, Calendar, MapPin, BarChart3, Zap, Lightbulb, ChevronRight,
   ExternalLink, Brain, Clock, CheckCircle2, Eye, Radar, Sparkles,
-  FileText, Edit3, Link2, ThumbsUp, TrendingDown, Search, Send
+  FileText, Edit3, Link2, ThumbsUp, TrendingDown, Search, Send, Star
 } from 'lucide-react';
 
 const cur = (v: number) => formatCurrency(v, 'CNY');
@@ -569,67 +569,176 @@ export const CustomerAnalysis = () => {
       </div>
       )}
 
-      {/* ═══ DEEP: Organizational + Financial + Architecture ═══ */}
+      {/* ═══ DEEP: Strategic Attack Center ═══ */}
       {activeView === 'deep' && (
       <div className="max-w-[1600px] mx-auto px-6 py-6">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {intel.attackPlan ? (
+        <div className="space-y-4">
+          {/* Row 1: Win Prob + Procurement */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {/* Win Probability */}
+            <Card className={cn(intel.attackPlan.winProbability >= 60 ? 'border-emerald-300' : intel.attackPlan.winProbability >= 40 ? 'border-amber-300' : 'border-red-300')}>
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-bold flex items-center gap-2"><Target className="w-4 h-4 text-red-500" />赢单机会评估</h3>
+                  <div className="flex items-center gap-2">
+                    <span className={cn('w-3 h-3 rounded-full animate-pulse', intel.attackPlan.winProbability >= 60 ? 'bg-emerald-500' : intel.attackPlan.winProbability >= 40 ? 'bg-amber-500' : 'bg-red-500')} />
+                    <span className={cn('text-2xl font-extrabold', intel.attackPlan.winProbability >= 60 ? 'text-emerald-600' : intel.attackPlan.winProbability >= 40 ? 'text-amber-600' : 'text-red-600')}>
+                      {intel.attackPlan.winProbability}%
+                    </span>
+                    <span className="text-[10px] text-neutral-400">AI 动态胜率</span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <div className="p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-100 dark:border-red-800">
+                    <p className="text-[10px] font-semibold text-red-600 mb-1">🧠 AI 诊断</p>
+                    <p className="text-[11px] text-red-700 dark:text-red-300">{intel.attackPlan.coreIssue}</p>
+                  </div>
+                  <div className="p-3 bg-amber-50 dark:bg-amber-950/20 rounded-lg border border-amber-100 dark:border-amber-800">
+                    <p className="text-[10px] font-semibold text-amber-600 mb-1">⚡ 必争之地</p>
+                    <p className="text-[11px] text-amber-700 dark:text-amber-300">{intel.attackPlan.mustWin}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Procurement Logic */}
+            <Card>
+              <CardContent className="p-5">
+                <h3 className="text-sm font-bold flex items-center gap-2 mb-4"><DollarSign className="w-4 h-4 text-emerald-600" />采购政策与财务路径</h3>
+                <div className="space-y-3">
+                  {[
+                    { label: '采购政策', value: intel.attackPlan.procurement.policy },
+                    { label: '准入规则', value: intel.attackPlan.procurement.compliance },
+                    { label: '支付偏好', value: intel.attackPlan.procurement.payPref },
+                  ].map((item, i) => (
+                    <div key={i} className="p-2.5 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
+                      <p className="text-[9px] text-neutral-400 mb-0.5">{item.label}</p>
+                      <p className="text-[11px] font-semibold text-neutral-800 dark:text-white">{item.value}</p>
+                    </div>
+                  ))}
+                  <div className="p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-100">
+                    <p className="text-[10px] font-semibold text-emerald-600 mb-1">🎯 AI 策略</p>
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">{intel.attackPlan.procurement.aiStrategy}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Row 2: Battlefield */}
           <Card>
-            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="w-4 h-4 text-purple-600" />组织行为分析</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">采购决策模式</p>
-                <p className="font-semibold text-purple-700">{intel.decisionMode}</p>
+            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Shield className="w-4 h-4 text-red-500" />竞争对手全维度对垒</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 text-[11px]">
+                {/* Our column */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200">
+                  <p className="font-bold text-blue-700 mb-2">🛡️ 我方优势</p>
+                  <p className="text-blue-600">{intel.attackPlan.battlefield[0]?.ourEdge}</p>
+                </div>
+                {/* Competitor cards */}
+                {intel.attackPlan.battlefield.map((comp, i) => (
+                  <div key={i} className={cn('p-3 rounded-lg border',
+                    comp.role.includes('在位') ? 'bg-red-50/50 dark:bg-red-950/10 border-red-200' : 'bg-amber-50/50 dark:bg-amber-950/10 border-amber-200')}>
+                    <div className="flex items-center justify-between mb-2">
+                      <div>
+                        <span className="font-bold text-sm">{comp.name}</span>
+                        <Badge size="sm" variant={comp.role.includes('在位') ? 'danger' : 'warning'} className="ml-1.5">{comp.role}</Badge>
+                      </div>
+                      <span className="text-neutral-500">份额 {comp.share}</span>
+                    </div>
+                    <div className="space-y-1.5 text-[10px]">
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-emerald-500 shrink-0 mt-0.5">✓</span><span className="text-neutral-600 dark:text-neutral-400">{comp.strength}</span>
+                      </div>
+                      <div className="flex items-start gap-1.5">
+                        <span className="text-red-500 shrink-0 mt-0.5">✗</span><span className="text-neutral-600 dark:text-neutral-400">{comp.weakness}</span>
+                      </div>
+                    </div>
+                    <div className="mt-2 p-2 bg-white dark:bg-neutral-800 rounded border border-dashed border-red-200">
+                      <p className="text-[9px] font-semibold text-red-600 mb-0.5">🎯 AI 攻击点</p>
+                      <p className="text-[10px] text-neutral-700 dark:text-neutral-300">{comp.aiAttack}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">决策链长度</p>
-                <p className="font-semibold text-purple-700">{intel.decisionMode.includes('集团') ? '3-5层审批' : '2-3层审批'}</p>
-              </div>
-              <div className="p-3 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">关键影响人</p>
-                <p className="font-semibold text-purple-700">{intel.cioProfile} · {intel.cioBackground}</p>
-              </div>
-              <p className="text-[11px] text-neutral-500 mt-2">{intel.decisionMode.includes('集团') ? '集团集中采购模式意味着需要总部级别的关系突破，但一旦签约，子公司采购将大幅简化。' : '部门级决策模式意味着周期较短，但需要关注多部门协同。'}</p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><DollarSign className="w-4 h-4 text-emerald-600" />财务造影分析</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">5年期 TCO 估算</p>
-                <p className="font-semibold text-emerald-700">{cur(totalValue * 3)}</p>
-              </div>
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">预计运维节省</p>
-                <p className="font-semibold text-emerald-700">30% / 年</p>
-              </div>
-              <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">投资回收期</p>
-                <p className="font-semibold text-emerald-700">18-24 个月</p>
-              </div>
-              <p className="text-[11px] text-neutral-500 mt-2">基于{intel.revenue}营收规模和{intel.itBudgetGrowth}的IT预算增速，5年期TCO约为{cur(totalValue * 3)}，预计可节省30%运维成本。</p>
-            </CardContent>
-          </Card>
+          {/* Row 3: Power Map + Channel Partner */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            {/* Power Map (3 cols) */}
+            <Card className="lg:col-span-3">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Users className="w-4 h-4 text-purple-600" />权力地图与关系渗透</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {intel.attackPlan.powerMap.map((p, i) => (
+                    <div key={i} className={cn('p-3 rounded-lg border-l-4',
+                      p.stance === 'champion' ? 'border-l-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/10' :
+                      p.stance === 'gatekeeper' ? 'border-l-amber-500 bg-amber-50/50 dark:bg-amber-950/10' :
+                      p.stance === 'detractor' ? 'border-l-red-500 bg-red-50/50 dark:bg-red-950/10' :
+                      'border-l-neutral-300 bg-neutral-50 dark:bg-neutral-800')}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-sm">{p.name}</span>
+                          <span className="text-[10px] text-neutral-500">{p.title}</span>
+                          <Badge size="sm" variant={
+                            p.stance === 'champion' ? 'success' : p.stance === 'gatekeeper' ? 'warning' : p.stance === 'detractor' ? 'danger' : 'default'
+                          }>
+                            {p.stance === 'champion' ? '支持者' : p.stance === 'gatekeeper' ? '守门员' : p.stance === 'detractor' ? '阻碍者' : '中立'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-neutral-400">影响力</span>
+                          <div className="w-12 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full">
+                            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${p.influence}%` }} />
+                          </div>
+                          <span className="text-[10px] font-semibold text-purple-600">{p.influence}</span>
+                        </div>
+                      </div>
+                      <p className="text-[10px] text-neutral-500 mb-1.5">{p.note}</p>
+                      <div className="p-2 bg-white dark:bg-neutral-800 rounded border border-dashed border-purple-200">
+                        <p className="text-[9px] font-semibold text-purple-600">🎯 攻坚建议</p>
+                        <p className="text-[10px] text-neutral-700">{p.approach}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardHeader><CardTitle className="text-sm flex items-center gap-2"><TrendingUp className="w-4 h-4 text-blue-600" />技术架构演进</CardTitle></CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">当前阶段</p>
-                <p className="font-semibold text-blue-700">{intel.techStack}</p>
-              </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">1-2年演进</p>
-                <p className="font-semibold text-blue-700">混合云 + 容器化</p>
-              </div>
-              <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-                <p className="text-[10px] text-neutral-500">3-5年目标</p>
-                <p className="font-semibold text-blue-700">云原生 + AI 原生</p>
-              </div>
-              <p className="text-[11px] text-neutral-500 mt-2">基于当前{intel.cloudMaturity}上云比例和{intel.hiringHot}的招聘方向，预计2年内完成容器化改造，5年内向AI原生架构演进。</p>
-            </CardContent>
-          </Card>
+            {/* Channel Partner (2 cols) */}
+            <Card className="lg:col-span-2">
+              <CardHeader><CardTitle className="text-sm flex items-center gap-2"><Zap className="w-4 h-4 text-amber-500" />渠道商战术</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="p-4 bg-amber-50 dark:bg-amber-950/20 rounded-xl border border-amber-200 text-center">
+                  <p className="text-2xl font-extrabold text-amber-600">{intel.attackPlan.channelPartner.name}</p>
+                  <p className="text-[10px] text-neutral-500 mt-1">{intel.attackPlan.channelPartner.background}</p>
+                  <div className="flex justify-center gap-0.5 mt-2">
+                    {Array.from({ length: intel.attackPlan.channelPartner.rating }).map((_, i) => (
+                      <Star key={i} className="w-4 h-4 text-amber-500 fill-amber-500" />
+                    ))}
+                  </div>
+                  <p className="text-[10px] font-semibold text-amber-700 mt-2">{intel.attackPlan.channelPartner.value}</p>
+                </div>
+                <div className="p-3 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-100">
+                  <p className="text-[10px] font-semibold text-purple-600 mb-1">🎯 策略协同</p>
+                  <p className="text-[11px] text-purple-700 dark:text-purple-300">{intel.attackPlan.channelPartner.strategy}</p>
+                </div>
+                <Button variant="brand" size="sm" className="w-full text-[11px]" onClick={() => alert(`已向 ${intel.attackPlan!.channelPartner.name} 发送联合攻坚请求，包含完整的竞争话术和关系公关计划`)}>
+                  <Send className="w-3.5 h-3.5 mr-1" />发起联合攻坚
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
         </div>
+        ) : (
+          <div className="text-center py-20 text-neutral-400">
+            <Brain className="w-12 h-12 mx-auto mb-4 opacity-30" />
+            <p className="text-sm font-semibold">暂无深度攻坚数据</p>
+            <p className="text-[11px] mt-1">精标客户（中国平安、海尔集团、比亚迪、国家电网、深圳市政府）提供完整攻坚分析</p>
+          </div>
+        )}
       </div>
       )}
 
