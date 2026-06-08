@@ -444,7 +444,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           { label: t('deals.quarterNew'), value: stats.quarterNew, icon: TrendingUp, color: 'text-blue-600', trend: '↑12%' },
           { label: '管线总额', value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600', trend: '↑5%' },
           { label: '加权金额', value: formatCurrency(weightedPipelineValue), icon: Target, color: 'text-amber-600', highlight: true, trend: `${Math.round(weightedPipelineValue / Math.max(pipelineValue || 1, 1) * 100)}%` },
-          { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600', trend: wonValue > 0 ? '↑' : '-' },
+          { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600', trend: `${Math.round(wonValue / 150000000 * 100)}%`, sub: `目标 ¥150M · 时间过50% · 业绩达${Math.round(wonValue / 150000000 * 100)}%`, progressPct: Math.round(wonValue / 150000000 * 100), progressColor: 'bg-emerald-500' },
           { label: '异常停滞', value: stagnantDeals.length, icon: AlertTriangle, color: stagnantDeals.length > 0 ? 'text-red-500' : 'text-neutral-400', alert: stagnantDeals.length > 0, trend: stagnantDeals.length > 0 ? '需处理' : '正常' },
         ].map((s) => (
           <Card key={s.label} className={s.alert ? 'border-red-200 dark:border-red-900' : ''}>
@@ -472,6 +472,22 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           </Card>
         ))}
       </div>
+
+      {/* Pipeline Coverage Prediction */}
+      {wonValue < 150000000 * 0.5 && (
+        <div className="p-3 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200 dark:border-amber-800 text-[11px] flex items-center gap-3">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+          <span className="text-amber-700 dark:text-amber-400">
+            当前有效管线 {formatCurrency(pipelineValue)} 为剩余目标 {formatCurrency(150000000 - wonValue)} 的 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)} 倍，按历史 35% 转化率{ pipelineValue * 0.35 < 150000000 - wonValue ? '，无法覆盖缺口。建议前往 ' : '，可覆盖目标。' }
+          </span>
+          {pipelineValue * 0.35 < 150000000 - wonValue && (
+            <div className="flex gap-2 ml-auto shrink-0">
+              <a href="/partners" className="text-blue-600 hover:underline">招募伙伴 →</a>
+              <a href="/incentives" className="text-blue-600 hover:underline">发布激励 →</a>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
@@ -643,9 +659,14 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                         <p className="text-xs text-neutral-500 mt-1">{deal.customerName} · {deal.partnerName}</p>
                         <div className="flex items-center justify-between mt-2">
                           <Badge variant="danger" size="sm">商机冲突</Badge>
-                          <Button variant="ghost" size="sm" onClick={() => { setSelectedDeal(deal); setShowConflictModal(true); }}>
-                            {t('common.view')}
-                          </Button>
+                          <div className="flex gap-1.5">
+                            <Button variant="brand" size="sm" className="text-[10px] h-6" onClick={(e) => { e.stopPropagation(); setSelectedDeal(deal); setShowConflictModal(true); }}>
+                              立即裁决
+                            </Button>
+                            <Button variant="ghost" size="sm" className="text-[10px] h-6" onClick={() => alert('已标记为待协调，将通知双方渠道经理')}>
+                              待协调
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     );
