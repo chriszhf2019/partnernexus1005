@@ -58,8 +58,8 @@ export const PartnerHealthBar = ({
 
   return (
     <>
-      {/* Three Health Cards — matching KPI card style */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* Three Health Cards — in KPI card 4-column grid style */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {/* 覆盖健康 */}
         <div className="group/tip relative bg-white dark:bg-neutral-900 rounded-xl border border-blue-200 dark:border-blue-800 p-4 shadow-card hover:shadow-md transition-shadow cursor-pointer"
           onClick={() => setHealthDetail({
@@ -161,6 +161,37 @@ export const PartnerHealthBar = ({
           </button>
           <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-sm rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[300px] text-center shadow-lg">
             能效决定了利润。诊断投入产出比，识别"高投入低产出"和"低资源高成长"伙伴。
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
+          </div>
+        </div>
+
+        {/* 综合健康摘要 — 4th card */}
+        <div className="group/tip relative bg-white dark:bg-neutral-900 rounded-xl border border-amber-200 dark:border-amber-800 p-4 shadow-card hover:shadow-md transition-shadow cursor-pointer"
+          onClick={() => setShowDrawer(true)}>
+          <div className="flex items-center justify-between">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1">
+                <p className="text-xs text-neutral-500">📋 综合健康</p>
+                <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0" />
+              </div>
+              <p className="text-2xl font-bold text-amber-600">{Math.round((78+72+65)/3)}</p>
+              <p className="text-[10px] text-neutral-400 mt-0.5">覆盖78 · 活跃72 · 能效65</p>
+            </div>
+            <div className="w-10 h-10 rounded-lg bg-amber-50 dark:bg-amber-900/20 flex items-center justify-center shrink-0 ml-2"><Shield className="w-5 h-5 text-amber-600" /></div>
+          </div>
+          <div className="h-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-full mt-2 overflow-hidden">
+            <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.round((78+72+65)/3)}%` }} />
+          </div>
+          <div className="mt-2 grid grid-cols-3 gap-1 text-[10px] text-center">
+            <div className="p-1 bg-blue-50 dark:bg-blue-900/10 rounded"><span className="font-bold text-blue-600">{coopCount}</span><br/><span className="text-neutral-400">活跃</span></div>
+            <div className="p-1 bg-red-50 dark:bg-red-900/10 rounded"><span className="font-bold text-red-600">{pendingCount}</span><br/><span className="text-neutral-400">待批</span></div>
+            <div className="p-1 bg-emerald-50 dark:bg-emerald-900/10 rounded"><span className="font-bold text-emerald-600">{wonCount}</span><br/><span className="text-neutral-400">赢单</span></div>
+          </div>
+          <button className="mt-2 w-full text-xs text-amber-600 hover:text-amber-800 font-medium flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-amber-50 transition-colors">
+            打开待办中心 <ChevronRight className="w-3 h-3" />
+          </button>
+          <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-sm rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[300px] text-center shadow-lg">
+            综合生态健康指数 72/100。点击打开智能待办中心查看全部预警和行动建议。
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
           </div>
         </div>
