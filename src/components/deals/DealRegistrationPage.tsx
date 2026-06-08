@@ -439,93 +439,35 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+      {/* ═══ 4 KPI Cards — 隐含数量/周期/转化率 ═══ */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: t('deals.yearNew'), value: stats.yearNew, icon: Calendar, color: 'text-neutral-700', trend: '↑8%' },
-          { label: t('deals.quarterNew'), value: stats.quarterNew, icon: TrendingUp, color: 'text-blue-600', trend: '↑12%' },
-          { label: '管线总额', value: formatCurrency(pipelineValue), icon: DollarSign, color: 'text-purple-600', trend: '↑5%' },
-          { label: '加权金额', value: formatCurrency(weightedPipelineValue), icon: Target, color: 'text-amber-600', highlight: true, trend: `${Math.round(weightedPipelineValue / Math.max(pipelineValue || 1, 1) * 100)}%` },
-          { label: t('deals.wonValue'), value: formatCurrency(wonValue), icon: CheckCircle2, color: 'text-emerald-600', trend: `${Math.round(wonValue / 150000000 * 100)}%`, sub: `目标 ¥150M · 时间过50% · 业绩达${Math.round(wonValue / 150000000 * 100)}%`, progressPct: Math.round(wonValue / 150000000 * 100), progressColor: 'bg-emerald-500' },
-          { label: '异常停滞', value: stagnantDeals.length, icon: AlertTriangle, color: stagnantDeals.length > 0 ? 'text-red-500' : 'text-neutral-400', alert: stagnantDeals.length > 0, trend: stagnantDeals.length > 0 ? '需处理' : '正常' },
-        ].map((s) => (
-          <Card key={s.label} className={s.alert ? 'border-red-200 dark:border-red-900' : ''}>
-            <div className="flex items-center gap-3">
-              <div className={cn(
-                'w-10 h-10 rounded-lg flex items-center justify-center shrink-0',
-                s.alert ? 'bg-red-100 dark:bg-red-900/30' : 'bg-neutral-100 dark:bg-neutral-800'
-              )}>
-                <s.icon className={s.color} />
-              </div>
-              <div>
+          { key: 'pipeline', label: '管线覆盖', value: formatCurrency(pipelineValue), sub: `${deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length}笔 · 覆盖${(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x`, icon: DollarSign, color: 'text-blue-600 bg-blue-50', tip: '活跃商机管线总额。数值越大说明弹药越充足。低于 ¥100M 表示数量不足，需招募新伙伴或发布激励政策。', trend: `${deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length}笔` },
+          { key: 'weighted', label: '加权预期', value: formatCurrency(weightedPipelineValue), sub: `阶段概率加权 · ${Math.round(weightedPipelineValue / Math.max(pipelineValue || 1, 1) * 100)}% 转化预期`, icon: Target, color: 'text-amber-600 bg-amber-50', tip: '金额 × 阶段概率的加权总和。反映转化率预期——如果加权值远低于管线值，说明商机多集中在早期阶段，转化效率需提升。', trend: `${Math.round(weightedPipelineValue / Math.max(pipelineValue || 1, 1) * 100)}%` },
+          { key: 'won', label: '赢单进展', value: formatCurrency(wonValue), sub: `${Math.round(wonValue / 150000000 * 100)}% 达成 · 目标 ¥150M`, icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50', tip: '已赢单金额 vs 年度目标。时间过半但业绩未过半说明转化周期偏长或赢单率偏低。', trend: `${Math.round(wonValue / 150000000 * 100)}%` },
+          { key: 'cycle', label: '周期健康', value: `21天`, sub: `${stagnantDeals.length}笔停滞 · 行业基准25天`, icon: Clock, color: stagnantDeals.length > 0 ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50', tip: '商机从报备到结单的平均周期。超过 30 天表示流程拥堵。停滞笔数反映商机管理秩序。', trend: stagnantDeals.length > 0 ? `⚠${stagnantDeals.length}笔停滞` : '✓正常' },
+        ].map((s, i) => (
+          <Card key={s.key} hover className="group/tip relative cursor-pointer" onClick={() => setMetricDetail(s.key)}>
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-neutral-500">{s.label}</p>
-                <div className="flex items-baseline gap-1.5">
-                  <p className={cn('text-xl font-semibold', s.highlight ? 'text-amber-600' : 'text-neutral-900 dark:text-white')}>
-                    {s.value}
-                  </p>
-                  {s.trend && (
-                    <span className={cn('text-[10px] font-medium', s.alert ? 'text-red-500' : s.trend.startsWith('↑') ? 'text-emerald-600' : 'text-neutral-400')}>
-                      {s.trend}
-                    </span>
-                  )}
+                <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center', s.color)}>
+                  <s.icon className="w-4 h-4" />
                 </div>
               </div>
+              <p className="text-xl font-bold text-neutral-900 dark:text-white">{s.value}</p>
+              <p className="text-[10px] text-neutral-400 mt-1">{s.sub}</p>
+              <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-700">
+                <span className="text-[10px] text-neutral-400">{s.trend}</span>
+                <span className="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">详情 →</span>
+              </div>
+            </div>
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-2.5 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs leading-relaxed rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[280px] text-center shadow-lg">
+              {s.tip}
+              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
             </div>
           </Card>
         ))}
-      </div>
-
-      {/* ═══ 三要素诊断：数量 · 周期 · 转化率 ═══ */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* 1. 数量够不够 */}
-        <div onClick={() => setMetricDetail('quantity')}
-          className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', pipelineValue >= 100000000 ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-bold">📦 数量够不够</span>
-            <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', pipelineValue >= 100000000 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
-              {pipelineValue >= 100000000 ? '✓ 充足' : '⚠ 不足'}
-            </span>
-          </div>
-          <p className="text-2xl font-extrabold">{formatCurrency(pipelineValue)}</p>
-          <p className="text-[10px] text-neutral-500 mt-1">
-            活跃 {deals.filter(d => !['ClosedWon','ClosedLost'].includes(d.stage)).length} 笔 · 覆盖 {(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x · 点击查看明细
-          </p>
-        </div>
-
-        {/* 2. 周期长不长 */}
-        {(() => {
-          const avgCycle = 21; const isSlow = avgCycle > 30;
-          return (
-            <div onClick={() => setMetricDetail('cycle')}
-              className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', !isSlow ? 'border-emerald-200 bg-emerald-50/30' : 'border-amber-200 bg-amber-50/30')}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold">⏱ 周期长不长</span>
-                <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isSlow ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700')}>
-                  {!isSlow ? '✓ 正常' : '⚠ 偏长'}
-                </span>
-              </div>
-              <p className="text-2xl font-extrabold">{avgCycle}<span className="text-sm font-normal text-neutral-500"> 天</span></p>
-              <p className="text-[10px] text-neutral-500 mt-1">行业基准 25 天 · 点击查看各阶段耗时</p>
-            </div>
-          );
-        })()}
-
-        {/* 3. 转化率高不高 */}
-        {(() => {
-          const winRate = 32; const isLow = winRate < 35;
-          return (
-            <div onClick={() => setMetricDetail('conversion')}
-              className={cn('p-4 rounded-xl border-2 cursor-pointer hover:shadow-md transition-all', !isLow ? 'border-emerald-200 bg-emerald-50/30' : 'border-red-200 bg-red-50/30')}>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold">🎯 转化率高不高</span>
-                <span className={cn('text-xs font-bold px-2 py-0.5 rounded-full', !isLow ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700')}>
-                  {!isLow ? '✓ 正常' : '⚠ 偏低'}
-                </span>
-              </div>
-              <p className="text-2xl font-extrabold">{winRate}<span className="text-sm font-normal text-neutral-500">%</span></p>
-              <p className="text-[10px] text-neutral-500 mt-1">行业平均 35% · 点击查看阶段转化详情</p>
-            </div>
-          );
-        })()}
       </div>
 
       {/* Metric Detail Modal */}
@@ -534,55 +476,31 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-auto" onClick={e => e.stopPropagation()}>
             <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-5 py-4 flex items-center justify-between">
               <h3 className="text-sm font-bold">
-                {metricDetail === 'quantity' ? '📦 数量诊断 — 管线覆盖详情' : metricDetail === 'cycle' ? '⏱ 周期诊断 — 各阶段耗时' : '🎯 转化率诊断 — 阶段转化漏斗'}
+                {metricDetail === 'pipeline' ? '📦 管线覆盖 — 各阶段商机分布' : metricDetail === 'weighted' ? '🎯 加权预期 — 阶段概率×金额' : metricDetail === 'won' ? '💰 赢单进展 — 业绩 vs 目标' : '⏱ 周期健康 — 各阶段耗时分析'}
               </h3>
               <button onClick={() => setMetricDetail(null)} className="p-1 hover:bg-neutral-100 rounded"><X className="w-5 h-5" /></button>
             </div>
-            <div className="p-4 space-y-3 text-sm">
-              {metricDetail === 'quantity' && (<>
-                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals 表，排除 ClosedWon / ClosedLost</div>
-                {STAGES.filter(s => s !== 'ClosedWon' && s !== 'ClosedLost').map(stage => {
-                  const stageDeals = deals.filter(d => d.stage === stage);
-                  const stageValue = stageDeals.reduce((s, d) => s + d.value, 0);
-                  return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <span className="font-medium">{STAGE_CONFIG[stage]?.label || stage}</span>
-                    <span>{stageDeals.length} 笔 · {formatCurrency(stageValue)}</span>
-                  </div>;
-                })}
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg font-semibold">管线覆盖率：{(pipelineValue / Math.max(150000000 - wonValue, 1)).toFixed(1)}x 剩余目标</div>
-              </>)}
-              {metricDetail === 'cycle' && (<>
-                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals.lifecycle 事件时间差，25 笔有周期数据</div>
-                {['Registered→UnderReview', 'UnderReview→Approved', 'Approved→Solution', 'Solution→Commercial', 'Commercial→Closed'].map((transition, i) => {
-                  const days = [3, 5, 7, 10, 8][i];
-                  const benchmark = [2, 4, 6, 8, 5][i];
-                  const isSlow = days > benchmark;
-                  return <div key={transition} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <span className="font-medium">{transition}</span>
-                    <span className={isSlow ? 'text-amber-600 font-semibold' : 'text-emerald-600'}>
-                      {days} 天 {isSlow ? '⚠' : '✓'} (基准 {benchmark}天)
-                    </span>
-                  </div>;
-                })}
-                <div className="p-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">平均总周期 21 天 · 行业基准 25 天 · 周期健康</div>
-              </>)}
-              {metricDetail === 'conversion' && (<>
-                <div className="p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span className="text-neutral-500">数据来源：</span>deals.stage 分布，总 25 笔</div>
-                {STAGES.map((stage, i) => {
-                  const count = deals.filter(d => d.stage === stage).length;
-                  const pct = Math.round(count / 25 * 100);
-                  const nextCount = i < STAGES.length - 1 ? deals.filter(d => d.stage === STAGES[i + 1]).length : 0;
-                  const convRate = count > 0 && nextCount > 0 ? Math.round(nextCount / count * 100) : 0;
-                  return <div key={stage} className="p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{STAGE_CONFIG[stage]?.label || stage}</span>
-                      <span>{count} 笔 ({pct}%)</span>
-                    </div>
-                    {i < STAGES.length - 1 && <p className="text-[10px] text-neutral-400 mt-0.5">→ 转化率 {convRate}%</p>}
-                  </div>;
-                })}
-                <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg font-semibold">整体赢单率 32% (8/25) · 行业平均 35% · 需提升方案到商务阶段转化</div>
-              </>)}
+            <div className="p-4 space-y-2 text-sm">
+              {metricDetail === 'pipeline' && ['Registered','UnderReview','Approved','Solution','Commercial'].map(stage => {
+                const c = deals.filter(d => d.stage === stage).length;
+                const v = deals.filter(d => d.stage === stage).reduce((s, d) => s + (d.value||0), 0);
+                return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span>{STAGE_CONFIG[stage]?.label||stage}</span><span>{c}笔 · {formatCurrency(v)}</span></div>;
+              })}
+              {metricDetail === 'weighted' && ['Registered','UnderReview','Approved','Solution','Commercial','ClosedWon'].map(stage => {
+                const c = deals.filter(d => d.stage === stage).length;
+                const v = deals.filter(d => d.stage === stage).reduce((s, d) => s + (d.value||0), 0);
+                const prob = {Registered:10,UnderReview:20,Approved:35,Solution:50,Commercial:80,ClosedWon:100}[stage]||0;
+                return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span>{STAGE_CONFIG[stage]?.label||stage} ({prob}%)</span><span>{c}笔 · {formatCurrency(v * prob / 100)}</span></div>;
+              })}
+              {metricDetail === 'won' && (<><div className="p-3 bg-neutral-50 rounded-lg">已赢单 {formatCurrency(wonValue)} / 年度目标 ¥150M ({Math.round(wonValue/150000000*100)}%)</div><div className="h-3 bg-neutral-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{width:`${Math.round(wonValue/150000000*100)}%`}}/></div><p className="text-xs text-neutral-400 mt-1">时间已过 50%，业绩达成 {Math.round(wonValue/150000000*100)}%{wonValue < 75000000 ? '，缺口明显' : ''}</p></>)}
+              {metricDetail === 'cycle' && ['报备→审批','审批→批复','批复→方案','方案→商务','商务→结单'].map((t,i) => {
+                const d=[3,5,7,10,8][i]; const b=[2,4,6,8,5][i];
+                return <div key={t} className="flex items-center justify-between p-2 bg-neutral-50 rounded-lg"><span>{t}</span><span className={d>b?'text-amber-600':'text-emerald-600'}>{d}天 (基准{b}天) {d>b?'⚠':''}</span></div>;
+              })}
+            </div>
+          </div>
+        </div>
+      )}
             </div>
           </div>
         </div>
