@@ -201,15 +201,80 @@ export const PartnerHealthBar = ({
                 <button onClick={() => setShowDrawer(false)} className="p-1 hover:bg-white/20 rounded-lg"><X className="w-5 h-5" /></button>
               </div>
               <div className="p-5 space-y-4">
-                {pendingCount > 0 && (<div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200"><div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-red-500" /><span className="text-sm font-semibold text-red-700">待批复 ({pendingCount})</span></div>
-                  {partners.filter(p => p.status === 'Prospective').slice(0, 5).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><div><p className="text-xs font-semibold">{p.name}</p><p className="text-[10px] text-neutral-400">{p.tier} · {p.region}</p></div><button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="text-[10px] text-red-600 hover:underline">批复 →</button></div>))}
-                  <button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="w-full text-center text-[11px] text-red-600 hover:underline mt-2">查看全部 →</button>
-                </div>)}
-                <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200"><div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-amber-500" /><span className="text-sm font-semibold text-amber-700">无赢单伙伴 ({partners.filter(p => !p.winRate).length})</span></div>
-                  {partners.filter(p => p.status === 'Cooperating' && !p.winRate).slice(0, 5).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><div><p className="text-xs font-semibold">{p.name}</p><p className="text-[10px] text-neutral-400">{p.region} · 经理: {p.manager || '—'}</p></div><a href={`/partners/${p.id}`} className="text-[10px] text-blue-600 hover:underline">诊断 →</a></div>))}
+                {/* 1. 活跃贡献率 */}
+                <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl border border-emerald-200">
+                  <div className="flex items-center gap-2 mb-3"><TrendingUp className="w-4 h-4 text-emerald-500" /><span className="text-sm font-semibold text-emerald-700">活跃贡献率 ({Math.round(partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length / Math.max(partners.length, 1) * 100)}%)</span></div>
+                  <div className="grid grid-cols-2 gap-2 text-xs">
+                    <div className="p-2 bg-white dark:bg-neutral-800 rounded-lg"><span className="text-emerald-600 font-bold">{partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length} 家</span><p className="text-[10px] text-neutral-400">有商机产出</p></div>
+                    <div className="p-2 bg-white dark:bg-neutral-800 rounded-lg"><span className="text-amber-600 font-bold">{partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) === 0).length} 家</span><p className="text-[10px] text-neutral-400">沉睡伙伴</p></div>
+                  </div>
                 </div>
+
+                {/* 2. 待批复 */}
+                {pendingCount > 0 && (<div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200"><div className="flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-red-500" /><span className="text-sm font-semibold text-red-700">待批复 ({pendingCount} 家)</span><span className="text-[10px] text-red-400">最长 {Math.max(0, ...partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)))} 天</span></div>
+                  {partners.filter(p => p.status === 'Prospective').slice(0, 5).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><div><p className="text-xs font-semibold">{p.name}</p><p className="text-[10px] text-neutral-400">{p.tier} · {Math.ceil((Date.now()-new Date(p.applicationDate||p.startDate).getTime())/86400000)}天</p></div><button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="text-[10px] text-red-600 hover:underline shrink-0">批复 →</button></div>))}
+                  <button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="w-full text-center text-[11px] text-red-600 hover:underline mt-2">查看全部 {pendingCount} 条 →</button>
+                </div>)}
+
+                {/* 3. 区域饱和度 */}
+                <div className="p-4 bg-cyan-50 dark:bg-cyan-900/10 rounded-xl border border-cyan-200">
+                  <div className="flex items-center gap-2 mb-3"><MapPin className="w-4 h-4 text-cyan-500" /><span className="text-sm font-semibold text-cyan-700">区域饱和度</span></div>
+                  <div className="space-y-1.5">
+                    {[...new Set(partners.map(p=>p.region).filter(Boolean))].slice(0,6).map(r => {
+                      const c = partners.filter(p=>p.region===r).length;
+                      return (<div key={r} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg text-xs"><span>{r}</span><span className="font-bold text-cyan-600">{c} 家</span></div>);
+                    })}
+                  </div>
+                  <p className="text-[10px] text-cyan-500 mt-2">
+                    {[...new Set(partners.map(p=>p.region).filter(Boolean))].filter(r=>partners.filter(p=>p.region===r).length>=3).length} 区密集 · {['西北','西南'].filter(r=>![...new Set(partners.map(p=>p.region).filter(Boolean))].includes(r)).length} 区空白
+                  </p>
+                </div>
+
+                {/* 4. 管线覆盖率 */}
+                <div className="p-4 bg-purple-50 dark:bg-purple-900/10 rounded-xl border border-purple-200">
+                  <div className="flex items-center gap-2 mb-3"><Award className="w-4 h-4 text-purple-500" /><span className="text-sm font-semibold text-purple-700">管线覆盖率</span></div>
+                  <div className="grid grid-cols-2 gap-2 text-xs mb-2">
+                    <div className="p-2 bg-white dark:bg-neutral-800 rounded-lg"><span className="text-purple-600 font-bold">{partners.filter(p=>(p.winRate||0)>=80).length} 家</span><p className="text-[10px] text-neutral-400">⭐ 明星(≥80%)</p></div>
+                    <div className="p-2 bg-white dark:bg-neutral-800 rounded-lg"><span className="text-purple-600 font-bold">{partners.filter(p=>(p.winRate||0)>=50&&(p.winRate||0)<80).length} 家</span><p className="text-[10px] text-neutral-400">中坚(50-79%)</p></div>
+                  </div>
+                  <button onClick={() => { setShowDrawer(false); navigate('/analytics'); }} className="w-full text-center text-[11px] text-purple-600 hover:underline">查看完整高产出名单 →</button>
+                </div>
+
+                {/* 5. 无赢单伙伴 */}
+                <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl border border-amber-200"><div className="flex items-center gap-2 mb-3"><AlertTriangle className="w-4 h-4 text-amber-500" /><span className="text-sm font-semibold text-amber-700">无赢单伙伴 ({partners.filter(p => !p.winRate).length})</span></div>
+                  {partners.filter(p => p.status === 'Cooperating' && !p.winRate).slice(0, 3).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><div><p className="text-xs font-semibold">{p.name}</p><p className="text-[10px] text-neutral-400">{p.region} · {p.manager || '—'}</p></div><a href={`/partners/${p.id}`} className="text-[10px] text-blue-600 hover:underline shrink-0">诊断 →</a></div>))}
+                </div>
+
+                {/* 6. JBP 建议 */}
                 <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl border border-blue-200"><div className="flex items-center gap-2 mb-3"><Calendar className="w-4 h-4 text-blue-500" /><span className="text-sm font-semibold text-blue-700">建议发起 JBP</span></div>
-                  {partners.filter(p => p.status === 'Cooperating' && p.winRate === 0).slice(0, 3).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><p className="text-xs font-semibold">{p.name}</p><button onClick={() => { setShowDrawer(false); navigate(`/partners/${p.id}`); }} className="text-[10px] text-blue-600 hover:underline">发起 →</button></div>))}
+                  {partners.filter(p => p.status === 'Cooperating' && p.winRate === 0).slice(0, 3).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><p className="text-xs font-semibold">{p.name}</p><button onClick={() => { setShowDrawer(false); navigate(`/partners/${p.id}`); }} className="text-[10px] text-blue-600 hover:underline shrink-0">发起 →</button></div>))}
+                </div>
+
+                {/* 7. 动态分层 */}
+                <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl">
+                  <h4 className="text-xs font-semibold text-neutral-500 mb-3">🏷️ 动态分层标签</h4>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, color: 'bg-emerald-100 text-emerald-700', action: () => setHealthDetail?.() || onFilterStatus?.('Cooperating') },
+                      { label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length, color: 'bg-amber-100 text-amber-700', action: () => onFilterStatus?.('Cooperating') },
+                      { label: '🆕 新进', count: partners.filter(p=>p.status==='Prospective').length, color: 'bg-blue-100 text-blue-700', action: () => onTabChange?.('pending') },
+                      { label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length, color: 'bg-purple-100 text-purple-700', action: () => onFilterStatus?.('Cooperating') },
+                    ].map((tag, i) => (
+                      <button key={i} onClick={tag.action} className={`px-3 py-1.5 rounded-full text-[10px] font-semibold ${tag.color} hover:opacity-80 transition-opacity`}>
+                        {tag.label} {tag.count}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 8. 生态摘要 */}
+                <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl">
+                  <h4 className="text-xs font-semibold text-neutral-500 mb-2">📋 生态健康摘要</h4>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2 bg-white dark:bg-neutral-700 rounded-lg"><p className="text-lg font-extrabold text-blue-600">{coopCount}</p><p className="text-[9px] text-neutral-400">活跃伙伴</p></div>
+                    <div className="p-2 bg-white dark:bg-neutral-700 rounded-lg"><p className="text-lg font-extrabold text-amber-600">{pendingCount}</p><p className="text-[9px] text-neutral-400">待批复</p></div>
+                    <div className="p-2 bg-white dark:bg-neutral-700 rounded-lg"><p className="text-lg font-extrabold text-purple-600">{wonCount}</p><p className="text-[9px] text-neutral-400">有赢单</p></div>
+                  </div>
                 </div>
               </div>
             </motion.div>
