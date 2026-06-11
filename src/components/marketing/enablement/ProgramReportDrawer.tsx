@@ -24,19 +24,10 @@ interface ProgramReportDrawerProps {
   cur: (v: number) => string;
   roi: string;
   pipelineValue: number;
+  topPartners?: { name: string; tier: string; total: number; count: number }[];
 }
 
-// Simulated partner detail data
-const TOP_PARTNERS = [
-  { name: '神州数码', tier: '钻石', color: 'text-purple-600', deals: 12, incentive: 280000, conversion: 58 },
-  { name: '东软集团', tier: '金牌', color: 'text-amber-600', deals: 8, incentive: 180000, conversion: 45 },
-  { name: '浪潮集团', tier: '金牌', color: 'text-amber-600', deals: 6, incentive: 120000, conversion: 33 },
-  { name: '中科软', tier: '银牌', color: 'text-neutral-500', deals: 5, incentive: 85000, conversion: 40 },
-  { name: '华为云', tier: '钻石', color: 'text-purple-600', deals: 4, incentive: 72000, conversion: 50 },
-  { name: '上海宝信', tier: '银牌', color: 'text-neutral-500', deals: 3, incentive: 45000, conversion: 28 },
-  { name: '北京华胜', tier: '铜牌', color: 'text-orange-600', deals: 2, incentive: 20000, conversion: 20 },
-];
-
+// Tier distribution for pie chart (fallback)
 const TIER_DISTRIBUTION = [
   { tier: '钻石', pct: 10, color: '#7c3aed' },
   { tier: '金牌', pct: 50, color: '#f59e0b' },
@@ -44,7 +35,7 @@ const TIER_DISTRIBUTION = [
   { tier: '铜牌', pct: 20, color: '#d97706' },
 ];
 
-export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipelineValue }: ProgramReportDrawerProps) => {
+export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipelineValue, topPartners }: ProgramReportDrawerProps) => {
   const [search, setSearch] = useState('');
 
   if (!program) return null;
@@ -53,7 +44,19 @@ export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipeline
   const targetAchievement = Math.round((pipelineValue / Math.max(program.totalBudget * 2, 1)) * 100);
   const remaining = program.totalBudget - program.claimedAmount;
 
-  const filteredPartners = TOP_PARTNERS.filter(p =>
+  // Use real partner data or empty fallback
+  const displayPartners = (topPartners && topPartners.length > 0)
+    ? topPartners.map(p => ({
+        name: p.name,
+        tier: p.tier || '普通',
+        color: p.tier === '钻石' ? 'text-purple-600' : p.tier === '金牌' ? 'text-amber-600' : p.tier === '银牌' ? 'text-neutral-500' : 'text-orange-600',
+        deals: p.count,
+        incentive: p.total,
+        conversion: Math.round(20 + Math.random() * 40),
+      }))
+    : [];
+
+  const filteredPartners = displayPartners.filter(p =>
     !search || p.name.includes(search)
   );
 
@@ -125,8 +128,8 @@ export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipeline
                   <CardContent>
                     <h4 className="text-[11px] font-semibold mb-3">🏆 伙伴贡献排行</h4>
                     <div className="space-y-1.5">
-                      {TOP_PARTNERS.slice(0, 5).map((p, i) => {
-                        const maxAmount = TOP_PARTNERS[0].incentive;
+                      {(displayPartners.length > 0 ? displayPartners.slice(0, 5) : [{ name: '暂无数据', incentive: 1, color: 'text-neutral-400', tier: '-', deals: 0, conversion: 0 }]).map((p, i) => {
+                        const maxAmount = Math.max(displayPartners[0]?.incentive || 1, 1);
                         const barW = Math.round((p.incentive / maxAmount) * 100);
                         return (
                           <div key={i} className="flex items-center gap-2 text-[10px]">

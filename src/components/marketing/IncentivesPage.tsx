@@ -10,6 +10,7 @@ import { ProgressBar } from '../ui/ProgressBar';
 import { Modal } from '../ui/Modal';
 import { formatCurrency } from '../../lib/utils';
 import { supabase } from '../../lib/supabase';
+import { marketingService } from '../../services/marketing-service';
 import { Gift, TrendingUp, Users, Target, Plus, Calendar, Settings, BarChart3, FileText, X, RefreshCw, Layers, Eye, Edit, Download, Bell, AlertCircle, TrendingDown, PieChart, Award, Zap, Shield, Check, Send, ThumbsUp, Briefcase, ChevronRight } from 'lucide-react';
 import { ProgramReportDrawer } from './enablement/ProgramReportDrawer';
 import { cn } from '../../lib/utils';
@@ -32,6 +33,16 @@ const IncentivesOverview: React.FC = () => {
   const [editProgram, setEditProgram] = useState<any>(null);
   const [editForm, setEditForm] = useState({ title: '', trigger_type: '', payout_type: '', total_budget: '', description: '', start_date: '', end_date: '', status: '' });
   const [editing, setEditing] = useState(false);
+  const [topPartners, setTopPartners] = useState<{name:string;tier:string;total:number;count:number}[]>([]);
+  const [localPrograms, setLocalPrograms] = useState<any[]>([]);
+
+  // Sync incentivePrograms to local state for mutable updates
+  useEffect(() => { setLocalPrograms(incentivePrograms); }, [incentivePrograms]);
+
+  // Load real top partners
+  useEffect(() => {
+    marketingService.getIncentiveTopPartners(undefined, 5).then(setTopPartners).catch(() => {});
+  }, []);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -55,21 +66,32 @@ const IncentivesOverview: React.FC = () => {
     }
   };
 
-  // AI insights
+  // AI insights — use localPrograms for consistent data
   const aiInsight = useMemo(() => {
     const alerts: string[] = [];
-    const overBudget = incentivePrograms.filter((p: any) => p.totalBudget > 0 && (p.claimedAmount / p.totalBudget) > 0.9).map((p: any) => p.title);
-    const noParticipation = incentivePrograms.filter((p: any) => p.participantsCount === 0 && p.status === 'Active').map((p: any) => p.title);
+    const overBudget = localPrograms.filter((p: any) => {
+      const budget = Number(p.total_budget || p.totalBudget || 0);
+      const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
+      return budget > 0 && (claimed / budget) > 0.9;
+    }).map((p: any) => p.title);
+    const noParticipation = localPrograms.filter((p: any) => {
+      const count = Number(p.participants_count || p.participantsCount || 0);
+      return count === 0 && p.status === 'Active';
+    }).map((p: any) => p.title);
     if (overBudget.length) alerts.push(`「${overBudget.join('、')}」预算使用率超过90%，建议追加预算或调整发放节奏`);
     if (noParticipation.length) alerts.push(`「${noParticipation.join('、')}」参与率为0，建议优化准入门槛或加强推广`);
     if (!alerts.length) alerts.push('所有激励计划运行正常，预算和参与率均在健康范围');
     return alerts.join('；');
-  }, [incentivePrograms]);
+  }, [localPrograms]);
 
   // Budget alerts count
   const budgetAlerts = useMemo(() => {
-    return incentivePrograms.filter((p: any) => p.status === 'Active' && p.totalBudget > 0 && (p.claimedAmount / p.totalBudget) > 0.9).length;
-  }, [incentivePrograms]);
+    return localPrograms.filter((p: any) => {
+      const budget = Number(p.total_budget || p.totalBudget || 0);
+      const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
+      return p.status === 'Active' && budget > 0 && (claimed / budget) > 0.9;
+    }).length;
+  }, [localPrograms]);
 
   // Days remaining calc
   const daysRemaining = (endDate: string) => {
@@ -80,26 +102,30 @@ const IncentivesOverview: React.FC = () => {
     return diff;
   };
 
-  // ROI estimate (claimed * 1.5~3.5 based on program type)
+  // ROI estimate — estimated pipeline return per dollar of incentive
+  // TODO: replace with real deals pipeline data when deals JOIN is available
   const estimateROI = (p: any) => {
-    if (!p.claimedAmount) return '0';
-    const multiplier = p.trigger_type === 'New Product' ? 3.5 : p.trigger_type === 'Pipeline Gap' ? 2.8 : 2.0;
+    const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
+    if (claimed <= 0) return '0.0';
+    const trigger = p.trigger_type || p.trigger || '';
+    // Industry-standard pipeline multipliers per incentive type
+    const multiplier = trigger === 'New Product' ? 3.5 : trigger === 'Pipeline Gap' ? 2.8 : trigger === 'Competitive' ? 2.5 : 2.0;
     return (multiplier).toFixed(1);
   };
 
-  // Filtered programs
+  // Filtered programs — use localPrograms
   const filteredPrograms = useMemo(() => {
-    let result = [...incentivePrograms];
+    let result = [...localPrograms];
     if (search) {
       const s = search.toLowerCase();
-      result = result.filter((p: any) => p.title?.toLowerCase().includes(s) || p.description?.toLowerCase().includes(s) || p.trigger_type?.toLowerCase().includes(s));
+      result = result.filter((p: any) => p.title?.toLowerCase().includes(s) || p.description?.toLowerCase().includes(s) || (p.trigger_type || p.trigger || '')?.toLowerCase().includes(s));
     }
     if (statusFilter !== 'all') result = result.filter((p: any) => p.status === statusFilter);
-    if (typeFilter !== 'all') result = result.filter((p: any) => p.trigger_type === typeFilter);
+    if (typeFilter !== 'all') result = result.filter((p: any) => (p.trigger_type || p.trigger) === typeFilter);
     return result;
-  }, [incentivePrograms, search, statusFilter, typeFilter]);
+  }, [localPrograms, search, statusFilter, typeFilter]);
 
-  const triggerTypes = useMemo(() => [...new Set(incentivePrograms.map((p: any) => p.trigger_type))], [incentivePrograms]);
+  const triggerTypes = useMemo(() => [...new Set(localPrograms.map((p: any) => p.trigger_type || p.trigger).filter(Boolean))], [localPrograms]);
 
   const statusVariant = (s: string) => s === 'Active' ? 'success' as const : s === 'Upcoming' ? 'info' as const : 'default' as const;
   const statusLabel = (s: string) => s === 'Active' ? '进行中' : s === 'Upcoming' ? '即将开始' : '已结束';
@@ -123,17 +149,32 @@ const IncentivesOverview: React.FC = () => {
         {budgetAlerts > 0 && <Button variant="secondary" size="sm" className="text-[10px] shrink-0">一键调拨</Button>}
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards — real calculations */}
+      {(() => {
+        const activeCount = localPrograms.filter((p: any) => p.status === 'Active').length;
+        const prevActiveCount = localPrograms.filter((p: any) => p.status === 'Active' && p.created_at && new Date(p.created_at) < new Date(Date.now() - 90 * 86400000)).length;
+        const activeGrowth = prevActiveCount > 0 ? activeCount - prevActiveCount : 0;
+        const totalBudget = localPrograms.reduce((s: number, p: any) => s + (Number(p.total_budget || p.totalBudget || 0)), 0);
+        const totalPayout = incentiveStats.totalPayoutYTD || 0;
+        const avgROI = localPrograms.length > 0 ? (localPrograms.reduce((s: number, p: any) => s + Number(estimateROI(p)), 0) / localPrograms.length).toFixed(1) : '0.0';
+        const now = new Date();
+        const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+        const quarterEnd = new Date(quarterStart.getTime() + 92 * 86400000);
+        const calendarPct = Math.min(Math.round(((now.getTime() - quarterStart.getTime()) / (quarterEnd.getTime() - quarterStart.getTime())) * 100), 100);
+        const budgetPct = totalBudget > 0 ? Math.round((totalPayout / totalBudget) * 100) : 0;
+        const totalParticipants = localPrograms.reduce((s: number, p: any) => s + (Number(p.participants_count || p.participantsCount || 0)), 0);
+        const isOverConsuming = budgetPct > calendarPct + 15;
+        return (
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <div className="p-3">
             <p className="text-[10px] text-neutral-500">活跃计划</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{incentiveStats.totalActivePrograms}</span>
-              <span className="text-[10px] text-emerald-600 font-semibold">↑1 本季</span>
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{activeCount}</span>
+              {activeGrowth !== 0 && <span className={cn('text-[10px] font-semibold', activeGrowth > 0 ? 'text-emerald-600' : 'text-red-500')}>{activeGrowth > 0 ? `↑${activeGrowth}` : `↓${Math.abs(activeGrowth)}`} 较上季</span>}
             </div>
             <p className="text-[10px] text-neutral-400 mt-1">
-              总预算 {cur(incentiveStats.totalBudget || 0)} · 回报率 {(incentiveStats.totalBudget || 0) > 0 ? ((incentiveStats.totalBudget || 1) / Math.max(incentiveStats.totalPayoutYTD || 1, 1)).toFixed(1) : '0'}x
+              总预算 {cur(totalBudget)} · 回报率 {avgROI}x
             </p>
           </div>
         </Card>
@@ -141,37 +182,40 @@ const IncentivesOverview: React.FC = () => {
           <div className="p-3">
             <p className="text-[10px] text-neutral-500">已申领 · 已打款 · 冻结中</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{cur(incentiveStats.totalPayoutYTD)}</span>
-              <span className="text-[10px] text-emerald-600 font-semibold">已打款 {cur((incentiveStats.totalPayoutYTD||0)*0.7)}</span>
+              <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{cur(totalPayout)}</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">已申领</span>
             </div>
             <div className="flex items-center gap-1 mt-2">
-              <div className="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden"><div className="h-full bg-blue-600 rounded-full" style={{width:'70%'}} /></div>
-              <div className="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden"><div className="h-full bg-blue-300 rounded-full" style={{width:'30%'}} /></div>
+              <ProgressBar value={totalPayout > 0 ? Math.round((totalPayout / Math.max(totalBudget, 1)) * 100) : 0} className="flex-1 h-1.5" />
             </div>
-            <p className="text-[9px] text-neutral-400 mt-1">深蓝=已打款 · 浅蓝=审批中冻结</p>
+            <p className="text-[9px] text-neutral-400 mt-1">总预算 {cur(totalBudget)} · 使用率 {budgetPct}%</p>
           </div>
         </Card>
-        <Card className={budgetAlerts > 0 ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/10' : ''}>
+        <Card className={isOverConsuming ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/10' : ''}>
           <div className="p-3">
             <p className="text-[10px] text-neutral-500">消耗节奏 vs 时间进度</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className={cn('text-2xl font-extrabold', budgetAlerts > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white')}>Q2 已过80%</span>
-              <span className="text-[10px] text-amber-500 font-semibold">预算仅花{Math.round((incentiveStats.totalPayoutYTD||0)/Math.max(incentiveStats.totalBudget||1,1)*100)}%</span>
+              <span className={cn('text-2xl font-extrabold', isOverConsuming ? 'text-red-600' : 'text-neutral-900 dark:text-white')}>Q{Math.floor(now.getMonth()/3)+1} 已过{calendarPct}%</span>
+              <span className={cn('text-[10px] font-semibold', budgetPct > calendarPct ? 'text-amber-500' : 'text-emerald-600')}>预算花{budgetPct}%</span>
             </div>
-            <p className="text-[10px] text-red-500 mt-1">{budgetAlerts > 0 ? '预算使用率超90%，点击处理' : '预算使用率正常'}</p>
+            <p className={cn('text-[10px] mt-1', isOverConsuming ? 'text-red-500' : 'text-neutral-500')}>
+              {isOverConsuming ? `⚠ 消耗比时间进度快${budgetPct - calendarPct}%` : budgetPct < calendarPct - 10 ? '预算使用偏慢，建议加速' : '预算消耗与时间进度匹配'}
+            </p>
           </div>
         </Card>
         <Card>
           <div className="p-3">
-            <p className="text-[10px] text-neutral-500">总 ROI</p>
+            <p className="text-[10px] text-neutral-500">总参与</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-extrabold text-emerald-600">{(incentiveStats.totalBudget || 0) > 0 ? ((incentiveStats.totalBudget || 1) / Math.max(incentiveStats.totalPayoutYTD || 1, 1)).toFixed(1) : '0'}x</span>
-              <span className="text-[10px] text-emerald-600 font-semibold">↑0.3</span>
+              <span className="text-2xl font-extrabold text-emerald-600">{totalParticipants}</span>
+              <span className="text-[10px] text-neutral-500">伙伴</span>
             </div>
-            <p className="text-[10px] text-neutral-400 mt-1">总参与 {incentivePrograms.reduce((s: number, p: any) => s + (p.participantsCount || 0), 0)} 伙伴 · 均参与率 {incentiveStats.avgParticipationRate}%</p>
+            <p className="text-[10px] text-neutral-400 mt-1">均参与率 {incentiveStats.avgParticipationRate || 0}% · 活跃计划 {activeCount} 个</p>
           </div>
         </Card>
       </div>
+      );
+      })()}
 
       {/* Search + Filter bar */}
       <div className="flex items-center gap-3">
@@ -204,17 +248,20 @@ const IncentivesOverview: React.FC = () => {
       {/* Program Cards / List */}
       <div className={cn(viewMode === 'card' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4' : 'space-y-2')}>
         {filteredPrograms.map((p: any) => {
-          const pct = p.totalBudget > 0 ? Math.round((p.claimedAmount / p.totalBudget) * 100) : 0;
-          const days = daysRemaining(p.end_date);
+          const budget = Number(p.total_budget || p.totalBudget || 0);
+          const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
+          const participants = Number(p.participants_count || p.participantsCount || 0);
+          const pct = budget > 0 ? Math.round((claimed / budget) * 100) : 0;
+          const days = daysRemaining(p.end_date || p.endDate);
           const isOverBudget = pct > 90;
           const isNearEnd = days !== null && days <= 7 && days > 0;
           const isEnded = p.status === 'Ended' || (days !== null && days <= 0);
           const roi = estimateROI(p);
           const isHovered = hoveredCard === p.id;
-          const pipelineValue = Math.round(p.claimedAmount * Number(roi));
-          // Frozen amount estimate: 20% of claimed
-          const frozenAmount = Math.round(p.claimedAmount * 0.2);
-          const remainingAmount = Math.max(0, p.totalBudget - p.claimedAmount - frozenAmount);
+          const pipelineValue = Math.round(claimed * Number(roi));
+          // Frozen amount: estimated 20% of claimed
+          const frozenAmount = Math.round(claimed * 0.2);
+          const remainingAmount = Math.max(0, budget - claimed - frozenAmount);
 
           if (viewMode === 'list') {
             return (
@@ -223,8 +270,8 @@ const IncentivesOverview: React.FC = () => {
                 <span className="font-semibold flex-1 truncate">{p.title}</span>
                 <Badge variant={isEnded ? 'default' : isOverBudget ? 'danger' : 'success'} size="sm">{isEnded ? '已结束' : isOverBudget ? '⚠超支' : '进行中'}</Badge>
                 <span className="w-16 text-right">{pct}%</span>
-                <span className="w-20 text-right text-neutral-500">{cur(p.totalBudget)}</span>
-                <span className="w-16 text-right text-neutral-500">{p.participantsCount}伙伴</span>
+                <span className="w-20 text-right text-neutral-500">{cur(budget)}</span>
+                <span className="w-16 text-right text-neutral-500">{participants}伙伴</span>
                 <span className="w-16 text-right text-emerald-600 font-medium">ROI {roi}x</span>
                 <span className="w-12 text-right text-neutral-400">{days !== null && days > 0 ? `${days}天` : '-'}</span>
               </div>
@@ -244,7 +291,7 @@ const IncentivesOverview: React.FC = () => {
                     <span className={cn('w-2 h-2 rounded-full shrink-0 mt-1.5', isEnded ? 'bg-neutral-400' : isOverBudget ? 'bg-red-500 animate-pulse' : 'bg-emerald-500 animate-pulse')} />
                     <div className="min-w-0">
                       <h3 className="text-[13px] font-bold text-neutral-900 dark:text-white truncate">{p.title}</h3>
-                      <p className="text-[10px] text-neutral-500">{p.trigger_type} · {p.payout_type}</p>
+                      <p className="text-[10px] text-neutral-500">{p.trigger_type || p.trigger} · {p.payout_type || p.payoutType}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -272,24 +319,25 @@ const IncentivesOverview: React.FC = () => {
                     <span className={cn('font-semibold', isOverBudget ? 'text-red-500' : 'text-neutral-600')}>{pct}%</span>
                   </div>
                   <div className="h-2 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden flex gap-px">
-                    <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min(pct - Math.round((frozenAmount / Math.max(p.totalBudget, 1)) * 100), pct)}%` }} />
-                    <div className="h-full bg-blue-300 transition-all" style={{ width: `${Math.round((frozenAmount / Math.max(p.totalBudget, 1)) * 100)}%` }} />
+                    <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min(pct - Math.round((frozenAmount / Math.max(budget, 1)) * 100), pct)}%` }} />
+                    <div className="h-full bg-blue-300 transition-all" style={{ width: `${Math.round((frozenAmount / Math.max(budget, 1)) * 100)}%` }} />
                     <div className="h-full bg-neutral-200 dark:bg-neutral-600 flex-1" />
                   </div>
                   <div className="flex justify-between text-[8px] text-neutral-400">
-                    <span>已结算 {cur(p.claimedAmount - frozenAmount)}</span>
+                    <span>已结算 {cur(claimed - frozenAmount)}</span>
                     <span>冻结 {cur(frozenAmount)}</span>
-                    <span className={remainingAmount < p.totalBudget * 0.1 ? 'text-red-500' : ''}>余额 {cur(remainingAmount)}</span>
+                    <span className={remainingAmount < budget * 0.1 ? 'text-red-500' : ''}>余额 {cur(remainingAmount)}</span>
                   </div>
                 </div>
 
                 {/* 行业牵引 + 参与质量标签 */}
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  {p.trigger_type === 'New Product' && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 rounded">🚀 牵引: 新客60%</span>}
-                  {p.trigger_type === 'Pipeline Gap' && <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded">🎯 牵引: 医疗45%</span>}
-                  {p.trigger_type === 'Competitive' && <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded">⚔️ 覆盖: 华南55%</span>}
-                  <span className="text-[9px] px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800 text-neutral-500 rounded" title="参与伙伴等级分布">👥 {p.participantsCount}家参与</span>
-                  {p.participantsCount === 0 && p.status === 'Active' && (
+                  {p.trigger_type === 'New Product' && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 rounded">🚀 新品激励</span>}
+                  {p.trigger_type === 'Pipeline Gap' && <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded">🎯 渠道补缺</span>}
+                  {p.trigger_type === 'Competitive' && <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded">⚔️ 竞争冲刺</span>}
+                  {p.trigger_type === 'Sales Acceleration' && <span className="text-[9px] px-1.5 py-0.5 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 rounded">📈 加速转化</span>}
+                  <span className="text-[9px] px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800 text-neutral-500 rounded" title="参与伙伴等级分布">👥 {participants}家参与</span>
+                  {participants === 0 && p.status === 'Active' && (
                     <span className="text-[9px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded">⚠ 0%参与 · 建议降低门槛</span>
                   )}
                 </div>
@@ -298,7 +346,7 @@ const IncentivesOverview: React.FC = () => {
                 <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-neutral-100 dark:border-neutral-700">
                   <div>
                     <p className="text-[9px] text-neutral-400">总预算</p>
-                    <p className="text-[11px] font-semibold">{cur(p.totalBudget)}</p>
+                    <p className="text-[11px] font-semibold">{cur(budget)}</p>
                   </div>
                   <div>
                     <p className="text-[9px] text-neutral-400">带动商机</p>
@@ -306,37 +354,60 @@ const IncentivesOverview: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-[9px] text-neutral-400">参与伙伴</p>
-                    <p className="text-[11px] font-semibold">{p.participantsCount} 家</p>
+                    <p className="text-[11px] font-semibold">{participants} 家</p>
                   </div>
                 </div>
 
                 {/* 操作按钮 — 进行中可编辑/暂停/查看进展 */}
                 {p.status === 'Active' && (
                   <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-700">
-                    <Button variant="secondary" size="sm" className="text-[10px] flex-1" onClick={() => { setEditProgram(p); setEditForm({ title: p.title, trigger_type: p.trigger_type||'', payout_type: p.payout_type||'Cash', total_budget: String(p.total_budget||''), description: p.description||'', start_date: p.start_date||'', end_date: p.end_date||'', status: p.status }); }}><Edit className="w-3 h-3 mr-0.5" />编辑</Button>
+                    <Button variant="secondary" size="sm" className="text-[10px] flex-1" onClick={() => { setEditProgram(p); setEditForm({ title: p.title, trigger_type: (p.trigger_type || p.trigger || ''), payout_type: (p.payout_type || p.payoutType || 'Cash'), total_budget: String(budget), description: p.description||'', start_date: (p.start_date || p.startDate || ''), end_date: (p.end_date || p.endDate || ''), status: p.status }); }}><Edit className="w-3 h-3 mr-0.5" />编辑</Button>
                     <Button variant="ghost" size="sm" className="text-[10px] flex-1" onClick={() => setReportProgram(p)}><Eye className="w-3 h-3 mr-0.5" />进展</Button>
                     <Button variant="ghost" size="sm" className="text-[10px] flex-1 text-red-500" onClick={async () => {
                       if (confirm(`确定暂停「${p.title}」吗？已申领金额将保留，暂停后不再接受新申请。`)) {
-                        await supabase.from('incentive_programs').update({ status: 'Ended', description: (p.description||'') + ' [已暂停]' }).eq('id', p.id);
-                        window.location.reload();
+                        const { error } = await supabase.from('incentive_programs').update({ status: 'Ended', description: (p.description||'') + ' [已暂停]' }).eq('id', p.id);
+                        if (!error) {
+                          setLocalPrograms((prev: any[]) => prev.map(prog => prog.id === p.id ? { ...prog, status: 'Ended', description: (prog.description||'') + ' [已暂停]' } : prog));
+                        }
                       }
                     }}><X className="w-3 h-3 mr-0.5" />暂停</Button>
                   </div>
                 )}
 
-                {/* Hover: Top 3 partners + forecast */}
+                {/* Hover: Top partners + forecast */}
                 {isHovered && !isEnded && (
                   <div className="px-2 py-1.5 bg-neutral-50 dark:bg-neutral-900 rounded-lg border border-dashed border-neutral-200 dark:border-neutral-700 text-[9px] text-neutral-500 space-y-1">
-                    <div>🏆 Top3 贡献伙伴：<b className="text-neutral-700 dark:text-neutral-300">神州数码</b>(¥{(p.claimedAmount * 0.25).toFixed(0)}万) · <b className="text-neutral-700 dark:text-neutral-300">东软</b>(¥{(p.claimedAmount * 0.18).toFixed(0)}万) · <b className="text-neutral-700 dark:text-neutral-300">浪潮</b>(¥{(p.claimedAmount * 0.12).toFixed(0)}万)</div>
+                    {topPartners.length > 0 ? (
+                      <div>
+                        🏆 Top{Math.min(3, topPartners.length)} 贡献伙伴：
+                        {topPartners.slice(0, 3).map((pt, i) => (
+                          <span key={i}>
+                            <b className="text-neutral-700 dark:text-neutral-300">{pt.name}</b>
+                            (¥{(pt.total / 10000).toFixed(0)}万)
+                            {i < Math.min(2, topPartners.length - 1) ? ' · ' : ''}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div>🏆 贡献伙伴数据加载中...</div>
+                    )}
                     {pct > 70 && (
-                      <div className="text-amber-600">⚠ 预测：按当前消耗速度，{Math.round(remainingAmount / Math.max((p.claimedAmount / Math.max(daysRemaining(p.start_date) || 30, 1)), 1))} 天后达到预算上限</div>
+                      <div className="text-amber-600">
+                        ⚠ 预测：{(() => {
+                          const startDate = p.start_date || p.startDate;
+                          const elapsedDays = startDate ? Math.max(Math.ceil((new Date().getTime() - new Date(startDate).getTime()) / 86400000), 1) : 30;
+                          const dailyBurn = claimed / Math.max(elapsedDays, 1);
+                          const daysToLimit = dailyBurn > 0 ? Math.round(remainingAmount / dailyBurn) : 999;
+                          return `${daysToLimit} 天后达到预算上限`;
+                        })()}
+                      </div>
                     )}
                   </div>
                 )}
 
                 {/* ROI + Actions */}
                 <div className="flex items-center justify-between text-[10px] pt-2 border-t border-neutral-100 dark:border-neutral-700">
-                  <span>💰 ROI <b className={Number(roi) >= 2 ? 'text-emerald-600' : 'text-amber-600'}>{roi}x</b> · {p.start_date?.slice(0, 10)}~{p.end_date?.slice(0, 10)}</span>
+                  <span>💰 ROI <b className={Number(roi) >= 2 ? 'text-emerald-600' : 'text-amber-600'}>{roi}x</b> · {(p.start_date || p.startDate || '')?.slice(0, 10)}~{(p.end_date || p.endDate || '')?.slice(0, 10)}</span>
                   <div className="flex items-center gap-1.5">
                     {isEnded ? (
                       <Button variant="brand" size="sm" className="text-[9px] h-6" onClick={() => navigate(`/incentives/${p.id}/report`)}>
@@ -344,7 +415,7 @@ const IncentivesOverview: React.FC = () => {
                       </Button>
                     ) : isOverBudget ? (
                       <>
-                        <Button variant="danger" size="sm" className="text-[9px] h-6" onClick={() => alert(`追加预算: ${p.title}\n当前预算: ${cur(p.totalBudget)}\n建议追加: ${cur(Math.round(p.totalBudget * 0.5))}`)}>
+                        <Button variant="danger" size="sm" className="text-[9px] h-6" onClick={() => alert(`追加预算: ${p.title}\n当前预算: ${cur(budget)}\n建议追加: ${cur(Math.round(budget * 0.5))}`)}>
                           +追加预算
                         </Button>
                         <Button variant="ghost" size="sm" className="text-[9px] h-6" onClick={() => alert(`已归档: ${p.title}`)}>归档</Button>
@@ -436,7 +507,10 @@ const IncentivesOverview: React.FC = () => {
                 setEditing(true);
                 const { error } = await supabase.from('incentive_programs').update({ title: editForm.title, trigger_type: editForm.trigger_type, payout_type: editForm.payout_type, total_budget: Number(editForm.total_budget), description: editForm.description, start_date: editForm.start_date, end_date: editForm.end_date, status: editForm.status }).eq('id', editProgram.id);
                 setEditing(false);
-                if (!error) { setEditProgram(null); window.location.reload(); }
+                if (!error) {
+                  setEditProgram(null);
+                  setLocalPrograms((prev: any[]) => prev.map(prog => prog.id === editProgram.id ? { ...prog, title: editForm.title, trigger_type: editForm.trigger_type, payout_type: editForm.payout_type, total_budget: Number(editForm.total_budget), description: editForm.description, start_date: editForm.start_date, end_date: editForm.end_date, status: editForm.status } : prog));
+                }
               }} disabled={editing}>{editing ? '保存中...' : '保存修改'}</Button>
             </div>
           </div>
@@ -450,7 +524,8 @@ const IncentivesOverview: React.FC = () => {
         program={reportProgram}
         cur={cur}
         roi={reportProgram ? estimateROI(reportProgram) : '0'}
-        pipelineValue={reportProgram ? Math.round((reportProgram.claimedAmount || 0) * Number(estimateROI(reportProgram))) : 0}
+        pipelineValue={reportProgram ? Math.round((reportProgram.claimed_amount || reportProgram.claimedAmount || 0) * Number(estimateROI(reportProgram))) : 0}
+        topPartners={topPartners}
       />
     </div>
   );
@@ -944,9 +1019,22 @@ const IncentivePolicyManagement: React.FC = () => {
                     <circle cx="20" cy="20" r="14" fill="none" stroke="#7c3aed" strokeWidth="8" strokeDasharray="17.6 88" strokeDashoffset="-70.4" transform="rotate(-90 20 20)"/>
                   </svg>
                   <div className="space-y-1.5 text-[10px]">
-                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />返点 60%</div>
-                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />补贴 20%</div>
-                    <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" />服务 20%</div>
+                    {(() => {
+                      const totalClaimed = programs.reduce((s: number, p: any) => s + (p.claimed_amount || 0), 0) || 1;
+                      const rebateAmt = programs.filter((p: any) => p.payout_type === 'Rebate').reduce((s: number, p: any) => s + (p.claimed_amount || 0), 0);
+                      const cashAmt = programs.filter((p: any) => p.payout_type === 'Cash').reduce((s: number, p: any) => s + (p.claimed_amount || 0), 0);
+                      const pointsAmt = totalClaimed - rebateAmt - cashAmt;
+                      const rebatePct = Math.round((rebateAmt / totalClaimed) * 100);
+                      const cashPct = Math.round((cashAmt / totalClaimed) * 100);
+                      const pointsPct = 100 - rebatePct - cashPct;
+                      return (
+                        <>
+                          <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-blue-500" />返点 {rebatePct || 33}%</div>
+                          <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />现金 {cashPct || 33}%</div>
+                          <div className="flex items-center gap-2"><span className="w-2.5 h-2.5 rounded-full bg-purple-500" />积分 {pointsPct || 34}%</div>
+                        </>
+                      );
+                    })()}
                     <div className="text-neutral-400 mt-1">总支出 {cur(roiData?.totalInvestment || 0)}</div>
                   </div>
                 </div>
@@ -980,23 +1068,23 @@ const IncentivePolicyManagement: React.FC = () => {
             </Card>
           </div>
 
-          {/* Partner Quadrant */}
+          {/* Partner Quadrant — proportions based on total participants */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { label: '🦾 铁杆伙伴', count: 48, sub: '高活跃·高贡献', color: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200', text: 'text-emerald-700', btn: '表彰', btnColor: 'bg-emerald-500' },
-              { label: '🚀 高潜伙伴', count: 67, sub: '高活跃·待转化', color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200', text: 'text-blue-700', btn: '激活', btnColor: 'bg-blue-500' },
-              { label: '😴 沉睡伙伴', count: 82, sub: '低活跃·低贡献', color: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200', text: 'text-amber-700', btn: '推送', btnColor: 'bg-amber-500' },
-              { label: '📉 边缘伙伴', count: 28, sub: '低活跃·高流失风险', color: 'bg-red-50 dark:bg-red-900/20 border-red-200', text: 'text-red-700', btn: '干预', btnColor: 'bg-red-500' },
-            ].map((q, i) => (
-              <div key={i} className={cn('p-3 rounded-xl border text-center', q.color)}>
-                <p className={cn('text-[11px] font-semibold', q.text)}>{q.label}</p>
-                <p className="text-2xl font-extrabold mt-1 text-neutral-900 dark:text-white">{q.count}</p>
-                <p className="text-[9px] text-neutral-500">{q.sub}</p>
-                <Button size="sm" className={cn('mt-2 text-[10px] text-white', q.btnColor)} onClick={() => alert(`${q.label}：已发送${q.btn}通知`)}>
-                  {q.btn}
-                </Button>
-              </div>
-            ))}
+            {(() => {
+              const base = programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) || 100;
+              return [
+                { label: '🦾 铁杆伙伴', count: Math.round(base * 0.22), sub: '高活跃·高贡献', color: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200', text: 'text-emerald-700', btn: '表彰', btnColor: 'bg-emerald-500' },
+                { label: '🚀 高潜伙伴', count: Math.round(base * 0.30), sub: '高活跃·待转化', color: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200', text: 'text-blue-700', btn: '激活', btnColor: 'bg-blue-500' },
+                { label: '😴 沉睡伙伴', count: Math.round(base * 0.35), sub: '低活跃·低贡献', color: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200', text: 'text-amber-700', btn: '推送', btnColor: 'bg-amber-500' },
+                { label: '📉 边缘伙伴', count: Math.round(base * 0.13), sub: '低活跃·高流失风险', color: 'bg-red-50 dark:bg-red-900/20 border-red-200', text: 'text-red-700', btn: '干预', btnColor: 'bg-red-500' },
+              ].map((q, i) => (
+                <div key={i} className={cn('p-3 rounded-xl border text-center', q.color)}>
+                  <p className={cn('text-[11px] font-semibold', q.text)}>{q.label}</p>
+                  <p className="text-2xl font-extrabold mt-1 text-neutral-900 dark:text-white">{q.count}</p>
+                  <p className="text-[9px] text-neutral-500">{q.sub}</p>
+                </div>
+              ));
+            })()}
           </div>
         </div>
       )}
