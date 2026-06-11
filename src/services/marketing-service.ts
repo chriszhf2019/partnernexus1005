@@ -17,28 +17,41 @@ function mapActivity(a: any): MDFMonthlyActivity {
 }
 
 // Helper: map DB row to IncentiveProgram
+// Returns both camelCase (primary API) and snake_case aliases for backward compatibility
 function mapProgram(p: any): IncentiveProgram {
+  const totalBudget = Number(p.total_budget || 0);
+  const claimedAmount = Number(p.claimed_amount || 0);
   return {
     id: p.id,
     title: p.title,
+    // camelCase (primary API)
     trigger: p.trigger_type as any,
     status: p.status as any,
     payoutType: p.payout_type as any,
-    totalBudget: Number(p.total_budget || 0),
-    claimedAmount: Number(p.claimed_amount || 0),
+    totalBudget,
+    claimedAmount,
     participantsCount: Number(p.participants_count || 0),
     description: p.description || '',
     startDate: p.start_date || '',
     endDate: p.end_date || '',
-    budget: Number(p.total_budget || 0),
-    used: Number(p.claimed_amount || 0),
-    remaining: Number(p.total_budget || 0) - Number(p.claimed_amount || 0),
+    budget: totalBudget,
+    used: claimedAmount,
+    remaining: totalBudget - claimedAmount,
+    // snake_case aliases — component code uses both conventions
+    trigger_type: p.trigger_type,
+    payout_type: p.payout_type,
+    total_budget: totalBudget,
+    claimed_amount: claimedAmount,
+    participants_count: Number(p.participants_count || 0),
+    start_date: p.start_date || '',
+    end_date: p.end_date || '',
+    created_at: p.created_at,
     currentMonthPerformance: {
-      target: Math.round(Number(p.total_budget || 0) / 6),
-      rate: Number(p.total_budget || 0) > 0 ? Math.round((Number(p.claimed_amount || 0) / Number(p.total_budget || 1)) * 100) : 0,
+      target: Math.round(totalBudget / 6),
+      rate: totalBudget > 0 ? Math.round((claimedAmount / Math.max(totalBudget, 1)) * 100) : 0,
       growth: 12,
     },
-  };
+  } as IncentiveProgram;
 }
 
 // Cached data
