@@ -150,4 +150,53 @@ export const marketingService = {
   invalidateCache() {
     cacheTimestamp = 0;
   },
+
+  async getIncentiveApplications(planId?: string) {
+    await refreshCache();
+    let query = supabase
+      .from('incentive_applications')
+      .select('*')
+      .order('submitted_at', { ascending: false });
+    if (planId) query = query.eq('plan_id', planId);
+    const { data } = await query;
+    if (!data?.length) return [];
+    return data.map((a: any) => ({
+      id: a.id,
+      planId: a.plan_id,
+      partnerId: a.partner_id,
+      partnerName: a.partner_name,
+      partnerTier: a.partner_tier,
+      metric: a.metric,
+      claimedValue: Number(a.claimed_value || 0),
+      payoutAmount: Number(a.payout_amount || 0),
+      status: a.status,
+      submittedAt: a.submitted_at,
+      approvedAt: a.approved_at,
+    }));
+  },
+
+  async getIncentiveTopPartners(planId?: string, limit = 10) {
+    let query = supabase
+      .from('incentive_applications')
+      .select('partner_id, partner_name, partner_tier, claimed_value, status')
+      .eq('status', 'approved');
+    if (planId) query = query.eq('plan_id', planId);
+    const { data } = await query;
+    if (!data?.length) return [];
+
+    // Aggregate by partner
+    const partnerMap = new Map<string, { name: string; tier: string; total: number; count: number }>();
+    data.forEach((a: any) => {
+      const key = a.partner_id;
+      const existing = partnerMap.get(key) || { name: a.partner_name || '未知', tier: a.partner_tier || '普通', total: 0, count: 0 };
+      existing.total += Number(a.claimed_value || 0);
+      existing.count += 1;
+      partnerMap.set(key, existing);
+    });
+
+    return Array.from(partnerMap.entries())
+      .sort((a, b) => b[1].total - a[1].total)
+      .slice(0, limit)
+      .map(([, v]) => v);
+  },
 };
