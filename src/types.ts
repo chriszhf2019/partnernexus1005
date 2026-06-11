@@ -958,21 +958,13 @@ export type CampaignGoal =
   | 'conversion'    // 做转化 - 产生商机、促进销售转化
   | 'engagement';   // 提粘性 - 增强客户粘性、提升忠诚度
 
-// 目标权重配置
-export interface CampaignGoalWeight {
-  goal: CampaignGoal;
-  weight: number;   // 权重百分比 (0-100)
-  description?: string;
-}
-
-// 目标值基准
+// 活动目标及权重配置（带目标值）
 export interface GoalTarget {
   metric: string;        // 指标名称
   targetValue: number;    // 目标值
   unit?: string;         // 单位（如：人、次、元、%等）
 }
 
-// 活动目标及权重配置（带目标值）
 export interface CampaignGoalWeight {
   goal: CampaignGoal;
   weight: number;   // 权重百分比 (0-100)

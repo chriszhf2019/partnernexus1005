@@ -12,7 +12,21 @@ import { partnerService } from './services/partner-service';
 import { dealService } from './services/deal-service';
 import { buildPartnerDetails } from './lib/partnerDataBuilder';
 import { supabase } from './lib/supabase';
-import { Shield, HelpCircle } from 'lucide-react';
+import { Shield, HelpCircle, Clock } from 'lucide-react';
+
+const LiveClock = () => {
+  const [time, setTime] = useState(new Date());
+  useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const tzAbbr = time.toLocaleTimeString('en-US', { timeZoneName: 'short' }).split(' ').pop();
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-medium" title={`时区: ${tz}`}>
+      <Clock className="w-3.5 h-3.5" />
+      {time.toLocaleString('zh-CN', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false })}
+      <span className="text-[10px] text-neutral-300 ml-0.5">{tzAbbr}</span>
+    </div>
+  );
+};
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { ConfigProvider } from './contexts/ConfigContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -361,6 +375,8 @@ function AppLayout() {
             <Shield className="w-3.5 h-3.5" />
             {t('footer.secure')}
           </div>
+          <div className="h-3 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <LiveClock />
           <div className="h-3 w-px bg-neutral-200 dark:bg-neutral-700" />
           <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-medium">
             <HelpCircle className="w-3.5 h-3.5" />

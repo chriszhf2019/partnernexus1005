@@ -2,12 +2,13 @@ import { memo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Handshake, FileText, Megaphone, Gift,
-  GraduationCap, BarChart3, Settings, Plus, Network, Sun, Moon,
+  GraduationCap, BarChart3, Settings, Plus, Network, Sun, Moon, LogOut,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useConfig } from '../../contexts/ConfigContext';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface NavItem {
   path: string;
@@ -47,6 +48,7 @@ export const Sidebar = memo(() => {
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { config } = useConfig();
+  const { logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -84,9 +86,9 @@ export const Sidebar = memo(() => {
                       onClick={() => navigate(item.path)}
                       aria-current={active ? 'page' : undefined}
                       className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150',
+                        'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-150 relative',
                         active
-                          ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900'
+                          ? 'bg-neutral-100 dark:bg-white/10 text-neutral-900 dark:text-white before:absolute before:left-[-12px] before:top-1/2 before:-translate-y-1/2 before:w-[3px] before:h-5 before:rounded-r-full before:bg-brand'
                           : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-800 hover:text-neutral-900 dark:hover:text-white',
                       )}
                     >
@@ -105,7 +107,7 @@ export const Sidebar = memo(() => {
       <div className="px-3 pb-2">
         <button
           onClick={() => window.open(config.partnerCenterUrl || 'https://www.partner-center.com', '_blank', 'noopener,noreferrer')}
-          className="w-full h-9 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5"
+          className="w-full h-9 bg-brand hover:bg-brand/90 text-white rounded-lg text-sm font-medium flex items-center justify-center transition-all duration-200 shadow-md hover:shadow-lg hover:-translate-y-0.5"
         >
           {config.ctaButtonLabel || '合作伙伴中心'}
         </button>
@@ -113,18 +115,19 @@ export const Sidebar = memo(() => {
 
       {/* Footer */}
       <div className="px-3 pb-3 border-t border-neutral-200 dark:border-neutral-800 pt-3">
-        {/* Company Info */}
-        <div className="mb-3 px-2 py-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg space-y-0.5">
-          <p className="text-[10px] text-neutral-400 uppercase tracking-wider mb-0.5">所属公司</p>
-          <p className="text-[12px] font-medium text-neutral-700 dark:text-neutral-300 truncate">
-            {config.companyName || '未设置'}
-          </p>
-          {config.companyAddress && <p className="text-[10px] text-neutral-400 truncate">{config.companyAddress}</p>}
-          {config.companyPhone && <p className="text-[10px] text-neutral-400 truncate">{config.companyPhone}</p>}
-          {config.companyEmail && <p className="text-[10px] text-neutral-400 truncate">{config.companyEmail}</p>}
+        {/* Compact company info */}
+        <div className="flex items-center gap-2 px-2 py-1.5 mb-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors group relative"
+          title={`${config.companyAddress ? config.companyAddress + ' · ' : ''}${config.companyPhone ? config.companyPhone : ''}`.trim()}>
+          <div className="w-6 h-6 rounded-md bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+            <span className="text-[9px] font-bold text-neutral-400">{config.companyName?.[0] || '?'}</span>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 truncate">{config.companyName || t('common.noData')}</p>
+          </div>
         </div>
 
-        <div className="flex items-center justify-between mb-2.5">
+        {/* Theme + Language */}
+        <div className="flex items-center justify-between mb-2 px-1">
           <button
             onClick={toggleTheme}
             className="p-1.5 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-400 transition-colors"
@@ -147,14 +150,24 @@ export const Sidebar = memo(() => {
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 p-2 rounded-lg">
-          <div className="w-7 h-7 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] font-semibold text-neutral-600 dark:text-neutral-300">
+
+        {/* User info + Logout */}
+        <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors group">
+          <div className="w-7 h-7 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] font-semibold text-neutral-600 dark:text-neutral-300 shrink-0">
             AR
           </div>
-          <div className="overflow-hidden">
+          <div className="flex-1 min-w-0">
             <p className="text-[12px] font-medium text-neutral-900 dark:text-white truncate">Alex Rivera</p>
             <p className="text-[11px] text-neutral-400 truncate">Ecosystem Admin</p>
           </div>
+          <button
+            onClick={logout}
+            className="p-1.5 rounded-md text-neutral-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+            aria-label="Logout"
+            title="退出登录"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
     </aside>

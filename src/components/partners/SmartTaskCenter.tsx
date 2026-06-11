@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, Clock, Users, Award, Shield, FileText, ChevronRight, X } from 'lucide-react';
+import { AlertTriangle, Clock, FileText, ChevronRight } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { Partner } from '../../types';
 import { Card } from '../ui/Card';
@@ -23,28 +23,8 @@ export const SmartTaskCenter: React.FC<SmartTaskCenterProps> = ({
     p.status === 'Cooperating' && ['Gold','Platinum','Diamond'].includes(p.tier) && (p.winRate || 0) === 0
   );
 
-  // Cert stats - computed from real partner data
-  const l1Count = partners.reduce((s, p) => s + (((p as any).certifications || []).includes('L1认证') ? 1 : 0), 0);
-  const l2Count = partners.reduce((s, p) => s + (((p as any).certifications || []).includes('L2认证') ? 1 : 0), 0);
-
-  // Contract expiry - top priority
-  const expiringPartners = partners.filter(p => {
-    const d = (p as any).contract_expiry;
-    if (!d) return false;
-    const days = Math.ceil((new Date(d).getTime() - Date.now()) / 86400000);
-    return days > 0 && days <= 30;
-  });
-
   // Smart tasks
   const tasks = [
-    // 🔴 TOP: Contract expiry (most urgent)
-    ...(expiringPartners.length > 0 ? [{
-      id: 'contract', icon: AlertTriangle, color: 'text-red-600 bg-red-100 dark:bg-red-900/30',
-      title: `⚠️ ${expiringPartners.length} 家伙伴代理协议即将到期`,
-      sub: expiringPartners.map(p => `${p.name}(${(p as any).tier}) ${Math.ceil((new Date((p as any).contract_expiry).getTime() - Date.now()) / 86400000)}天后到期`).join(' · '),
-      urgent: true, isTop: true,
-      action: { label: '续约处理', onClick: () => {} },
-    }] : []),
     {
       id: 'risk', icon: AlertTriangle, color: 'text-red-600 bg-red-50 dark:bg-red-900/20',
       title: `${atRiskPartners.length} 家高等级伙伴存在流失风险`,
@@ -60,64 +40,40 @@ export const SmartTaskCenter: React.FC<SmartTaskCenterProps> = ({
       action: { label: '立即审批', onClick: onViewPending },
     },
     {
-      id: 'conflict', icon: Shield, color: 'text-red-600 bg-red-50 dark:bg-red-900/20',
-      title: '2 个商机冲突需要裁决',
-      sub: '涉及 4 家伙伴的客户归属冲突',
-      urgent: true,
-      action: { label: '裁决', onClick: () => {} },
-    },
-    {
-      id: 'cert', icon: Award, color: 'text-purple-600 bg-purple-50 dark:bg-purple-900/20',
-      title: `生态认证工程师: ${l1Count + l2Count} 人`,
-      sub: `L1: ${l1Count}人 · L2: ${l2Count}人 · 培训完成率 78%`,
-      urgent: false,
-      action: { label: '人才池', onClick: () => {} },
-    },
-    {
       id: 'jbp', icon: FileText, color: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
-      title: '2 个 JBP 联合业务计划需本月复盘',
-      sub: '神州数码 · 东软集团 Q2 复盘到期',
+      title: 'JBP 复盘提醒',
+      sub: '暂无待复盘计划',
       urgent: false,
       action: { label: '安排复盘', onClick: () => {} },
     },
   ];
 
+  const urgentCount = tasks.filter(t => t.urgent).length;
+  const topTask = tasks.find(t => (t as any).isTop) || tasks[0];
+
   return (
-    <Card>
-      <div className="p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-sm font-semibold flex items-center gap-2">
-            <AlertTriangle className="w-4 h-4 text-brand" />智能待办中心
-          </h3>
-          <Badge variant="warning" size="sm">{tasks.filter(t => t.urgent).length} 项紧急</Badge>
-        </div>
-        <div className="space-y-1">
-          {tasks.map(task => (
-            <div key={task.id} className={cn(
-              'flex items-center justify-between px-3 py-2.5 rounded-lg text-sm transition-colors',
-              (task as any).isTop ? 'bg-red-100 dark:bg-red-900/20 border-2 border-red-300 dark:border-red-700 animate-pulse' :
-              task.urgent ? 'bg-red-50/50 dark:bg-red-900/5 border border-red-100 dark:border-red-900' :
-              'hover:bg-neutral-50 dark:hover:bg-neutral-800'
-            )}>
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className={cn('w-8 h-8 rounded-lg flex items-center justify-center shrink-0', task.color)}>
-                  <task.icon className={cn('w-4 h-4', (task as any).isTop && 'animate-bounce')} />
-                </div>
-                <div className="min-w-0">
-                  <p className={cn('text-sm font-semibold truncate', (task as any).isTop ? 'text-red-800 dark:text-red-200' : 'text-neutral-900 dark:text-white')}>{task.title}</p>
-                  <p className={cn('text-xs truncate', (task as any).isTop ? 'text-red-600 dark:text-red-400 font-medium' : 'text-neutral-400')}>{task.sub}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                {task.urgent && <span className={cn('w-2 h-2 rounded-full', (task as any).isTop ? 'bg-red-600 animate-ping' : 'bg-red-500 animate-pulse')} />}
-                <Button variant={(task as any).isTop ? 'danger' : 'ghost'} size="sm" onClick={task.action.onClick} className="text-xs">
-                  {task.action.label} <ChevronRight className="w-3 h-3 ml-0.5" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+    <div className="flex items-center gap-2 text-xs group relative">
+      <div className="flex items-center gap-1.5 cursor-pointer" title={`${urgentCount}项紧急待办`}>
+        <AlertTriangle className={cn('w-4 h-4', urgentCount > 0 ? 'text-red-500 animate-pulse' : 'text-neutral-400')} />
+        <span className="font-medium text-neutral-600 dark:text-neutral-400">待办</span>
+        {urgentCount > 0 && <span className="px-1.5 py-0.5 rounded-full bg-red-500 text-white text-[10px] font-bold">{urgentCount}</span>}
       </div>
-    </Card>
+      {/* Hover dropdown */}
+      <div className="absolute top-full right-0 mt-2 w-80 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 rounded-xl shadow-2xl p-2 space-y-0.5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all z-50">
+        {tasks.slice(0, 3).map(task => (
+          <div key={task.id} onClick={task.action.onClick} className={cn(
+            'flex items-center justify-between px-3 py-2 rounded-lg text-xs cursor-pointer hover:bg-neutral-50 dark:hover:bg-neutral-800',
+            task.urgent && 'bg-red-50/50 dark:bg-red-900/5'
+          )}>
+            <div className="flex items-center gap-2 min-w-0">
+              <task.icon className={cn('w-3.5 h-3.5 shrink-0', task.urgent ? 'text-red-500' : 'text-neutral-400')} />
+              <span className="truncate">{task.title}</span>
+            </div>
+            <Button variant="ghost" size="sm" className="text-[10px] shrink-0">{task.action.label}</Button>
+          </div>
+        ))}
+        {tasks.length > 3 && <p className="text-[10px] text-neutral-400 text-center py-1">还有 {tasks.length - 3} 项...</p>}
+      </div>
+    </div>
   );
 };

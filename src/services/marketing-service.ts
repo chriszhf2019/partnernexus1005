@@ -133,4 +133,8 @@ export const marketingService = {
     await refreshCache();
     return (cachedPrograms || []).find((p) => p.id === id);
   },
+
+  invalidateCache() {
+    cacheTimestamp = 0;
+  },
 };

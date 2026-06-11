@@ -118,10 +118,10 @@ function generateROIAlert(tags: TagItem[], partner: any): string {
   const winRate = tags.find(t => t.label === '赢单率');
   const pipeline = tags.find(t => t.label === '商机管道');
   if (winRate?.value === '0%' && pipeline) {
-    return `受限于 0% 赢单率，该伙伴目前已积压商机无法变现，预计导致本季度返点损失 ¥${Math.round(Math.random() * 150 + 80)},000。`;
+    return `受限于 0% 赢单率，该伙伴目前已积压商机无法变现，建议优先推进现有商机转化。`;
   }
   if (winRate && Number(winRate.value.replace('%', '')) < 30) {
-    return `赢单率 ${winRate.value}，低于行业平均 35%。每提升 10% 赢单率，预计增加 ¥${Math.round(Math.random() * 200 + 100)},000 返点收入。`;
+    return `赢单率 ${winRate.value}，低于行业平均 35%。建议加强售前支持和培训。`;
   }
   return `各项指标处于健康范围，建议继续保持并拓展新市场。`;
 }

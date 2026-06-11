@@ -286,7 +286,7 @@ export const PartnerHealthBar = ({
                   <h4 className="text-xs font-semibold text-neutral-500 mb-3">🏷️ 动态分层标签</h4>
                   <div className="flex flex-wrap gap-2">
                     {[
-                      { label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, color: 'bg-emerald-100 text-emerald-700', action: () => setHealthDetail?.() || onFilterStatus?.('Cooperating') },
+                      { label: '🏆 高产出', count: partners.filter(p=>(p.winRate||0)>50&&p.status==='Cooperating').length, color: 'bg-emerald-100 text-emerald-700', action: () => onFilterStatus?.('Cooperating') },
                       { label: '💤 沉睡', count: partners.filter(p=>p.status==='Cooperating'&&(p.winRate||0)===0).length, color: 'bg-amber-100 text-amber-700', action: () => onFilterStatus?.('Cooperating') },
                       { label: '🆕 新进', count: partners.filter(p=>p.status==='Prospective').length, color: 'bg-blue-100 text-blue-700', action: () => onTabChange?.('pending') },
                       { label: '📈 上升', count: partners.filter(p=>p.status==='Cooperating'&&new Date(p.startDate).getTime()>Date.now()-90*86400000).length, color: 'bg-purple-100 text-purple-700', action: () => onFilterStatus?.('Cooperating') },

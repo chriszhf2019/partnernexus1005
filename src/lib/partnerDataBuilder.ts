@@ -66,11 +66,8 @@ export function buildPartnerDetails(partner: Partner): PartnerDetails {
   }
   years = Math.max(0, years);
 
-  // winRate: from DB, fallback to tier-based default
-  const tierWinRates: Record<string, number> = {
-    Diamond: 75, Platinum: 70, Gold: 65, Silver: 55, Registered: 45, Premier: 68, Standard: 50
-  };
-  const winRate = (partner as any).winRate ?? partner.winRate ?? tierWinRates[partner.tier] ?? 50;
+  // winRate: from DB, 0 if no data (no fake defaults)
+  const winRate = partner.winRate || 0;
 
   // Pipeline: ONLY from DB columns — never generate random numbers
   const pipeline = {

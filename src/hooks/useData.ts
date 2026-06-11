@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState, useEffect } from 'react';
 import { dealService } from '../services/deal-service';
+import { partnerService } from '../services/partner-service';
 import { marketingService } from '../services/marketing-service';
 import type { CockpitData, Partner, Deal, MDFMonthlyActivity, IncentiveProgram, MDFStats, IncentiveStats } from '../types';
 import type { MatrixData } from '../types';
@@ -47,10 +48,14 @@ const STAGE_PROBABILITIES: Record<string, { probability: number; avgCycleDays: n
 };
 
 export function usePartners() {
+  const [partners, setPartners] = useState<Partner[]>([]);
   const partnerListRef = useRef<Partner[]>([]);
 
-  const partners = useMemo(() => {
-    return [];
+  useEffect(() => {
+    partnerService.list().then((result) => {
+      setPartners(result.items);
+      partnerListRef.current = result.items;
+    }).catch(() => debug.warn('[useData] usePartners failed'));
   }, []);
 
   return useMemo(() => ({
@@ -288,21 +293,18 @@ function fallbackCockpitData(): CockpitData {
   const emptyMetric = (name: string): any => ({
     metric_name: name, current_value: 0, yoy: 0, qoq: 0, mom: 0, linear_rate: 0,
     achievements: { monthly: { current: 0, target: 100, rate: 0 }, quarterly: { current: 0, target: 100, rate: 0 }, yearly: { current: 0, target: 100, rate: 0 } },
-    monthly_data: [{ month: '1月', value: 0 }, { month: '2月', value: 0 }, { month: '3月', value: 0 }, { month: '4月', value: 0 }, { month: '5月', value: 0 }, { month: '6月', value: 0 }],
-    partner_ecosystem_details: {
-      regional_coverage: [{ region: '华北', partner_count: 8, city_count: 20, deal_value: 19500000 }, { region: '华东', partner_count: 5, city_count: 12, deal_value: 35100000 }, { region: '华南', partner_count: 4, city_count: 10, deal_value: 58700000 }, { region: '华中', partner_count: 2, city_count: 8, deal_value: 14400000 }, { region: '西部', partner_count: 3, city_count: 6, deal_value: 4500000 }],
-      tier_funnel: [{ tier: 'Diamond', count: 2, percentage: 9 }, { tier: 'Platinum', count: 2, percentage: 9 }, { tier: 'Gold', count: 5, percentage: 23 }, { tier: 'Silver', count: 7, percentage: 32 }, { tier: 'Registered', count: 6, percentage: 27 }],
-    },
-    active_split: { order_placing: { value: 11, target: 18, rate: 61 }, leads_reporting: { value: 8, target: 18, rate: 44 }, incentive_participants: { value: 6, target: 18, rate: 33 } },
-    dimensional_achievements: [{ type: 'region', data: [{ name: '华北', rate: 72, activity_rate: 65, count: 8, value: 19500000 }, { name: '华东', rate: 68, activity_rate: 70, count: 5, value: 35100000 }, { name: '华南', rate: 55, activity_rate: 48, count: 4, value: 58700000 }, { name: '华中', rate: 80, activity_rate: 75, count: 2, value: 14400000 }] }, { type: 'partner_type', data: [{ name: 'Diamond', rate: 90, activity_rate: 85, count: 2 }, { name: 'Platinum', rate: 82, activity_rate: 78, count: 2 }, { name: 'Gold', rate: 70, activity_rate: 65, count: 5 }, { name: 'Silver', rate: 55, activity_rate: 50, count: 7 }] }],
+    monthly_data: [{ month: '1月', value: 0, qoq: 0 }, { month: '2月', value: 0, qoq: 0 }, { month: '3月', value: 0, qoq: 0 }, { month: '4月', value: 0, qoq: 0 }, { month: '5月', value: 0, qoq: 0 }, { month: '6月', value: 0, qoq: 0 }],
+    partner_ecosystem_details: { regional_coverage: [], tier_funnel: [] },
+    active_split: { order_placing: { value: 0, target: 0, rate: 0 }, leads_reporting: { value: 0, target: 0, rate: 0 }, incentive_participants: { value: 0, target: 0, rate: 0 } },
+    dimensional_achievements: [],
   });
   return {
-    revenue: { ...emptyMetric('Revenue'), current_value: 163900000, achievements: { monthly: { current: 49500000, target: 60000000, rate: 82 }, quarterly: { current: 49500000, target: 60000000, rate: 82 }, yearly: { current: 49500000, target: 80000000, rate: 62 } }, monthly_data: [{ month: '1月', value: 18000000 }, { month: '2月', value: 22000000 }, { month: '3月', value: 35000000 }, { month: '4月', value: 28000000 }, { month: '5月', value: 42000000 }, { month: '6月', value: 49500000 }] },
-    activePartners: { ...emptyMetric('活跃伙伴数'), current_value: 18, achievements: { monthly: { current: 18, target: 22, rate: 82 }, quarterly: { current: 18, target: 22, rate: 82 }, yearly: { current: 18, target: 22, rate: 82 } }, monthly_data: [{ month: '1月', value: 15 }, { month: '2月', value: 16 }, { month: '3月', value: 17 }, { month: '4月', value: 16 }, { month: '5月', value: 17 }, { month: '6月', value: 18 }], partner_ecosystem_details: emptyMetric('').partner_ecosystem_details, active_split: emptyMetric('').active_split, dimensional_achievements: emptyMetric('').dimensional_achievements },
-    pipeline: { ...emptyMetric('Pipeline'), current_value: 107100000, achievements: { monthly: { current: 15, target: 25, rate: 60 }, quarterly: { current: 15, target: 25, rate: 60 }, yearly: { current: 15, target: 30, rate: 50 } }, monthly_data: [{ month: '1月', value: 98200000 }, { month: '2月', value: 105000000 }, { month: '3月', value: 112000000 }, { month: '4月', value: 108000000 }, { month: '5月', value: 115000000 }, { month: '6月', value: 107100000 }] },
-    leadsConversion: { ...emptyMetric('线索转化率'), current_value: 40, achievements: { monthly: { current: 40, target: 50, rate: 80 }, quarterly: { current: 40, target: 50, rate: 80 }, yearly: { current: 40, target: 50, rate: 80 } }, monthly_data: [{ month: '1月', value: 28 }, { month: '2月', value: 30 }, { month: '3月', value: 32 }, { month: '4月', value: 31 }, { month: '5月', value: 35 }, { month: '6月', value: 40 }] },
+    revenue: emptyMetric('Revenue'),
+    activePartners: emptyMetric('活跃伙伴数'),
+    pipeline: emptyMetric('Pipeline'),
+    leadsConversion: emptyMetric('线索转化率'),
     marketing: emptyMetric('营销'),
-    insights: [{ type: 'risk', title: '伙伴活跃度', content: '需激活沉睡伙伴', actionLabel: '查看', actionId: 'partners' }, { type: 'opportunity', title: 'MDF预算', content: '建议加速活动执行', actionLabel: '查看', actionId: 'marketing' }, { type: 'trend', title: '激励计划', content: '5个计划进行中', actionLabel: '查看', actionId: 'incentives' }],
+    insights: [],
   };
 }
 

@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react';
-import { User, Building2, Shield, Globe, Save, Plus, Trash2, Pencil, Check, X, Lock, Key, Clock, Smartphone, AlertTriangle, Mail, ToggleLeft, ShieldCheck, ShieldAlert, BarChart3, TrendingUp, MessageSquare, Users } from 'lucide-react';
+import { User, Building2, Shield, Globe, Save, Plus, Trash2, Pencil, Check, X, Lock, Key, Clock, Smartphone, AlertTriangle, Mail, ToggleLeft, ShieldCheck, ShieldAlert, BarChart3, TrendingUp, MessageSquare, Users, UserCheck, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useAuth } from '../../contexts/AuthContext';
 import { ROLE_LABELS, isInternalRole, isExternalRole, type UserRole } from '../../services/auth-service';
 import { permissionService, PERMISSION_CATEGORIES, type PermissionDef } from '../../services/permission-service';
+import { sendInviteEmail, generateTempPassword } from '../../services/email-service';
 import { useToast } from '../ui/Toast';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -164,9 +165,15 @@ export const SettingsPage = () => {
     } else {
       // 新增用户
       const newUser = { ...userForm, id: 'u' + Date.now() };
-      setUsers((p) => [...p, newUser]); 
+      setUsers((p) => [...p, newUser]);
       addLog('create', newUser);
-      toast('success', '用户已添加'); 
+      // 发送邀请邮件
+      const tempPwd = generateTempPassword();
+      sendInviteEmail({ email: newUser.email, name: newUser.name, role: newUser.role, tempPassword: tempPwd, inviteUrl: 'https://partner.velolabs.top/login' }).then((res) => {
+        if (res.success) toast('success', '用户已添加，邀请邮件已发送至 ' + newUser.email);
+        else toast('error', '用户已添加，但邮件发送失败: ' + (res.error || ''));
+      });
+      toast('success', '用户已添加，邀请邮件发送中...');
     }
     setShowUserForm(false);
   };
@@ -557,11 +564,26 @@ export const SettingsPage = () => {
 
       {activeTab === 'users' && (
         <div className="space-y-6">
+          {/* User KPI Cards */}
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: '全部用户', value: allUsers.length, sub: `${allUsers.filter(u => u.status === 'active').length} 活跃`, icon: Users, color: 'text-blue-600 bg-blue-50' },
+              { label: '本公司', value: allUsers.filter(u => u.source === 'admin').length, sub: `${allUsers.filter(u => u.source === 'admin' && u.status === 'active').length} 活跃`, icon: Building2, color: 'text-indigo-600 bg-indigo-50' },
+              { label: '合作伙伴', value: allUsers.filter(u => u.source === 'partner').length, sub: `${partnerUsers.length} 联系人`, icon: UserCheck, color: 'text-emerald-600 bg-emerald-50' },
+              { label: '管理员', value: allUsers.filter(u => u.role === 'admin').length, sub: `${allUsers.filter(u => u.role === 'channel_manager').length} 渠道经理`, icon: Shield, color: 'text-amber-600 bg-amber-50' },
+            ].map((s, i) => (
+              <Card key={i}><div className="p-3 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}><s.icon className="w-5 h-5" /></div><div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-xl font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div></div></Card>
+            ))}
+          </div>
+
           {/* 用户列表 */}
           <Card padding={false}>
             <div className="px-6 py-4 border-b border-neutral-200 dark:border-neutral-800 flex items-center justify-between">
               <CardTitle>系统用户</CardTitle>
-              {activeUserTab !== 'partner' && <Button variant="brand" size="sm" onClick={openNewUser}><Plus className="w-4 h-4" />添加用户</Button>}
+              <div className="flex items-center gap-2">
+                <div className="relative"><Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" /><input placeholder="搜索用户..." className="w-48 h-8 pl-8 pr-3 rounded-lg border text-xs" onChange={e => {}} /></div>
+                {activeUserTab !== 'partner' && <Button variant="brand" size="sm" onClick={openNewUser}><Plus className="w-4 h-4" />添加用户</Button>}
+              </div>
             </div>
 
             {/* 用户分类标签 */}
@@ -637,7 +659,14 @@ export const SettingsPage = () => {
                                 </button>
                               </>
                             ) : (
-                              <span className="text-xs text-neutral-400">由合作伙伴中心管理</span>
+                              <div className="flex items-center gap-1">
+                                <button onClick={async () => {
+                                  const newStatus = u.status === 'active' ? 'inactive' : 'active';
+                                  setPartnerUsers(prev => prev.map(p => p.id === u.id ? { ...p, status: newStatus } : p));
+                                }} className={cn('px-2 py-1 rounded text-xs', u.status === 'active' ? 'bg-red-50 text-red-600 hover:bg-red-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100')} title={u.status === 'active' ? '停用' : '启用'}>
+                                  {u.status === 'active' ? '停用' : '启用'}
+                                </button>
+                              </div>
                             )}
                           </div>
                         </td>

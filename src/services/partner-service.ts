@@ -70,11 +70,8 @@ const normalizePartner = (p: Record<string, any>): Partner => {
     const d = new Date(startDate);
     if (!isNaN(d.getTime())) years = new Date().getFullYear() - d.getFullYear();
   }
-  // Auto-generate winRate based on tier
-  const tierWinRates: Record<string, number> = {
-    Diamond: 75, Platinum: 70, Gold: 65, Silver: 55, Registered: 45, Premier: 68, Standard: 50
-  };
-  const winRate = p.winRate || p.win_rate || tierWinRates[p.tier] || 50;
+  // Auto-generate winRate: from DB, 0 if not set (no fake defaults)
+  const winRate = p.winRate ?? p.win_rate ?? 0;
   
   const contacts = normalizeContacts(p.contacts);
 

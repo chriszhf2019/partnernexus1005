@@ -37,7 +37,7 @@ export const TopNav: React.FC = memo(() => {
           <Bell className="w-4 h-4" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-neutral-950" />
         </button>
-        <span className="text-xs font-medium text-neutral-400">PEM System</span>
+        <span className="text-xs font-medium text-neutral-400">PartnerNexus</span>
       </div>
     </header>
   );

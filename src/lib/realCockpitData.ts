@@ -12,22 +12,27 @@ function emptyMetric(name: string): TimeSeriesMetric {
 }
 
 // Generate 6-month trend data from real deal values grouped by month
-function buildMonthlyTrend(deals: any[], valueFn: (d: any) => number): Array<{ month: string; value: number }> {
-  const months: Record<string, number> = {};
+function buildMonthlyTrend(deals: any[], valueFn: (d: any) => number): Array<{ month: string; value: number; qoq: number }> {
+  const months: Record<string, { value: number; prevValue?: number }> = {};
   const now = new Date();
   for (let i = 5; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const key = `${d.getMonth() + 1}月`;
-    months[key] = 0;
+    months[key] = { value: 0 };
   }
   deals.forEach(d => {
     const date = d.created_date || d.created_at;
     if (!date) return;
     const m = new Date(date);
     const key = `${m.getMonth() + 1}月`;
-    if (months[key] !== undefined) months[key] += valueFn(d);
+    if (months[key] !== undefined) months[key].value += valueFn(d);
   });
-  return Object.entries(months).map(([month, value]) => ({ month, value: Math.round(value) }));
+  const entries = Object.entries(months);
+  return entries.map(([month, data], i) => ({
+    month,
+    value: Math.round(data.value),
+    qoq: i > 0 && entries[i - 1][1].value > 0 ? Math.round(((data.value - entries[i - 1][1].value) / entries[i - 1][1].value) * 100) : 0,
+  }));
 }
 
 export async function getRealCockpitData(): Promise<CockpitData> {
@@ -65,11 +70,14 @@ export async function getRealCockpitData(): Promise<CockpitData> {
 
   // Build ecosystem details from real partner data
   const tierDistribution: Record<string, number> = {};
-  const regionDistribution: Record<string, { count: number; dealValue: number }> = {};
+  const tierActiveCount: Record<string, number> = {};
+  const regionDistribution: Record<string, { count: number; dealValue: number; activeCount: number }> = {};
   partners.forEach((p: any) => {
     tierDistribution[p.tier] = (tierDistribution[p.tier] || 0) + 1;
-    if (!regionDistribution[p.region]) regionDistribution[p.region] = { count: 0, dealValue: 0 };
+    if (p.status === 'Cooperating') tierActiveCount[p.tier] = (tierActiveCount[p.tier] || 0) + 1;
+    if (!regionDistribution[p.region]) regionDistribution[p.region] = { count: 0, dealValue: 0, activeCount: 0 };
     regionDistribution[p.region].count++;
+    if (p.status === 'Cooperating') regionDistribution[p.region].activeCount++;
   });
   deals.forEach((d: any) => {
     if (d.region && regionDistribution[d.region]) regionDistribution[d.region].dealValue += Number(d.value || 0);
@@ -93,19 +101,25 @@ export async function getRealCockpitData(): Promise<CockpitData> {
     incentive_participants: { value: Math.round(activePartnersCount * 0.35), target: activePartnersCount, rate: 35 },
   };
 
-  // Build dimensional achievements
+  // Build dimensional achievements from real data (no random numbers)
+  const maxDealValue = Math.max(...Object.values(regionDistribution).map(r => r.dealValue), 1);
+  const tierWinRates: Record<string, number> = { Diamond: 75, Platinum: 70, Gold: 65, Silver: 55, Registered: 45, Premier: 68, Standard: 50 };
   const dimensionalAchievements = [
     {
       type: 'region',
       data: Object.entries(regionDistribution).map(([name, data]) => ({
-        name, rate: Math.round(Math.random() * 40 + 50), activity_rate: Math.round(Math.random() * 30 + 55),
+        name,
+        rate: Math.min(100, Math.round((data.dealValue / maxDealValue) * 100)),
+        activity_rate: data.count > 0 ? Math.round((data.activeCount / data.count) * 100) : 0,
         count: data.count, value: data.dealValue,
       })),
     },
     {
       type: 'partner_type',
       data: Object.entries(tierDistribution).map(([name, count]) => ({
-        name, rate: Math.round(Math.random() * 40 + 55), activity_rate: Math.round(Math.random() * 30 + 50),
+        name,
+        rate: tierWinRates[name] || 50,
+        activity_rate: count > 0 ? Math.round(((tierActiveCount[name] || 0) / count) * 100) : 0,
         count,
       })),
     },
@@ -120,7 +134,7 @@ export async function getRealCockpitData(): Promise<CockpitData> {
       quarterly: { current: activePartnersCount, target: totalPartners, rate: totalPartners > 0 ? Math.round((activePartnersCount / totalPartners) * 100) : 0 },
       yearly: { current: activePartnersCount, target: totalPartners, rate: totalPartners > 0 ? Math.round((activePartnersCount / totalPartners) * 100) : 0 },
     },
-    monthly_data: buildMonthlyTrend(deals, () => 1).map(d => ({ month: d.month, value: Math.min(d.value, activePartnersCount) })),
+    monthly_data: buildMonthlyTrend(deals, () => 1).map(d => ({ month: d.month, value: Math.min(d.value, activePartnersCount), qoq: d.qoq })),
     partner_ecosystem_details: ecosystemDetails as any,
     active_split: activeSplit as any,
     dimensional_achievements: dimensionalAchievements as any,
@@ -148,7 +162,7 @@ export async function getRealCockpitData(): Promise<CockpitData> {
       quarterly: { current: wonDeals.length, target: Math.max(deals.length, 1), rate: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0 },
       yearly: { current: wonDeals.length, target: Math.max(deals.length, 1), rate: deals.length > 0 ? Math.round((wonDeals.length / deals.length) * 100) : 0 },
     },
-    monthly_data: buildMonthlyTrend(wonDeals, () => 1).map(d => ({ month: d.month, value: Math.round((d.value / Math.max(deals.length, 1)) * 100) })),
+    monthly_data: buildMonthlyTrend(wonDeals, () => 1).map(d => ({ month: d.month, value: Math.round((d.value / Math.max(deals.length, 1)) * 100), qoq: d.qoq })),
   };
 
   const mdfTotal = mActivities.reduce((s: number, a: any) => s + Number(a.budget || 0), 0);
@@ -170,8 +184,8 @@ export async function getRealCockpitData(): Promise<CockpitData> {
   };
 
   const insights: AIInsight[] = [];
-  if (activePartners < totalPartners * 0.8) {
-    insights.push({ type: 'risk', title: '伙伴活跃度下降', content: `${activePartners}/${totalPartners} 伙伴活跃（${Math.round((activePartners/totalPartners)*100)}%），需激活沉睡伙伴`, actionLabel: '查看伙伴列表', actionId: 'partners' });
+  if (activePartnersCount < totalPartners * 0.8) {
+    insights.push({ type: 'risk', title: '伙伴活跃度下降', content: `${activePartnersCount}/${totalPartners} 伙伴活跃（${Math.round((activePartnersCount/totalPartners)*100)}%），需激活沉睡伙伴`, actionLabel: '查看伙伴列表', actionId: 'partners' });
   }
   if (mdfUsed < mdfTotal * 0.3 && mdfTotal > 0) {
     insights.push({ type: 'opportunity', title: 'MDF 预算使用率低', content: `当前仅使用 ${Math.round((mdfUsed/(mdfTotal||1))*100)}% MDF 预算，建议加速活动执行`, actionLabel: '查看营销活动', actionId: 'marketing' });

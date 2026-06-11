@@ -36,12 +36,12 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-50 dark:bg-neutral-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-brand-50 via-white to-brand-100 dark:from-neutral-950 dark:via-neutral-900 dark:to-neutral-950 px-4">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center space-y-3">
           <div className="flex items-center justify-center gap-2.5">
-            <div className="w-10 h-10 bg-neutral-900 dark:bg-white rounded-xl flex items-center justify-center">
-              <Network className="text-white dark:text-neutral-900 w-5 h-5" />
+            <div className="w-10 h-10 bg-gradient-to-br from-brand to-brand-dark rounded-xl flex items-center justify-center shadow-lg shadow-brand/20">
+              <Network className="text-white w-5 h-5" />
             </div>
             <span className="text-xl font-semibold text-neutral-900 dark:text-white tracking-tight">PartnerNexus</span>
           </div>
@@ -51,7 +51,8 @@ export const LoginPage = () => {
           </div>
         </div>
 
-        <Card className="p-8 space-y-6">
+        <Card className="p-8 space-y-6 shadow-xl shadow-neutral-200/50 dark:shadow-neutral-950 border-t-4 border-t-brand relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-brand-50/50 to-transparent dark:from-brand-900/10 rounded-bl-[4rem] pointer-events-none" />
           {error && (
             <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-600 dark:text-red-400">
               <AlertCircle className="w-4 h-4 shrink-0" />

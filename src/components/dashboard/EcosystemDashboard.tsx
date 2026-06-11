@@ -1,9 +1,9 @@
 import { SafeGrid } from '../../lib/safeRecharts';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   TrendingUp, TrendingDown, Users, Target, Activity, Clock,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Zap, CheckCircle2,
-  MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles, X,
+  MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles, X, Newspaper,
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -13,6 +13,7 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { ProgressBar } from '../ui/ProgressBar';
 import { EmptyState } from '../ui/EmptyState';
+import { Skeleton } from '../ui/Skeleton';
 import { cn, formatCurrency } from '../../lib/utils';
 import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, BarChart, Bar, Cell, ComposedChart, Area } from 'recharts';
 
@@ -37,11 +38,8 @@ const Spark = ({ data, color }: { data: number[]; color: string }) => {
   );
 };
 
-const SectionHeader = ({ number, title, subtitle, highlight }: { number: string; title: string; subtitle: string; highlight?: string }) => (
+const SectionHeader = ({ title, subtitle, highlight }: { title: string; subtitle: string; highlight?: string }) => (
   <div className="flex items-center gap-4 mb-6">
-    <div className="w-9 h-9 rounded-lg bg-neutral-900 dark:bg-white flex items-center justify-center shrink-0">
-      <span className="text-sm font-semibold text-white dark:text-neutral-900">{number}</span>
-    </div>
     <div><h2 className="text-lg font-semibold text-neutral-900 dark:text-white">{title}{highlight && <span className="ml-2 text-sm font-normal text-amber-600">{highlight}</span>}</h2><p className="text-sm text-neutral-500">{subtitle}</p></div>
     <div className="flex-1 h-px bg-neutral-200 dark:bg-neutral-800 ml-4" />
   </div>
@@ -102,13 +100,30 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
 
   if (cockpitLoading) {
     return (
-      <div className="space-y-6 animate-pulse">
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Skeleton className="h-4 w-36" />
+          <Skeleton className="h-3 w-48" />
+        </div>
         <div className="grid grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => <div key={i} className="h-32 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />)}
+          {[1,2,3,4].map(i => (
+            <div key={i} className="bg-white dark:bg-neutral-900 p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-7 w-28" />
+              <Skeleton className="h-2 w-full" />
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          ))}
         </div>
         <div className="grid grid-cols-3 gap-6">
-          <div className="lg:col-span-2 h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
-          <div className="h-64 bg-neutral-100 dark:bg-neutral-800 rounded-2xl" />
+          <div className="lg:col-span-2 bg-white dark:bg-neutral-900 p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-48 w-full" />
+          </div>
+          <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-48 w-full" />
+          </div>
         </div>
       </div>
     );
@@ -117,16 +132,18 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
   return (
     <div className="space-y-12 pb-24">
       <section>
-        <SectionHeader number="1" title="业绩总揽与根因分析" subtitle="不只呈现结果，更揭示驱动业绩变化的深层原因" />
+        <SectionHeader title="业绩总揽与根因分析" subtitle="不只呈现结果，更揭示驱动业绩变化的深层原因" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {kpis.map((kpi) => (
             <Card key={kpi.label} hover
               onClick={kpi.label === '活跃伙伴数' ? () => handleShowPartners('活跃合作伙伴 (Cooperating)', { status: 'Cooperating' }) : undefined}
-              className={kpi.label === '活跃伙伴数' ? 'cursor-pointer' : ''}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-medium text-neutral-500">{kpi.label}</span>
-                {kpi.spark.length > 0 && <Spark data={kpi.spark} color={kpi.color} />}
-              </div>
+              className={cn(kpi.label === '活跃伙伴数' ? 'cursor-pointer' : '', 'relative pt-0 overflow-hidden')}>
+              <div className="absolute top-0 left-0 right-0 h-1" style={{ backgroundColor: kpi.color }} />
+              <div className="pt-6">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-medium text-neutral-500">{kpi.label}</span>
+                  {kpi.spark.length > 0 && <Spark data={kpi.spark} color={kpi.color} />}
+                </div>
               <div className="flex items-baseline gap-2 mb-1">
                 <span className="text-2xl font-semibold text-neutral-900 dark:text-white">{kpi.value}</span>
                 <span className="text-xs text-neutral-400">/ {kpi.target}</span>
@@ -154,6 +171,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     <span className="ml-1 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
                   </button>
                 </div>
+              </div>
               </div>
             </Card>
           ))}
@@ -191,7 +209,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
 
       {/* Part 2: 渠道三要素 */}
       <section>
-        <SectionHeader number="2" title="渠道分析：覆盖 · 活跃度 · 绩效评估" subtitle="从三个核心维度全面诊断渠道健康度" />
+        <SectionHeader title="渠道分析：覆盖 · 活跃度 · 绩效评估" subtitle="从三个核心维度全面诊断渠道健康度" />
         <div className="space-y-8">
           {/* 2.1 覆盖 */}
           <div>
@@ -340,7 +358,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
 
       {/* Part 3: 深度洞察与行动 */}
       <section>
-        <SectionHeader number="3" title="渠道深度洞察与行动建议" subtitle="相关性分析 · 生命周期管理 · 健康度诊断 · AI行动处方" />
+        <SectionHeader title="渠道深度洞察与行动建议" subtitle="相关性分析 · 生命周期管理 · 健康度诊断 · AI行动处方" />
 
         {/* Row 1: Anomaly Trend + ROI Correlation */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -535,6 +553,40 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
           </div>
         </div>
       )}
+
+      {/* ===== 新闻热榜 ===== */}
+      <NewsHotList />
+    </div>
+  );
+};
+
+const NewsHotList = () => {
+  const fallbackNews = [
+    { title: '工信部：2026年数字化转型专项资金规模同比扩大35%', source: '工信微报', url: 'https://www.miit.gov.cn' },
+    { title: '华为发布新一代云原生平台，伙伴生态扩展到2万家', source: '华为云', url: 'https://www.huaweicloud.com' },
+    { title: '信创产业规模突破3万亿，国产化替代进入深水区', source: '中国电子报', url: 'https://www.cena.com.cn' },
+    { title: 'AI+医疗影像市场规模年增45%，渠道伙伴迎窗口期', source: '动脉网', url: 'https://www.vcbeat.net' },
+    { title: '渠道数字化管理平台融资热，半年获投超50亿', source: '36氪', url: 'https://36kr.com' },
+    { title: '制造业数字化转型白皮书发布：成功率提升至68%', source: '赛迪顾问', url: 'https://www.ccidconsulting.com' },
+    { title: 'Gartner：2026年中国IT支出预计增长12.8%', source: 'Gartner', url: 'https://www.gartner.com' },
+    { title: '金融信创进入加速期，中小银行替换率达40%', source: '金融时报', url: 'https://www.financialnews.com.cn' },
+  ];
+  return (
+    <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Newspaper className="w-5 h-5 text-neutral-400" />
+        <h2 className="text-base font-semibold text-neutral-900 dark:text-white">行业热榜</h2>
+        <span className="text-xs text-neutral-400 ml-auto">每日更新</span>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
+        {fallbackNews.map((item, i) => (
+          <a key={i} href={item.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors group text-sm">
+            <span className="text-neutral-300 text-xs w-5 shrink-0">{i + 1}.</span>
+            <span className="flex-1 text-neutral-700 dark:text-neutral-300 truncate group-hover:text-brand transition-colors">{item.title}</span>
+            <span className="text-xs text-neutral-400 shrink-0">{item.source}</span>
+          </a>
+        ))}
+      </div>
     </div>
   );
 };

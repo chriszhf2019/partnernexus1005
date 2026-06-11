@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Users, Building2, ChevronRight } from 'lucide-react';
+import { Users, Building2, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { PartnerStaffList } from './PartnerStaffList';
 import { PartnerStaffDetail } from './PartnerStaffDetail';

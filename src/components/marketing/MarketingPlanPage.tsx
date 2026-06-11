@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle,
+  ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle, X,
   TrendingUp, RefreshCw, History, DollarSign, PieChart, BarChart3,
   AlertCircle, AlertTriangle, CheckCircle, Users, ChevronLeft, ChevronRight, Loader2,
 } from 'lucide-react';
@@ -187,41 +188,47 @@ const BudgetAdjustmentModal = memo(({
   config: BudgetConfig;
   onConfigChange: (update: Partial<BudgetConfig>) => void;
   onCancel: () => void;
-  onSave: () => void;
+  onSave: (reason: string) => void;
   saving: boolean;
   fmt: (v: number) => string;
-}) => (
+}) => {
+  const [adjustReason, setAdjustReason] = useState('');
+  return (
   <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/30 dark:bg-amber-900/10">
     <CardHeader className="flex flex-row items-center justify-between">
       <CardTitle className="flex items-center gap-2">
         <AlertCircle className="w-4 h-4 text-amber-600" />预算调整申请
       </CardTitle>
-      <span className="text-xs text-amber-600">在原批复预算基础上调整</span>
+      <span className="text-xs text-amber-600">需填写变更原因方可提交</span>
     </CardHeader>
     <CardContent>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
         {QUARTERS.map((q, i) => (
           <div key={q}>
             <label className="text-xs text-neutral-500">
-              {q} 原预算 {fmt(Number((config as any)[`q${i + 1}_budget`] || 0))}
+              {q} 原预算 {fmt(Number(config[`q${i + 1}_budget` as keyof BudgetConfig] || 0))}
+              {Number(config[`q${i + 1}_adjust` as keyof BudgetConfig] || 0) !== 0 && (
+                <span className="ml-1 text-amber-600">→ {fmt(Number(config[`q${i + 1}_budget` as keyof BudgetConfig] || 0) + Number(config[`q${i + 1}_adjust` as keyof BudgetConfig] || 0))}</span>
+              )}
             </label>
-            <input
-              type="number"
-              className="w-full h-10 px-3 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-              value={(config as any)[`q${i + 1}_adjust`] || ''}
-              onChange={e => onConfigChange({ [`q${i + 1}_adjust`]: Number(e.target.value) })}
-              placeholder="调整金额"
-            />
+            <input type="number" className="w-full h-10 px-3 mt-1 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm font-bold focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+              value={Number(config[`q${i + 1}_adjust` as keyof BudgetConfig] || 0) || ''}
+              onChange={e => onConfigChange({ [`q${i + 1}_adjust`]: Number(e.target.value) })} placeholder="调整金额" />
           </div>
         ))}
       </div>
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-neutral-700 mb-1">变更原因（必填）</label>
+        <input type="text" className="w-full px-3 py-2 rounded-lg border text-sm focus:outline-none focus:ring-2 focus:ring-amber-500/20" placeholder="如：制造业活动效果超预期，申请增拨Q2预算" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} />
+      </div>
       <div className="flex gap-2 justify-end">
         <Button variant="secondary" onClick={onCancel}>取消</Button>
-        <Button variant="brand" onClick={onSave} disabled={saving} loading={saving}>确认调整</Button>
+        <Button variant="brand" onClick={() => { if (adjustReason.trim()) onSave(adjustReason); }} disabled={saving || !adjustReason.trim()} loading={saving}>确认调整</Button>
       </div>
     </CardContent>
   </Card>
-));
+  );
+});
 BudgetAdjustmentModal.displayName = 'BudgetAdjustmentModal';
 
 // ── Budget Change Log ──────────────────────────────────
@@ -265,6 +272,7 @@ interface QuarterlyPlanCardProps {
   qBudget: number;
   qOriginalBudget?: number;
   qAdjust?: number;
+  justSavedIds?: Set<string>;
   items: PlanActivity[];
   partners: any[];
   partnerMDF: Record<string, PartnerMDF>;
@@ -274,14 +282,16 @@ interface QuarterlyPlanCardProps {
   onRemoveRow: (id: string) => void;
   onSaveRows: (status: 'draft' | 'submitted') => void;
   onApproveAll: () => void;
+  onSubmitForApproval: () => void;
+  onOpenDetail: (p: PlanActivity) => void;
   onReload: () => void;
   fmt: (v: number) => string;
   saving: boolean;
 }
 
 const QuarterlyPlanCard = memo(({
-  quarter, qIndex, qBudget, qOriginalBudget, qAdjust, items, partners, partnerMDF, currentYear,
-  onUpdateRow, onAddRow, onRemoveRow, onSaveRows, onApproveAll, onReload, fmt,
+  quarter, qIndex, qBudget, qOriginalBudget, qAdjust, justSavedIds, items, partners, partnerMDF, currentYear,
+  onUpdateRow, onAddRow, onRemoveRow, onSaveRows, onApproveAll, onSubmitForApproval, onOpenDetail, onReload, fmt,
   saving,
 }: QuarterlyPlanCardProps) => {
   const lineTotal = useMemo(() => items.reduce((s, p) => s + Number(p.total_budget || 0), 0), [items]);
@@ -362,7 +372,7 @@ const QuarterlyPlanCard = memo(({
           <Button variant="secondary" size="sm" onClick={onAddRow} disabled={saving}><Plus className="w-3.5 h-3.5" />添加</Button>
           <Button variant="secondary" size="sm" onClick={() => onSaveRows('draft')} disabled={saving} loading={saving}>保存</Button>
           {planStatus === 'draft' && (
-            <Button variant="brand" size="sm" onClick={() => onSaveRows('submitted')} disabled={saving} loading={saving}>提交审批</Button>
+            <Button variant="brand" size="sm" onClick={onSubmitForApproval} disabled={saving}>提交审批</Button>
           )}
           {planStatus === 'submitted' && (
             <Button variant="brand" size="sm" onClick={onApproveAll} disabled={saving} loading={saving}>批复通过</Button>
@@ -391,6 +401,7 @@ const QuarterlyPlanCard = memo(({
                   <th className="text-left py-2 px-2">产出(计划/实际)</th>
                   <th className="text-left py-2 px-2">负责人</th>
                   <th className="text-center py-2 px-2">状态</th>
+                  <th className="text-center py-2 px-2 w-16">保存</th>
                   <th className="w-8" />
                 </tr>
               </thead>
@@ -399,7 +410,7 @@ const QuarterlyPlanCard = memo(({
                   const isPMDF = (p.activity_type || 'Marketing') === 'PMDF';
                   const execStatus = normalizeExecStatus(p.execution_status);
                   return (
-                    <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
+                    <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer" onClick={() => onOpenDetail(p)}>
                       <td className="py-2 px-2">
                         <select value={p.activity_type || 'Marketing'} onChange={e => onUpdateRow(p.id, 'activity_type', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">
                           <option value="Marketing">Marketing</option>
@@ -408,20 +419,31 @@ const QuarterlyPlanCard = memo(({
                       </td>
                       <td className="py-2 px-2">
                         {isPMDF ? (
-                          <div>
-                            <SearchableSelect
-                              value={p.partner_id || ''}
-                              onChange={(id, label) => { onUpdateRow(p.id, 'partner_id', id); onUpdateRow(p.id, 'partner_name', label); }}
-                              options={partners.map((pt: any) => ({ id: pt.id, label: pt.name, sub: pt.tier }))}
-                              placeholder="搜索伙伴..."
-                              className="w-28"
-                            />
-                            {p.partner_id && partnerMDF[p.partner_id] && (
-                              <span className={`text-[9px] block ${partnerMDF[p.partner_id].remaining > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                                MDF: {fmt(partnerMDF[p.partner_id].allocated)} / 余{fmt(partnerMDF[p.partner_id].remaining)}
-                              </span>
-                            )}
-                          </div>
+                          execStatus === 'executed' ? (
+                            <div>
+                              <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300">{p.partner_name || '未指定'}</span>
+                              {p.partner_id && partnerMDF[p.partner_id] && (
+                                <span className={`text-[9px] block ${partnerMDF[p.partner_id].remaining > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                  MDF: {fmt(partnerMDF[p.partner_id].allocated)} / 余{fmt(partnerMDF[p.partner_id].remaining)}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <div>
+                              <SearchableSelect
+                                value={p.partner_id || ''}
+                                onChange={(id, label) => { onUpdateRow(p.id, 'partner_id', id); onUpdateRow(p.id, 'partner_name', label); }}
+                                options={partners.map((pt: any) => ({ id: pt.id, label: pt.name, sub: pt.tier }))}
+                                placeholder="搜索伙伴..."
+                                className="w-28"
+                              />
+                              {p.partner_id && partnerMDF[p.partner_id] && (
+                                <span className={`text-[9px] block ${partnerMDF[p.partner_id].remaining > 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                                  MDF: {fmt(partnerMDF[p.partner_id].allocated)} / 余{fmt(partnerMDF[p.partner_id].remaining)}
+                                </span>
+                              )}
+                            </div>
+                          )
                         ) : <span className="text-neutral-400 text-[11px]">自办</span>}
                       </td>
                       <td className="py-2 px-2">
@@ -458,7 +480,8 @@ const QuarterlyPlanCard = memo(({
                           <span className={`text-[11px] font-medium ${(p as any).actual_spend > p.total_budget ? 'text-red-500' : 'text-emerald-600'}`}>
                             {fmt((p as any).actual_spend)}
                             <span className="text-[9px] ml-0.5">({Math.round((p as any).actual_spend / p.total_budget * 100)}%)</span>
-                            {(p as any).actual_spend > p.total_budget && <span className="text-[9px] ml-0.5">🔴超支</span>}
+                            {(p as any).actual_spend >= p.total_budget && !(p as any).actual_leads && <span className="text-[9px] ml-0.5 text-red-500 animate-pulse" title="超支且零产出">⚠️</span>}
+                            {(p as any).actual_spend > p.total_budget && (p as any).actual_leads > 0 && <span className="text-[9px] ml-0.5">🔴</span>}
                           </span>
                         ) : (
                           <span className="text-[11px] text-neutral-400">{execStatus === 'executed' ? '—' : '待执行'}</span>
@@ -475,28 +498,26 @@ const QuarterlyPlanCard = memo(({
                           </span>
                         )}
                       </td>
-                      {/* 行级预警 */}
-                      {execStatus === 'executed' && (p as any).actual_spend >= p.total_budget && !(p as any).actual_leads && (
-                        <td className="py-2 px-1">
-                          <span className="inline-flex items-center gap-1 text-[10px] text-red-500 animate-pulse" title="超支且零产出！">
-                            <AlertTriangle className="w-3 h-3" />超支无产出
-                          </span>
-                        </td>
-                      )}
                       <td className="py-2 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.responsible_person || ''} onChange={e => onUpdateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" />
                       </td>
-                      <td className="py-2 px-2">
-                        <select
-                          value={execStatus}
-                          onChange={e => onUpdateRow(p.id, 'execution_status', e.target.value)}
-                          className={`w-16 bg-transparent text-[11px] focus:outline-none ${execStatus === 'executed' ? 'text-emerald-600' : execStatus === 'approved' ? 'text-blue-600' : 'text-neutral-500'}`}
-                        >
+                      <td className="py-2 px-2 text-center">
+                        <select value={execStatus} onChange={e => onUpdateRow(p.id, 'execution_status', e.target.value)}
+                          className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium focus:outline-none border-0 cursor-pointer ${execStatus === 'executed' ? 'bg-emerald-100 text-emerald-700' : execStatus === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'}`}>
                           {EXEC_STATUSES.map(s => <option key={s} value={s}>{EXEC_LABELS[s]}</option>)}
                         </select>
                       </td>
-                      <td className="py-2 px-2">
-                        <button onClick={() => onRemoveRow(p.id)} className="p-1 text-neutral-400 hover:text-red-500 transition-colors" title="删除">
+                      <td className="py-2 px-2 text-center">
+                        {justSavedIds.has(p.id) ? (
+                          <span className="text-[10px] text-emerald-600 font-medium animate-pulse">✅ 已保存</span>
+                        ) : p._new ? (
+                          <span className="text-[10px] text-amber-500">🕐 未保存</span>
+                        ) : (
+                          <span className="text-[10px] text-neutral-300">—</span>
+                        )}
+                      </td>
+                      <td className="py-2 px-2 text-right">
+                        <button onClick={() => onRemoveRow(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-400 hover:text-red-500 transition-colors" title="删除此行">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </td>
@@ -555,6 +576,12 @@ export const MarketingPlanPage = () => {
   const [partnerMDF, setPartnerMDF] = useState<Record<string, PartnerMDF>>({});
   const [showAdjust, setShowAdjust] = useState(false);
   const [savingRows, setSavingRows] = useState(false);
+  const [justSavedIds, setJustSavedIds] = useState<Set<string>>(new Set());
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [submitQuarter, setSubmitQuarter] = useState('');
+  const [showApproveModal, setShowApproveModal] = useState(false);
+  const [approveQuarter, setApproveQuarter] = useState('');
+  const [detailActivity, setDetailActivity] = useState<PlanActivity | null>(null);
   const [drilldownActivity, setDrilldownActivity] = useState<PlanActivity | null>(null);
 
   // Available years cache
@@ -750,13 +777,14 @@ export const MarketingPlanPage = () => {
     toast('success', actionLabel + '成功');
   }, [dataLoaded, annualBudget, baseAnnual, qBudgets, config, logChange, reloadChangeLog, toast]);
 
-  const saveAdjustment = useCallback(async () => {
+  const saveAdjustment = useCallback(async (reason: string) => {
     setSavingConfig(true);
     setErrorMsg('');
-    const newQ1 = Number(config.q1_budget || 0) + Number(config.q1_adjust || 0);
-    const newQ2 = Number(config.q2_budget || 0) + Number(config.q2_adjust || 0);
-    const newQ3 = Number(config.q3_budget || 0) + Number(config.q3_adjust || 0);
-    const newQ4 = Number(config.q4_budget || 0) + Number(config.q4_adjust || 0);
+    const oldQ1 = Number(config.q1_budget || 0), oldQ2 = Number(config.q2_budget || 0), oldQ3 = Number(config.q3_budget || 0), oldQ4 = Number(config.q4_budget || 0);
+    const newQ1 = oldQ1 + Number(config.q1_adjust || 0);
+    const newQ2 = oldQ2 + Number(config.q2_adjust || 0);
+    const newQ3 = oldQ3 + Number(config.q3_adjust || 0);
+    const newQ4 = oldQ4 + Number(config.q4_adjust || 0);
     const { error } = await supabase.from('marketing_budget_config').upsert({
       id: 'current', status: 'approved',
       q1_budget: newQ1, q2_budget: newQ2, q3_budget: newQ3, q4_budget: newQ4,
@@ -768,13 +796,12 @@ export const MarketingPlanPage = () => {
       toast('error', '预算调整失败');
       return;
     }
-    setConfig(prev => ({
-      ...prev, q1_budget: newQ1, q2_budget: newQ2, q3_budget: newQ3, q4_budget: newQ4,
-      q1_adjust: 0, q2_adjust: 0, q3_adjust: 0, q4_adjust: 0,
-    }));
+    setConfig(prev => ({ ...prev, q1_budget: newQ1, q2_budget: newQ2, q3_budget: newQ3, q4_budget: newQ4, q1_adjust: 0, q2_adjust: 0, q3_adjust: 0, q4_adjust: 0 }));
     setShowAdjust(false);
     setSavingConfig(false);
-    // Audit log
+    // Audit log with change reason
+    await supabase.from('plan_audit_logs').insert({ plan_config_id: 'current', field_changed: '季度预算调整', old_value: JSON.stringify({ q1: oldQ1, q2: oldQ2, q3: oldQ3, q4: oldQ4 }), new_value: JSON.stringify({ q1: newQ1, q2: newQ2, q3: newQ3, q4: newQ4 }), change_reason: reason, changed_by: '渠道经理' });
+    await logChange('预算调整: ' + reason);
     await supabase.from('plan_audit_logs').insert({ plan_config_id: 'current', field_changed: '季度预算调整', old_value: JSON.stringify({q1:config.q1_budget,q2:config.q2_budget,q3:config.q3_budget,q4:config.q4_budget}), new_value: JSON.stringify({q1:newQ1,q2:newQ2,q3:newQ3,q4:newQ4}), change_reason: '预算调整', changed_by: '渠道经理' });
     await logChange('预算调整');
     toast('success', '预算调整成功');
@@ -828,6 +855,9 @@ export const MarketingPlanPage = () => {
           target_opps: 0,
         };
         if (p._new) {
+          r.created_at = new Date().toISOString();
+          r.created_by = '渠道经理-陈伟';
+          if (targetPlanStatus === 'submitted') { r.submitted_at = new Date().toISOString(); r.submitted_by = '渠道经理-陈伟'; }
           const { data, error } = await supabase.from('marketing_plan').insert(r).select();
           return { success: !error, id: p.id, newId: data?.[0]?.id };
         } else {
@@ -840,7 +870,10 @@ export const MarketingPlanPage = () => {
       const failedCount = results.length - successCount;
 
       if (failedCount === 0) {
-        toast('success', `${quarter} 季度计划保存成功`);
+        toast('success', `${quarter} 季度计划已保存 ✅ · ${items.length} 项活动`);
+        const savedIds = new Set(items.map(p => p.id));
+        setJustSavedIds(savedIds);
+        setTimeout(() => setJustSavedIds(new Set()), 3000);
         setPlan(prev => prev.map(p => {
           const result = results.find(r => r.id === p.id);
           if (result?.newId) {
@@ -864,7 +897,7 @@ export const MarketingPlanPage = () => {
     try {
       const results = await Promise.all(
         items.map(async (p) => {
-          const { error } = await supabase.from('marketing_plan').update({ plan_status: 'approved' }).eq('id', p.id);
+          const { error } = await supabase.from('marketing_plan').update({ plan_status: 'approved', approved_at: new Date().toISOString(), approved_by: '市场总监 Alex / 渠道总监 陈伟' }).eq('id', p.id);
           return { success: !error, id: p.id };
         })
       );
@@ -1084,6 +1117,76 @@ export const MarketingPlanPage = () => {
         />
       )}
 
+      {/* Submit for Approval Modal */}
+      {showSubmitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowSubmitModal(false)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[480px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">提交审批 — {submitQuarter} 季度</h3>
+              <button onClick={() => setShowSubmitModal(false)} className="p-1 hover:bg-neutral-100 rounded"><XCircle className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/10 rounded-xl space-y-2 text-sm">
+                <p><strong>审批流程：</strong></p>
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="px-2 py-1 bg-amber-100 rounded">① 渠道总监审批</span>
+                  <span>→</span>
+                  <span className="px-2 py-1 bg-blue-100 rounded">② 市场总监批复</span>
+                  <span>→</span>
+                  <span className="px-2 py-1 bg-emerald-100 rounded">③ 生效执行</span>
+                </div>
+              </div>
+              <div className="text-sm text-neutral-600 space-y-1">
+                <p>提交后将锁定预算分配：</p>
+                <p>• {submitQuarter} 季度共 {plan.filter(p => normalizeQuarter(p.quarter) === submitQuarter).length} 项活动</p>
+                <p>• 总预算 {fmtW(plan.filter(p => normalizeQuarter(p.quarter) === submitQuarter).reduce((s, p) => s + Number(p.total_budget || 0), 0))}</p>
+                <p>• 批复后不可再修改，如需调整需走变更流程</p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="secondary" onClick={() => setShowSubmitModal(false)}>取消</Button>
+                <Button variant="brand" onClick={() => { savePlanRows(submitQuarter, 'submitted'); setShowSubmitModal(false); }}>确认提交</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Approval Modal */}
+      {showApproveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setShowApproveModal(false)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[520px] max-w-[90vw]" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex items-center justify-between">
+              <h3 className="text-lg font-semibold">批复确认 — {approveQuarter} 季度</h3>
+              <button onClick={() => setShowApproveModal(false)} className="p-1 hover:bg-neutral-100 rounded"><XCircle className="w-5 h-5" /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/10 rounded-xl space-y-2 text-sm">
+                <p><strong>双人批复确认：</strong></p>
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  <div className="p-3 bg-white dark:bg-neutral-800 rounded-lg">
+                    <p className="text-xs text-neutral-500">市场总监</p>
+                    <p className="font-semibold">Alex Rivera</p>
+                    <p className="text-[10px] text-neutral-400">审批: 预算合理性+战略对齐</p>
+                  </div>
+                  <div className="p-3 bg-white dark:bg-neutral-800 rounded-lg">
+                    <p className="text-xs text-neutral-500">渠道总监</p>
+                    <p className="font-semibold">陈伟</p>
+                    <p className="text-[10px] text-neutral-400">审批: 伙伴匹配+执行可行性</p>
+                  </div>
+                </div>
+              </div>
+              <div className="text-sm text-neutral-600">
+                <p>批复{approveQuarter}季度共 {plan.filter(p => normalizeQuarter(p.quarter) === approveQuarter).length} 项活动，批复后将生成 V1.0 基线快照，后续执行数据自动回填对比。</p>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="danger" onClick={() => { savePlanRows(approveQuarter, 'draft'); setShowApproveModal(false); }}>驳回</Button>
+                <Button variant="brand" onClick={() => { approveAll(approveQuarter); setShowApproveModal(false); }}>确认批复</Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Budget Display + Change Log */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <BudgetChangeLog changeLog={changeLog} fmt={fmtW} />
@@ -1226,6 +1329,7 @@ export const MarketingPlanPage = () => {
           qBudget={qBudgets[i]}
           qOriginalBudget={originalQBudgets[i]}
           qAdjust={(qBudgets[i]||0) - (originalQBudgets[i]||0)}
+          justSavedIds={justSavedIds}
           items={quarterlyItems[i]}
           partners={partners}
           partnerMDF={partnerMDF}
@@ -1234,7 +1338,9 @@ export const MarketingPlanPage = () => {
           onAddRow={() => addRow(q)}
           onRemoveRow={removeRow}
           onSaveRows={(status) => savePlanRows(q, status)}
-          onApproveAll={() => approveAll(q)}
+          onApproveAll={() => { setApproveQuarter(q); setShowApproveModal(true); }}
+          onSubmitForApproval={() => { setSubmitQuarter(q); setShowSubmitModal(true); }}
+          onOpenDetail={(p) => setDetailActivity(p)}
           onReload={() => loadData(currentYear)}
           fmt={fmtW}
           saving={savingRows}
@@ -1263,6 +1369,119 @@ export const MarketingPlanPage = () => {
           actualOpps={drilldownActivity.actual_opps || 0}
         />
       )}
+
+      {/* Activity Detail Slide-out Panel */}
+      <AnimatePresence>
+        {detailActivity && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-50 flex justify-end bg-black/30" onClick={() => setDetailActivity(null)}>
+            <motion.div initial={{ x: 440 }} animate={{ x: 0 }} exit={{ x: 440 }} transition={{ type: 'spring', damping: 30 }} className="w-[460px] max-w-[90vw] bg-white dark:bg-neutral-900 h-full overflow-auto shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-5 py-4 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold">活动详情</h3>
+                  {(() => { const d = detailActivity; const es = normalizeExecStatus(d.execution_status); return <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${es === 'executed' ? 'bg-emerald-100 text-emerald-700' : es === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'}`}>{EXEC_LABELS[es]}</span>; })()}
+                </div>
+                <button onClick={() => setDetailActivity(null)} className="p-1 hover:bg-neutral-100 rounded"><X className="w-5 h-5" /></button>
+              </div>
+              <div className="p-5 space-y-4">
+                {(() => {
+                  const d = detailActivity;
+                  const es = normalizeExecStatus(d.execution_status);
+                  return (
+                    <>
+                      <div className="space-y-3">
+                        {[
+                          { label: '活动名称', value: (d as any).title || `${d.category} - ${d.quarter}` },
+                          { label: '类型', value: d.activity_type === 'PMDF' ? `PMDF (${d.partner_name || '未指定'})` : '自办 (Marketing)' },
+                          { label: '类别', value: d.category },
+                          { label: '业务目标', value: (d as any).business_objective || '品牌曝光' },
+                          { label: '城市/时间', value: `${d.city || '-'} · ${d.expected_date || '-'}` },
+                          { label: '总预算', value: fmtW(d.total_budget || 0) },
+                          { label: '批复金额', value: fmtW(d.approved_amount || 0) },
+                          { label: '参加人数', value: `${d.expected_attendees || 0} 人` },
+                          { label: '预期产出', value: d.expected_output || '-' },
+                          { label: '负责人', value: d.responsible_person || '-' },
+                        ].map(r => (
+                          <div key={r.label} className="flex justify-between text-sm py-2 border-b border-neutral-100 dark:border-neutral-800">
+                            <span className="text-neutral-500">{r.label}</span>
+                            <span className="font-medium text-neutral-900 dark:text-white text-right max-w-[240px]">{r.value}</span>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* Actuals if executed */}
+                      {es === 'executed' && (
+                        <div className="p-4 bg-emerald-50 dark:bg-emerald-900/10 rounded-xl space-y-2">
+                          <p className="text-xs font-semibold text-emerald-700">执行结果</p>
+                          <div className="flex justify-between text-sm"><span className="text-neutral-500">实际支出</span><span className="font-medium">{fmtW((d as any).actual_spend || 0)}</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-neutral-500">实际线索</span><span className="font-medium">{(d as any).actual_leads || 0} 条</span></div>
+                          <div className="flex justify-between text-sm"><span className="text-neutral-500">实际商机</span><span className="font-medium">{(d as any).actual_opps || 0} 个</span></div>
+                        </div>
+                      )}
+
+                      {/* Status Timeline */}
+                      <div className="space-y-3 pt-4 border-t">
+                        <p className="text-xs font-semibold text-neutral-500">审批时间线</p>
+                        <div className="space-y-0">
+                          {[
+                            { s: 'executed', label: '执行完成', icon: '✅', person: (d as any).executed_by || '执行人', time: (d as any).executed_at || '-' },
+                            { s: 'approved', label: '已批复', icon: '🔵', person: '市场总监 Alex / 渠道总监 陈伟', time: (d as any).approved_at || '-' },
+                            { s: 'submitted', label: '已提交', icon: '🟡', person: (d as any).submitted_by || '渠道经理-陈伟', time: (d as any).submitted_at || '-' },
+                            { s: 'draft', label: '草稿创建', icon: '⚪', person: (d as any).created_by || d.responsible_person || '渠道经理', time: (d as any).created_at || d.expected_date || '-' },
+                          ].map((step, i) => {
+                            const statusOrder = ['executed','approved','submitted','draft'];
+                            const currentIdx = statusOrder.indexOf(es);
+                            const stepIdx = statusOrder.indexOf(step.s);
+                            const isDone = stepIdx >= currentIdx;
+                            const isCurrent = stepIdx === currentIdx;
+                            return (
+                              <div key={step.s} className="flex gap-3 py-2 relative">
+                                {i < 3 && isDone && <div className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-brand/30" />}
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm ${isDone ? 'bg-brand/10 ring-2 ring-brand/20' : 'bg-neutral-100 dark:bg-neutral-800 opacity-40'}`}>
+                                  {step.icon}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2">
+                                    <p className={`text-sm font-medium ${isDone ? 'text-neutral-900 dark:text-white' : 'text-neutral-400'}`}>{step.label}</p>
+                                    {isCurrent && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-brand/10 text-brand font-medium">当前</span>}
+                                  </div>
+                                  <p className="text-xs text-neutral-500 mt-0.5">{step.person}</p>
+                                  <p className="text-[10px] text-neutral-400">{step.time !== '-' ? new Date(step.time).toLocaleString('zh-CN') : '待记录'}</p>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex gap-2 pt-4 border-t">
+                        {es === 'draft' && (
+                          <>
+                            <Button variant="secondary" size="sm" onClick={() => { savePlanRows(d.quarter, 'submitted'); setDetailActivity(null); }} className="flex-1">提交审批</Button>
+                          </>
+                        )}
+                        {es === 'submitted' && (
+                          <>
+                            <Button variant="danger" size="sm" onClick={() => { savePlanRows(d.quarter, 'draft'); setDetailActivity(null); }}>驳回</Button>
+                            <Button variant="brand" size="sm" onClick={() => { approveAll(d.quarter); setDetailActivity(null); }} className="flex-1">批复通过</Button>
+                          </>
+                        )}
+                        {es === 'approved' && (
+                          <Button variant="brand" size="sm" onClick={async () => { await supabase.from('marketing_plan').update({ execution_status: 'executed', executed_at: new Date().toISOString(), executed_by: '执行人' }).eq('id', d.id); loadData(currentYear); setDetailActivity(null); }} className="flex-1">标记为已完成</Button>
+                        )}
+                        {es === 'executed' && (
+                          <Button variant="secondary" size="sm" className="flex-1" onClick={() => navigate('/marketing')}>查看执行数据</Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => { removeRow(d.id); setDetailActivity(null); }} className="text-red-500">删除</Button>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

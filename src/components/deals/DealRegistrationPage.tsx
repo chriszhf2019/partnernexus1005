@@ -8,7 +8,7 @@ import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   MessageSquare, Users, CalendarDays, Flag, Timer, AlertTriangle,
   Phone, Mail, ListTodo, RefreshCw, Send, Share2, Star, Bookmark,
   Filter, Layout, ChevronLeft, Award, Clock8, Handshake, Sparkles,
-  BarChart2, PieChart, Settings, TrendingDown,
+  BarChart2, PieChart, Settings, TrendingDown, X,
 } from 'lucide-react';
 import { InlineEdit } from './components/InlineEdit';
 import { WinLossPanel } from './components/WinLossPanel';

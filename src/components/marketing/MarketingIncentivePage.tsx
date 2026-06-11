@@ -22,6 +22,9 @@ import { SOPTaskChecklist } from './SOPTaskChecklist';
 import { AutoReportGenerator } from './AutoReportGenerator';
 import { BenchmarkSquare } from './BenchmarkSquare';
 import { KPIIncentivePanel } from './KPIIncentivePanel';
+import { GrowthLabCockpits } from './GrowthLabCockpits';
+import { GrowthLabFunnel } from './GrowthLabFunnel';
+import { GrowthLabActivityZone } from './GrowthLabActivityZone';
 
 export const MarketingIncentivePage = () => {
   const { t } = useLanguage();
@@ -241,7 +244,6 @@ export const MarketingIncentivePage = () => {
   
   // Generate dynamic budget data based on real activities
   const quarterNum = parseInt(currentQuarter.replace('Q', ''));
-  const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月'];
   const quarterMonthIndices = [
     [0, 1, 2],  // Q1
     [3, 4, 5],  // Q2
@@ -249,9 +251,9 @@ export const MarketingIncentivePage = () => {
     [9, 10, 11] // Q4
   ];
   const currentMonthIndices = quarterMonthIndices[quarterNum - 1];
-  
+
   const monthlyBudgetData = currentMonthIndices.map((idx, i) => {
-    const monthName = monthNames[idx];
+    const monthName = t(`month.${idx + 1}`);
     const monthActivities = mdfActivities.filter((a: any) => {
       const d = a.event_date || a.date || '';
       const m = parseInt(d.split('-')[1] || '0');
@@ -267,6 +269,46 @@ export const MarketingIncentivePage = () => {
     { id: 'partner', label: '代理商合办', icon: Handshake, color: 'text-emerald-600' },
   ];
 
+  // --- Growth Lab derived state ---
+  const activitiesWithROI = (() => {
+    return qActivities
+      .filter((a: any) => a.budget > 0 || a.status !== 'Planning')
+      .map((a: any) => {
+        const roi = a.budget > 0 ? ((a.leadsGenerated || 0) / (a.budget / 10000)) : 0;
+        let alertStatus: string;
+        if (a.status === 'In Progress' && (a.actualSpend || 0) > (a.budget || 0) * 0.9) alertStatus = 'over-budget';
+        else if (a.status === 'Completed' && (a.leadsGenerated || 0) === 0) alertStatus = 'no-leads';
+        else if (a.status === 'In Progress' && (a.actualSpend || 0) === 0) alertStatus = 'not-started';
+        else alertStatus = 'normal';
+        return { ...a, roi, alertStatus };
+      })
+      .sort((a: any, b: any) => {
+        const order: Record<string, number> = { 'over-budget': 0, 'no-leads': 1, 'not-started': 2, 'normal': 3 };
+        const aO = order[a.alertStatus] ?? 3;
+        const bO = order[b.alertStatus] ?? 3;
+        if (aO !== bO) return aO - bO;
+        return (b.roi || 0) - (a.roi || 0);
+      });
+  })();
+
+  const tierDistribution = (() => {
+    const tiers: { l1: number; l2: number; l3: number } = { l1: 0, l2: 0, l3: 0 };
+    partners.forEach((p: any) => {
+      if (['Platinum', 'Diamond'].includes(p.tier)) tiers.l3++;
+      else if (['Gold', 'Premier'].includes(p.tier)) tiers.l2++;
+      else tiers.l1++;
+    });
+    const total = tiers.l1 + tiers.l2 + tiers.l3 || 1;
+    return { l1: tiers.l1, l2: tiers.l2, l3: tiers.l3, pct1: Math.round((tiers.l1 / total) * 100), pct2: Math.round((tiers.l2 / total) * 100), pct3: Math.round((tiers.l3 / total) * 100) };
+  })();
+
+  const medianROI = (() => {
+    const rois = activitiesWithROI.filter((a: any) => a.roi > 0).map((a: any) => a.roi);
+    if (rois.length === 0) return 0;
+    rois.sort((a: number, b: number) => a - b);
+    return rois[Math.floor(rois.length / 2)];
+  })();
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -276,222 +318,97 @@ export const MarketingIncentivePage = () => {
           <p className="text-sm text-neutral-500 mt-1">{t('marketing.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => navigate('/marketing/plan')}><Target className="w-4 h-4" />年度规划</Button>
-          <Button variant="brand" size="sm" onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" />新建活动</Button>
+          <Button variant="secondary" size="sm" onClick={() => navigate('/marketing/plan')}><Target className="w-4 h-4" />{t('gl.marketing.annualPlan')}</Button>
+          <Button variant="brand" size="sm" onClick={() => setShowCreate(true)}><Plus className="w-4 h-4" />{t('gl.marketing.newActivity')}</Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: '预计收入/支出比 (Forecast ROI)', value: `1:${totalLeads > 0 ? (q2Plans.length * 3.5).toFixed(1) : '0'}`, sub: `基于${totalLeads}条线索预测 · 历史均值1:5.2`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20', alert: totalLeads < 10 ? 'yellow' : 'green' },
-          { label: `${currentQuarter} 执行健康度`, value: activeCount > 0 ? '🟢 正常' : '🟡 偏低', sub: `${activeCount}场进行中 · ${activeCount + completedCount}场总计`, icon: Activity, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-          { label: '线索待跟进 (超48h)', value: `${Math.max(0, totalLeads - (completedCount * 8))} 条`, sub: totalLeads > 0 ? `${Math.min(totalLeads, completedCount * 8)}条已转化 · 点击查看` : '-', icon: Clock, color: totalLeads > (completedCount * 10) ? 'text-red-500' : 'text-amber-600', bg: totalLeads > (completedCount * 10) ? 'bg-red-50 dark:bg-red-900/20' : 'bg-amber-50 dark:bg-amber-900/20', onClick: () => setShowLeadNurturing(true), alert: totalLeads > (completedCount * 10) ? 'red' : 'yellow' },
-          { label: '激励达标率', value: `${incentiveStats.totalActivePrograms > 0 ? Math.round(incentiveStats.totalPayoutYTD / Math.max(incentiveStats.totalBudget || 1, 1) * 100) : 0}%`, sub: `${incentiveStats.totalActivePrograms}个激励计划 · YTD ${cur(incentiveStats.totalPayoutYTD)}`, icon: Target, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20', onClick: () => navigate('/incentives') },
-        ].map((kpi, i) => (
-          <Card key={i} className={cn('cursor-pointer hover:shadow-md transition-shadow', kpi.alert === 'red' && 'border-red-200 dark:border-red-800', kpi.alert === 'yellow' && 'border-amber-200 dark:border-amber-800')} onClick={kpi.onClick}>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-lg ${kpi.bg} flex items-center justify-center shrink-0`}><kpi.icon className={kpi.color} /></div>
-              <div>
-                <div className="flex items-center gap-1">
-                  <p className="text-xs text-neutral-500">{kpi.label}</p>
-                  {kpi.alert === 'red' && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />}
-                  {kpi.alert === 'yellow' && <span className="w-2 h-2 rounded-full bg-amber-500" />}
-                </div>
-                <p className="text-lg font-semibold text-neutral-900 dark:text-white">{kpi.value}</p>
-                <p className="text-[11px] text-neutral-400">{kpi.sub}</p>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Zone 1: Diagnostic Cockpits */}
+      <GrowthLabCockpits
+        mdfStats={mdfStats}
+        incentiveStats={incentiveStats}
+        totalBudget={totalBudget}
+        totalSpend={totalSpend}
+        totalLeads={totalLeads}
+        activeCount={activeCount}
+        completedCount={completedCount}
+        qActivities={qActivities}
+        partners={partners}
+        currentQuarter={currentQuarter}
+        cur={cur}
+        onOpenPanel={(panel: string) => {
+          if (panel === 'mdf') setShowMDFClaims(true);
+          if (panel === 'roi') setShowROIPanel(true);
+          if (panel === 'leads') setShowLeadNurturing(true);
+        }}
+      />
 
-      {/* 功能快捷入口 — 精简为 6 个核心功能 */}
+      {/* Quick Entry Bar */}
       <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium text-neutral-500">核心功能:</span>
-        <div className="flex bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1 gap-0.5">
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowMDFClaims(true)}>
-            <Receipt className="w-3.5 h-3.5 mr-1" />MDF 核销
-          </Button>
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowROIPanel(true)}>
-            <Target className="w-3.5 h-3.5 mr-1" />ROI 追踪
-          </Button>
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowAssetLibrary(true)}>
-            <Package className="w-3.5 h-3.5 mr-1" />资料库
-          </Button>
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => { setShowSOP(true); }}>
-            <CheckSquare className="w-3.5 h-3.5 mr-1" />执行SOP
-          </Button>
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => setShowBenchmark(true)}>
-            <Trophy className="w-3.5 h-3.5 mr-1" />标杆 & 激励
-          </Button>
-          <Button variant="secondary" size="sm" className="rounded-lg" onClick={() => { setShowResourceMarket(true); }}>
-            <Wrench className="w-3.5 h-3.5 mr-1" />资源预约
-          </Button>
+        <span className="text-xs font-medium text-neutral-500">{t('gl.marketing.quickEntry')}</span>
+        <div className="flex gap-1">
+          <button onClick={() => setShowMDFClaims(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Receipt className="w-3 h-3 inline mr-1" />MDF
+          </button>
+          <button onClick={() => setShowROIPanel(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Target className="w-3 h-3 inline mr-1" />ROI
+          </button>
+          <button onClick={() => setShowAssetLibrary(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Package className="w-3 h-3 inline mr-1" />{t('gl.marketing.assets')}
+          </button>
+          <button onClick={() => setShowSOP(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <CheckSquare className="w-3 h-3 inline mr-1" />SOP
+          </button>
+          <button onClick={() => setShowBenchmark(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Trophy className="w-3 h-3 inline mr-1" />{t('gl.marketing.benchmarks')}
+          </button>
+          <button onClick={() => { setShowResourceMarket(true); }} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
+            <Wrench className="w-3 h-3 inline mr-1" />{t('gl.marketing.resources')}
+          </button>
         </div>
       </div>
 
-      {/* 预算执行追踪 — 与KPI卡片互补，不重复年度总额 */}
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">月度预算 vs 实际支出</CardTitle>
-          <div className="flex items-center gap-3 text-xs">
-            <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500"></span><span className="text-neutral-500">预算</span></div>
-            <div className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-emerald-500"></span><span className="text-neutral-500">实支</span></div>
-            <span className="text-neutral-400">|</span>
-            <span className="text-neutral-500">执行率: {monthlyBudgetData.reduce((s,m)=>s+m.budget,0) > 0 ? Math.round(monthlyBudgetData.reduce((s,m)=>s+m.spend,0) / monthlyBudgetData.reduce((s,m)=>s+m.budget,0) * 100) : 0}%</span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end justify-between h-40 gap-3 px-2">
-            {monthlyBudgetData.map((m, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                <div className="w-full flex flex-col items-center gap-1">
-                  <div className="w-8 bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${Math.max(1, (m.budget / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
-                  <div className="w-8 bg-emerald-500 rounded-t -mt-0.5" style={{height: `${Math.max(0, (m.spend / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
-                </div>
-                <span className="text-xs text-neutral-500">{m.month}</span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Main Content */}
+      {/* Zone 2: Pattern & Funnel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Activity List */}
-        <Card className="lg:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>{currentQuarter} 营销活动</CardTitle>
-              <span className="text-xs text-neutral-400">{q2Plans.length + qActivities.length} 个活动 · 批复预算 {cur(totalBudget)} · 实际支出 {cur(totalSpend)}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Filter className="w-4 h-4 text-neutral-400" />
-              {['all', 'Planning', 'In Progress', 'Completed'].map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setStatusFilter(status)}
-                  className={`text-xs px-2 py-1 rounded-full transition-colors ${
-                    statusFilter === status
-                      ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600'
-                      : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:bg-neutral-200'
-                  }`}
-                >
-                  {status === 'all' ? '全部' : status === 'Planning' ? '计划中' : status === 'In Progress' ? '进行中' : '已完成'}
-                </button>
-              ))}
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {q2Plans.length === 0 && qActivities.length === 0 && (
-                <p className="text-sm text-neutral-400 py-4 text-center">暂无 Q2 活动，请先在年度规划中批复 Q2 计划</p>
-              )}
-              {/* Approved Q2 plans */}
-              {q2Plans.map((p: any) => {
-                // Direct match: plan.expected_output = activity name
-                const act = qActivities.find((a: any) => a.name === p.expected_output);
-                return (
-                  <div key={p.id} className="p-3 rounded-lg border border-emerald-100 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant="success" size="sm">{p.activity_type || 'Marketing'}</Badge>
-                        <span className="text-sm font-medium">{p.category}{p.partner_name ? ` · ${p.partner_name}` : ''}</span>
-                      </div>
-                      <span className="text-sm font-semibold">{cur(act?.actualSpend || 0)} / {cur(p.approved_amount || 0)}</span>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-neutral-400">
-                      <span>{p.city || ''} · {p.expected_date || ''} · {p.responsible_person || ''}</span>
-                      <span>{p.expected_attendees || 0} 参加 · 目标: {p.expected_output || p.goal || ''}</span>
-                    </div>
-                  </div>
-                );
-              })}
-              {/* Other Q2 activities */}
-              {filteredActivities.filter((a: any) => !q2Plans.some((p: any) => p.category === a.type || p.category === a.name)).map((act: any) => {
-                const pct = act.budget > 0 ? Math.round(((act.actualSpend || 0) / act.budget) * 100) : 0;
-                return (
-                  <div key={act.id} className="p-3 rounded-lg border border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors cursor-pointer" onClick={() => navigate(`/marketing/activity/${act.id}`)}>
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-2">
-                        <Badge variant={act.hostType === 'partner' ? 'warning' : 'default'} size="sm">
-                          {act.hostType === 'partner' ? '代理商合办' : '厂商自办'}
-                        </Badge>
-                        <span className="text-sm font-medium text-neutral-900 dark:text-white">{act.name}</span>
-                        <Badge variant={act.status === 'Completed' ? 'success' : act.status === 'In Progress' ? 'info' : 'default'} size="sm">
-                          {act.status === 'Completed' ? '已完成' : act.status === 'In Progress' ? '进行中' : '计划中'}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-semibold">{cur(act.actualSpend || 0)} / {cur(act.budget)}</span>
-                        <ChevronRight className="w-4 h-4 text-neutral-400" />
-                      </div>
-                    </div>
-                    <ProgressBar value={pct} size="sm" variant={pct >= 90 ? 'danger' : 'brand'} />
-                    <div className="flex items-center justify-between mt-1.5 text-[11px] text-neutral-400">
-                      <span>{act.date} · {act.type}{act.partnerName ? ` · ${act.partnerName}` : ''}</span>
-                      <span>{act.leadsGenerated || 0} 线索 · {Math.round((act.leadsGenerated || 0) * 0.25)} 商机</span>
-                    </div>
-                    {/* Invitation Code & Actions */}
-                    {act.invitationCode && (
-                      <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <QrCode className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs text-neutral-500">邀请码:</span>
-                            <span className="text-xs font-mono font-bold text-blue-600">{act.invitationCode}</span>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const link = `${window.location.origin}/invitation/${act.invitationCode}`;
-                                navigator.clipboard.writeText(link);
-                                alert('邀请函链接已复制到剪贴板');
-                              }}
-                              className="p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-                              title="复制邀请函链接"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-neutral-500" />
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                window.open(`/invitation/${act.invitationCode}`, '_blank');
-                              }}
-                              className="p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-                              title="预览邀请函"
-                            >
-                              <Eye className="w-3.5 h-3.5 text-neutral-500" />
-                            </button>
-                            <button 
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(`${window.location.origin}/invitation/${act.invitationCode}`)}`;
-                                window.open(qrUrl, '_blank');
-                              }}
-                              className="p-1.5 rounded hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors"
-                              title="生成二维码"
-                            >
-                              <Share2 className="w-3.5 h-3.5 text-neutral-500" />
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Right Column */}
-        <div className="space-y-6">
-          {/* Activity Type Pie */}
+        <div className="lg:col-span-2 space-y-6">
+          {/* Budget Trend Chart */}
           <Card>
-            <CardHeader><CardTitle>活动类型分布</CardTitle></CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="text-base">{t('gl.marketing.budgetTrend')}</CardTitle>
+              <div className="flex items-center gap-4 text-xs">
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                  <span className="text-neutral-500">{t('gl.marketing.budget')}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
+                  <span className="text-neutral-500">{t('gl.marketing.actualSpend')}</span>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-end justify-between h-40 gap-3 px-2">
+                {monthlyBudgetData.map((m, i) => (
+                  <div key={i} className="flex-1 flex flex-col items-center gap-2">
+                    <div className="w-full flex flex-col items-center gap-1">
+                      <div className="w-8 bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${Math.max(1, (m.budget / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
+                      <div className="w-8 bg-emerald-500 rounded-t -mt-0.5" style={{height: `${Math.max(0, (m.spend / Math.max(250000, monthlyBudgetData.reduce((mx,d)=>Math.max(mx,d.budget),0))) * 120)}px`}}></div>
+                    </div>
+                    <span className="text-xs text-neutral-500">{m.month}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800 text-xs">
+                <span className="text-neutral-500">{t('gl.marketing.totalBudget')} {cur(monthlyBudgetData.reduce((s, m) => s + m.budget, 0))}</span>
+                <span className="text-neutral-500">{t('gl.marketing.totalSpend')} {cur(monthlyBudgetData.reduce((s, m) => s + m.spend, 0))}</span>
+                <span className="text-emerald-600 font-medium">{t('gl.marketing.executionRate')} {Math.round((monthlyBudgetData.reduce((s, m) => s + m.spend, 0) / monthlyBudgetData.reduce((s, m) => s + m.budget, 0)) * 100)}%</span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Activity Type Distribution */}
+          <Card>
+            <CardHeader><CardTitle className="text-sm">{t('gl.marketing.activityDistribution')}</CardTitle></CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
                 <PieSVG data={Object.values(activityTypes)} size={70} />
@@ -504,79 +421,35 @@ export const MarketingIncentivePage = () => {
               </div>
             </CardContent>
           </Card>
-
-          {/* Top Activities Ranking */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">活动效果排行</CardTitle>
-              <Trophy className="w-4 h-4 text-amber-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {topActivities.map((act, i) => (
-                  <div key={act.id} className="flex items-center gap-3 p-2 rounded-lg bg-neutral-50/50 dark:bg-neutral-800/50">
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                      i === 0 ? 'bg-amber-500 text-white' : i === 1 ? 'bg-neutral-400 text-white' : i === 2 ? 'bg-amber-700 text-white' : 'bg-neutral-200 dark:bg-neutral-700 text-neutral-600'
-                    }`}>
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{act.name}</p>
-                      <p className="text-[10px] text-neutral-500">{act.leadsGenerated || 0} 线索 · {Math.round((act.leadsGenerated || 0) * 0.25)} 商机</p>
-                    </div>
-                    <Flame className="w-4 h-4 text-orange-500" />
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Incentive Programs Overview */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-sm">激励计划概览</CardTitle>
-              <Zap className="w-4 h-4 text-purple-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {incentivePrograms.filter(p => p.status === 'Active').slice(0, 3).map((program) => (
-                  <div key={program.id} className="p-2 rounded-lg bg-purple-50/30 dark:bg-purple-900/10 border border-purple-100 dark:border-purple-800">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{program.title}</span>
-                      <Badge variant="info" size="sm">{program.type}</Badge>
-                    </div>
-                    <div className="flex items-center justify-between mt-1 text-xs">
-                      <span className="text-neutral-500">{program.participantsCount} 参与</span>
-                      <span className="text-purple-600 font-medium">{cur(program.claimedAmount || 0)} 已发放</span>
-                    </div>
-                  </div>
-                ))}
-                <Button variant="ghost" size="sm" className="w-full" onClick={() => navigate('/incentives')}>
-                  查看全部 <ChevronRight className="w-3 h-3 ml-1" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Quick Actions */}
-          <Card>
-            <CardHeader><CardTitle className="text-sm">快速入口</CardTitle></CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <Button variant="secondary" className="w-full justify-start" onClick={() => navigate('/incentives')}>
-                  <Target className="w-4 h-4 mr-2" />激励计划管理
-                </Button>
-                <Button variant="secondary" className="w-full justify-start" onClick={() => navigate('/marketing/plan')}>
-                  <Calendar className="w-4 h-4 mr-2" />年度预算规划
-                </Button>
-                <Button variant="secondary" className="w-full justify-start" onClick={() => navigate('/enablement')}>
-                  <Award className="w-4 h-4 mr-2" />赋能培训
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
         </div>
+        <GrowthLabFunnel
+          totalParticipants={totalParticipants}
+          totalLeads={totalLeads}
+          qActivities={qActivities}
+          cur={cur}
+        />
       </div>
+
+      {/* Zone 3: Operation & Assets */}
+      <GrowthLabActivityZone
+        activitiesWithROI={activitiesWithROI}
+        tierDistribution={tierDistribution}
+        q2Plans={q2Plans}
+        partners={partners}
+        mdfActivities={mdfActivities}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        medianROI={medianROI}
+        cur={cur}
+        onOpenPanel={(panel: string) => {
+          if (panel === 'mdf') setShowMDFClaims(true);
+          if (panel === 'roi') setShowROIPanel(true);
+          if (panel === 'sop') setShowSOP(true);
+          if (panel === 'assets') setShowAssetLibrary(true);
+          if (panel === 'leads') setShowLeadNurturing(true);
+        }}
+        setShowCreate={setShowCreate}
+      />
 
       {/* Create Activity Modal */}
       {showCreate && (

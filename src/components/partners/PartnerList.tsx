@@ -296,44 +296,44 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   return (
     <div className="space-y-4">
       {/* ═══════════ Page Header ═══════════ */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
-          <p className="text-sm text-neutral-500 mt-1">
-            管理合作伙伴生态 · 点击KPI卡片查看明细 · 点击伙伴名称预览画像 · 使用自动分层快速筛选
-
-      {/* Health Scorecard */}
-      <PartnerHealthBar
-        partners={partners}
-        pendingCount={pendingCount}
-        onFilterStatus={(s) => { setStatusFilter(s as any); }}
-        onTabChange={(t) => setTab(t as any)}
-      />
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-            <input type="text" placeholder="搜索名称/区域/类型/级别/联系人..." value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
-              className="w-80 h-9 pl-9 pr-8 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand dark:text-white transition-all" />
-            {deferredSearch && (
-              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
-                <span className="text-[10px] text-brand font-medium">{filteredPartners.length} 结果</span>
-                <button onClick={() => { setSearchTerm(''); setPage(1); }} className="text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>
-              </div>
-            )}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('partners.title')}</h1>
+            <p className="text-sm text-neutral-500 mt-1">管理合作伙伴生态 · 点击KPI卡片查看明细 · 点击伙伴名称预览画像 · 使用自动分层快速筛选</p>
           </div>
-          <button onClick={exportCSV} className="h-9 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-1.5 transition-colors">
-            <Download className="w-3.5 h-3.5" />导出 CSV
-          </button>
-          <button onClick={() => { const tpl = '名称,类型,等级,状态,区域,省份,城市,行业,渠道经理,电话,网站\n示例公司,Reseller,Silver,Cooperating,华东,上海,上海,制造,张经理,13800138000,www.example.com'; const b = new Blob(['﻿'+tpl],{type:'text/csv'}); const u=URL.createObjectURL(b); const a=document.createElement('a'); a.href=u; a.download='partner_import_template.csv'; a.click(); }} className="h-9 px-2 rounded-lg text-xs text-neutral-400 hover:text-neutral-600 transition-colors" title="下载导入模板 CSV">📥 模板</button>
-          <Button variant="secondary" size="md" onClick={() => setShowImport(true)}>
-            <Upload className="w-4 h-4" /> 导入
-          </Button>
-          <Button variant="brand" size="md" onClick={() => navigate('/partners/new')}>
-            {t('partners.add')}
-          </Button>
+          <div className="flex items-center gap-2">
+            <SmartTaskCenter
+              partners={partners}
+              pendingCount={pendingCount}
+              sleepingCount={sleepingCount}
+              overduePending={overduePending}
+              onViewPending={() => setTab('pending')}
+              onViewSleeping={() => setStatusFilter('Cooperating')}
+            />
+            <div className="w-px h-8 bg-neutral-200 dark:bg-neutral-700" />
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
+              <input type="text" placeholder="搜索名称/区域/类型/级别/联系人..." value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                className="w-64 h-9 pl-9 pr-8 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand dark:text-white transition-all" />
+              {deferredSearch && (
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <span className="text-[10px] text-brand font-medium">{filteredPartners.length} 结果</span>
+                  <button onClick={() => { setSearchTerm(''); setPage(1); }} className="text-neutral-400 hover:text-neutral-600"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              )}
+            </div>
+            <button onClick={exportCSV} className="h-9 px-3 rounded-lg border border-neutral-200 dark:border-neutral-700 text-xs font-medium text-neutral-600 dark:text-neutral-300 hover:bg-neutral-50 dark:hover:bg-neutral-800 flex items-center gap-1.5 transition-colors">
+              <Download className="w-3.5 h-3.5" />导出
+            </button>
+            <Button variant="secondary" size="md" onClick={() => setShowImport(true)}>
+              <Upload className="w-4 h-4" /> 导入
+            </Button>
+            <Button variant="brand" size="md" onClick={() => navigate('/partners/new')}>
+              {t('partners.add')}
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -351,6 +351,35 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
               segmentFilter === seg.key ? 'bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 border-neutral-900' : 'bg-white dark:bg-neutral-800 text-neutral-500 border-neutral-200 dark:border-neutral-700 hover:border-neutral-400')}>
             {seg.label} <span className="ml-0.5 opacity-60">{seg.count}</span>
           </button>
+        ))}
+      </div>
+
+      {/* Partner Health Bar */}
+      <PartnerHealthBar
+        partners={partners}
+        pendingCount={pendingCount}
+        onFilterStatus={(s) => { setStatusFilter(s as any); }}
+        onTabChange={(t) => setTab(t as any)}
+      />
+
+      {/* KPI 卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {[
+          { icon: TrendingUp, label: '活跃贡献率', value: `${partners.length > 0 ? Math.round(partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length / partners.length * 100) : 0}%`, sub: `${partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length}家活跃`, tip: '过去90天内有报备或成交记录的伙伴占比。点击查看明细', color: 'text-emerald-600 bg-emerald-50', onClick: () => setKpiDetail({ title: '活跃贡献率明细', items: [{ label: '活跃伙伴', value: `${partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length} 家`, extra: '有产出' }, { label: '沉睡伙伴', value: `${sleepingCount} 家`, extra: '无产出' }, { label: '待批复', value: `${pendingCount} 家`, extra: '尚未合作' }] }) },
+          { icon: Clock, label: '待批复停留', value: `${pendingCount} 家`, sub: `最长 ${Math.max(0, ...partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)))} 天`, tip: '点击查看每家等待天数', color: 'text-amber-600 bg-amber-50', onClick: () => setKpiDetail({ title: '待批复明细', items: partners.filter(p => p.status === 'Prospective').map(p => ({ label: p.name, value: `${Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)} 天`, extra: p.tier })) }) },
+          { icon: MapPin, label: '区域饱和度', value: `${partnerRegions.length} 区`, sub: `${partnerRegions.filter((r: string) => partners.filter(p => p.region === r).length >= 3).length} 区密集`, tip: '点击查看各区伙伴分布', color: 'text-cyan-600 bg-cyan-50', onClick: () => setShowMap(true) },
+          { icon: Award, label: '管线覆盖率', value: `${partners.filter(p => (p.winRate || 0) >= 50).length} 家高产出`, sub: `≥50%赢单率`, tip: '点击查看高产出伙伴名单', color: 'text-purple-600 bg-purple-50', onClick: () => setKpiDetail({ title: '高产出伙伴 (赢单率≥50%)', items: partners.filter(p => (p.winRate || 0) >= 50).sort((a,b) => (b.winRate||0)-(a.winRate||0)).map(p => ({ label: p.name, value: `${p.winRate}%`, extra: p.tier })) }) },
+        ].map((s, i) => (
+          <div key={i} className="group/tip relative bg-white dark:bg-neutral-900 rounded-xl border p-4 shadow-card cursor-pointer hover:shadow-md" onClick={s.onClick}>
+            <div className="flex items-center justify-between">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-neutral-500">{s.label}</p>
+                <p className="text-2xl font-bold">{s.value}</p>
+                <p className="text-[10px] text-neutral-400 mt-0.5 truncate">{s.sub}</p>
+              </div>
+              <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center shrink-0 ml-2`}><s.icon className="w-5 h-5" /></div>
+            </div>
+          </div>
         ))}
       </div>
 
@@ -506,21 +535,16 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
                             {/* 能力标签 */}
                             <td className="px-6 py-4">
                               <div className="flex flex-wrap gap-1 max-w-[140px]">
-                                {((partner as any).capabilities || []).slice(0, 2).map((c: string) => (
-                                  <span key={c} className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded" title={`行业专长: ${c}`}>{c}</span>
-                                ))}
-                                {((partner as any).certifications || []).slice(0, 1).map((c: string) => (
-                                  <span key={c} className="text-[10px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 rounded" title={`认证: ${c}`}>🎖{c}</span>
-                                ))}
+                                {partner.industry ? (
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded" title={`行业: ${partner.industry}`}>{partner.industry}</span>
+                                ) : (
+                                  <span className="text-xs text-neutral-400">-</span>
+                                )}
                               </div>
                             </td>
-                            {/* 活跃趋势微图 */}
+                            {/* 活跃趋势 */}
                             <td className="px-6 py-4">
-                              <div className="flex items-end gap-0.5 h-6" title="近6个月报备活跃度">
-                                {((partner as any).monthly_activity || [0,0,0,0,0,0]).map((v: number, i: number) => (
-                                  <div key={i} className="w-1.5 bg-brand/60 dark:bg-brand/40 rounded-t-sm" style={{height: `${Math.max(2, v * 3)}px`}} />
-                                ))}
-                              </div>
+                              <span className="text-xs text-neutral-400">暂无数据</span>
                             </td>
                             <td className="px-6 py-4 text-sm text-neutral-500">{partner.startDate || '-'}</td>
                             <td className="px-6 py-4">

@@ -45,6 +45,8 @@ export const EnablementPage = () => {
   const [myRole, setMyRole] = useState('销售经理');
   const [myName, setMyName] = useState('张伟');
   const [activeTab, setActiveTab] = useState('dashboard');
+  const [radarFilter, setRadarFilter] = useState<string | null>(null);
+  const [pointsAnim, setPointsAnim] = useState<number | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
   const [showAssessment, setShowAssessment] = useState(false);
   const [assessmentType, setAssessmentType] = useState<'pre' | 'post'>('pre');
@@ -306,18 +308,24 @@ export const EnablementPage = () => {
               <Card key={i}><div className="p-3 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}><s.icon className="w-5 h-5" /></div><div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div></div></Card>
             ))}
           </div>
-          <Card><div className="p-3 text-center"><h4 className="text-xs font-semibold text-neutral-500 mb-2">能力雷达</h4>
-            <svg viewBox="0 0 120 120" className="w-full max-w-[120px] mx-auto">
-              {[0.4, 0.7, 1].map(scale => <polygon key={scale} points={`60,${60-42*scale} ${60+36*scale},${60+21*scale} ${60+22*scale},${60+38*scale} ${60-22*scale},${60+38*scale} ${60-36*scale},${60+21*scale}`} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />)}
+          <Card><div className="p-3 text-center"><h4 className="text-xs font-semibold text-neutral-500 mb-2">能力雷达 · 点我补弱</h4>
+            <svg viewBox="0 0 120 120" className="w-full max-w-[120px] mx-auto cursor-pointer">
+              {[0.2, 0.4, 0.6, 0.8, 1].map(scale => <polygon key={scale} points={`60,${60-42*scale} ${60+36*scale},${60+21*scale} ${60+22*scale},${60+38*scale} ${60-22*scale},${60+38*scale} ${60-36*scale},${60+21*scale}`} fill="none" stroke="#e5e7eb" strokeWidth="0.5" />)}
+              {/* Role benchmark: 岗位基准线 55% */}
+              <polygon points={[
+                { v: 55, a: -90 }, { v: 55, a: 18 }, { v: 55, a: 126 }, { v: 55, a: -162 }, { v: 55, a: -234 },
+              ].map(d => { const r = (d.a * Math.PI) / 180; return `${60 + (12 + d.v / 100 * 38) * Math.cos(r)},${60 + (12 + d.v / 100 * 38) * Math.sin(r)}`; }).join(' ')} fill="none" stroke="#9ca3af" strokeWidth="1" strokeDasharray="3,2" />
+              <text x="58" y="40" className="text-[7px] fill-neutral-400">基准</text>
               <polygon points={[
                 { v: radarScores.tech, a: -90 }, { v: radarScores.sales, a: 18 },
                 { v: radarScores.marketing, a: 126 }, { v: radarScores.tech, a: -162 }, { v: radarScores.sales, a: -234 },
               ].map(d => { const r = (d.a * Math.PI) / 180; return `${60 + (12 + d.v / 100 * 38) * Math.cos(r)},${60 + (12 + d.v / 100 * 38) * Math.sin(r)}`; }).join(' ')} fill="rgba(37,99,235,0.15)" stroke="#2563eb" strokeWidth="1.5" />
-              {[{ l: '技术', v: radarScores.tech, a: -90, c: '#2563eb' }, { l: '销售', v: radarScores.sales, a: 18, c: '#059669' }, { l: '市场', v: radarScores.marketing, a: 126, c: '#7c3aed' }].map(d => {
+              {[{ l: '技术', v: radarScores.tech, a: -90, c: '#2563eb', cat: '技术认证' }, { l: '销售', v: radarScores.sales, a: 18, c: '#059669', cat: '销售赋能' }, { l: '市场', v: radarScores.marketing, a: 126, c: '#7c3aed', cat: '市场营销' }].map(d => {
                 const r = (d.a * Math.PI) / 180; const x = 60 + (12 + d.v / 100 * 38) * Math.cos(r); const y = 60 + (12 + d.v / 100 * 38) * Math.sin(r);
-                return <g key={d.l}><circle cx={x} cy={y} r="3" fill={d.c} /><text x={60 + (12 + d.v / 100 * 38 + 10) * Math.cos(r)} y={60 + (12 + d.v / 100 * 38 + 10) * Math.sin(r)} textAnchor="middle" dominantBaseline="central" className="text-[9px]" fill={d.c}>{d.l} {d.v}%</text></g>;
+                return <g key={d.l} onClick={() => setRadarFilter(radarFilter === d.cat ? null : d.cat)} className="cursor-pointer"><title>{`点击筛选${d.cat}课程`}</title><circle cx={x} cy={y} r={d.v < 55 ? 5 : 3} fill={d.c} opacity={d.v < 55 ? '1' : '0.8'} className={d.v < 55 ? 'animate-pulse' : ''} /><text x={60 + (12 + d.v / 100 * 38 + 10) * Math.cos(r)} y={60 + (12 + d.v / 100 * 38 + 10) * Math.sin(r)} textAnchor="middle" dominantBaseline="central" className="text-[9px]" fill={d.c}>{d.l} {d.v}%{d.v < 55 ? ' ⚠' : ''}</text></g>;
               })}
-            </svg></div>
+            </svg>
+            <p className="text-[9px] text-neutral-400 mt-1">虚线=岗位基准55% · 低于基准自动脉冲</p></div>
           </Card>
         </div>
       ) : (
@@ -350,44 +358,66 @@ export const EnablementPage = () => {
 
           {/* My enrollments */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {programs.map(p => {
+            {programs.filter(p => !radarFilter || p.category === radarFilter).map(p => {
               const enr = myEnrollments.find(e => e.program_name === p.name);
               const prog = enr?.progress || 0;
               const isComplete = isActive(enr?.status || '');
               const myAssessments = assessments.filter(a => a.user_name === myName && a.program_name === p.name);
               const fw = FRAMEWORK[p.category] || FRAMEWORK['技术认证'];
+              // Milestone markers
+              const milestones = [{ at: 25, icon: '🔓', label: '解锁资料包' }, { at: 50, icon: '🎖', label: '专家头像挂件' }, { at: 100, icon: '🏆', label: '大客户报备特权' }];
+              const nextMilestone = milestones.find(m => prog < m.at);
               return (
-                <Card key={p.id} hover className={cn(isComplete && 'border-emerald-200')}>
+                <Card key={p.id} hover className={cn(isComplete && 'border-emerald-300 bg-gradient-to-br from-emerald-50/30 dark:from-emerald-900/5')}>
                   <CardContent>
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
-                        <div className={`w-8 h-8 rounded-lg ${fw.bg} flex items-center justify-center`}><fw.icon className={`w-4 h-4 ${fw.color}`} /></div>
+                        <div className={`w-8 h-8 rounded-lg ${fw.bg} flex items-center justify-center ${isComplete ? 'ring-2 ring-amber-400 animate-pulse' : ''}`}><fw.icon className={`w-4 h-4 ${fw.color}`} /></div>
                         <div>
-                          <div className="flex items-center gap-1.5"><p className="text-sm font-semibold">{p.name}</p>{p.is_required ? <Badge variant="danger" size="sm">必修</Badge> : <Badge variant="secondary" size="sm">选修</Badge>}</div>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-sm font-semibold">{p.name}</p>
+                            {p.is_required ? <Badge variant="danger" size="sm">必修</Badge> : <Badge variant="secondary" size="sm">选修</Badge>}
+                            {p.level === '高级' && <span className="text-[9px] bg-amber-100 text-amber-700 px-1 rounded">💰达成提成+0.5%</span>}
+                            {p.level === '专家级' && <span className="text-[9px] bg-purple-100 text-purple-700 px-1 rounded">👑解锁核心代理权</span>}
+                          </div>
                           <div className="flex items-center gap-2 mt-0.5"><Badge size="sm">{p.level}</Badge><span className="text-[10px] text-neutral-400">⭐{p.points}分</span></div>
                         </div>
                       </div>
-                      {isComplete && <Award className="w-5 h-5 text-amber-500 fill-amber-500" />}
+                      {isComplete && <div className="relative"><Award className="w-5 h-5 text-amber-500 fill-amber-500 drop-shadow-lg" /><span className="absolute -top-1 -right-1 text-[8px]">✨</span></div>}
                     </div>
+                    {/* Real learner stats */}
+                    {p.is_required && (() => { const pc = courseStats.find(cs => cs.id === p.id); return pc?.enrollmentCount > 0 ? <p className="text-[10px] text-emerald-600 mb-2">📈 已有{pc.enrollmentCount}名学员修读 · 通过率{pc.enrollmentCount > 0 ? Math.round(pc.completedCount/pc.enrollmentCount*100) : 0}%</p> : null; })()}
                     {/* Assessment history */}
                     {myAssessments.length > 0 && (
                       <div className="mb-2 space-y-0.5">
-                        {myAssessments.slice(0, 3).map((a: any, i: number) => (
-                          <div key={i} className="text-[10px] text-neutral-400 flex items-center gap-1"><Clock className="w-3 h-3" />{a.type === 'pre' ? '课前' : '课后'}评估: {a.score}分 ({a.level}) · {new Date(a.created_at).toLocaleDateString('zh-CN')}</div>
+                        {myAssessments.slice(0, 2).map((a: any, i: number) => (
+                          <div key={i} className="text-[10px] text-neutral-400 flex items-center gap-1"><Clock className="w-3 h-3" />{a.type === 'pre' ? '课前' : '课后'}评估: {a.score}分 ({a.level})</div>
                         ))}
                       </div>
                     )}
+                    {/* Milestone treasure chests */}
+                    <div className="flex items-center gap-1 mb-1">
+                      {milestones.map((m, i) => (
+                        <span key={i} className={cn('text-[10px] transition-opacity', prog >= m.at ? 'opacity-100' : 'opacity-30')} title={`${m.at}% — ${m.label}`}>{m.icon}</span>
+                      ))}
+                      {nextMilestone && <span className="text-[9px] text-amber-600 ml-1">→{nextMilestone.at}% {nextMilestone.label}</span>}
+                    </div>
                     <div className="flex items-center justify-between text-[10px] text-neutral-400 mb-1"><span>进度</span><span>{prog}%</span></div>
                     <ProgressBar value={prog} max={100} />
                     <div className="flex items-center gap-1 mt-3">
-                      <Button variant="secondary" size="sm" onClick={() => startAssessment('pre', p.name)} title="随时评估您的当前水平">评估</Button>
-                      <Button variant={isComplete ? 'secondary' : 'brand'} size="sm" className="flex-1">{isComplete ? <><Award className="w-3.5 h-3.5 mr-1" />已获证</> : <><Play className="w-3.5 h-3.5 mr-1" />继续学习</>}</Button>
+                      <Button variant="secondary" size="sm" onClick={() => startAssessment('pre', p.name)} disabled={prog < 50 && !isComplete} title={prog < 50 ? '需完成50%课程后才可评估' : '随时评估您的当前水平'}>评估</Button>
+                      <Button variant={isComplete ? 'secondary' : 'brand'} size="sm" className="flex-1">{isComplete ? <><Award className="w-3.5 h-3.5 mr-1" />已获证 · 分享</> : <><Play className="w-3.5 h-3.5 mr-1" />继续学习</>}</Button>
                       <Button variant="ghost" size="sm" onClick={() => setShowFeedback(p.name)} title="课程反馈"><MessageSquare className="w-3.5 h-3.5" /></Button>
                     </div>
                   </CardContent>
                 </Card>
               );
             })}
+            {radarFilter && (
+              <div className="col-span-full text-center py-4">
+                <p className="text-sm text-neutral-400">已按{radarFilter}筛选 · 点击雷达图取消筛选</p>
+              </div>
+            )}
           </div>
         </div>
       )}

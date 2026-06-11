@@ -64,8 +64,6 @@ function normalizeDeal(row: any): Deal {
 
 function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {
   const out: Record<string, any> = {};
-  // Only map fields that exist in the current Supabase deals table (19 columns)
-  // New columns will be available after running scripts/migrate-deals.sql
   const map: Record<string, string> = {
     customerName: 'customer',
     partnerId: 'partner_id',
@@ -75,18 +73,31 @@ function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {
     salesTeam: 'sales_team',
     productType: 'product_type',
     createdDate: 'created_date',
+    lastActivityDate: 'last_activity_date',
     expectedCloseDate: 'end_date',
+    actualCloseDate: 'actual_close_date',
+    customerIndustry: 'customer_industry',
     isPriority: 'is_priority',
     hasConflict: 'has_conflict',
+    conflictId: 'conflict_id',
     customerContact: 'customer_contact',
     customerPhone: 'customer_phone',
     weightedValue: 'weighted_value',
     daysInCurrentStage: 'days_in_current_stage',
     isStagnant: 'is_stagnant',
     expiresInDays: 'expires_in_days',
+    nextAction: 'next_action',
+    nextActionDate: 'next_action_date',
+    originActivityId: 'origin_activity_id',
+    originActivityName: 'origin_activity_name',
+    originInvitationCode: 'origin_invitation_code',
+    healthScore: 'health_score',
+    leadResponseTime: 'lead_response_time',
+    isNewLogo: 'is_new_logo',
+    protectionRemainingDays: 'protection_remaining_days',
   };
-  // Known fields that don't exist in DB - skip them (expectedCloseDate is mapped to end_date above, so not skipped)
-  const skipFields = new Set(['lastActivityDate', 'customerIndustry', 'province', 'city', 'stage', 'lifecycle', 'sourceInfo', 'conversionMetrics', 'notes', 'nextAction', 'nextActionDate', 'activities', 'winLossAnalysis']);
+  // Complex objects stored as JSONB
+  const skipFields = new Set(['lifecycle', 'sourceInfo', 'conversionMetrics', 'activities', 'winLossAnalysis']);
   for (const [k, v] of Object.entries(deal)) {
     if (v === undefined || skipFields.has(k)) continue;
     out[map[k] || k] = v;
@@ -132,26 +143,42 @@ export const dealService = {
       title: deal.title || '',
       customer: deal.customerName || '',
       value: Number(deal.value || 0),
+      stage: deal.stage || 'Registered',
       partner_id: deal.partnerId || null,
       partner_name: deal.partnerName || '',
       partner_type: deal.partnerType || 'Reseller',
       status: deal.status || 'Pending',
       region: deal.region || '',
+      province: deal.province || '',
+      city: deal.city || '',
       sales_name: deal.salesName || '',
       sales_team: deal.salesTeam || (deal.partnerId ? '渠道报备' : '销售自建'),
       product_type: deal.productType || '',
-      created_date: deal.createdDate || new Date().toISOString().split('T')[0],
-      end_date: deal.expectedCloseDate || '',
-      is_priority: deal.isPriority ?? false,
-      has_conflict: deal.hasConflict ?? false,
-      description: deal.description || '',
+      customer_industry: deal.customerIndustry || '',
       customer_contact: deal.customerContact || '',
       customer_phone: deal.customerPhone || '',
+      created_date: deal.createdDate || new Date().toISOString().split('T')[0],
+      end_date: deal.expectedCloseDate || '',
+      actual_close_date: deal.actualCloseDate || null,
+      is_priority: deal.isPriority ?? false,
+      has_conflict: deal.hasConflict ?? false,
+      conflict_id: deal.conflictId || null,
+      description: deal.description || '',
+      notes: deal.notes || null,
+      next_action: deal.nextAction || null,
+      next_action_date: deal.nextActionDate || null,
       weighted_value: deal.weightedValue || 0,
       days_in_current_stage: deal.daysInCurrentStage || 0,
       is_stagnant: deal.isStagnant || false,
       expires_in_days: deal.expiresInDays || null,
-      activities: deal.activities || [],
+      last_activity_date: deal.lastActivityDate || null,
+      health_score: deal.healthScore || 50,
+      lead_response_time: deal.leadResponseTime || null,
+      is_new_logo: deal.isNewLogo ?? false,
+      protection_remaining_days: deal.protectionRemainingDays || null,
+      origin_activity_id: deal.originActivityId || null,
+      origin_activity_name: deal.originActivityName || null,
+      origin_invitation_code: deal.originInvitationCode || null,
     };
     const { data, error } = await db.deals().insert(insertData).select().single();
     if (error) throw new Error(error.message);

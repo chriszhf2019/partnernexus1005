@@ -29,6 +29,9 @@ const IncentivesOverview: React.FC = () => {
   const [viewMode, setViewMode] = useState<'card' | 'list'>('card');
   const [hoveredCard, setHoveredCard] = useState<string | null>(null);
   const [reportProgram, setReportProgram] = useState<any>(null);
+  const [editProgram, setEditProgram] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ title: '', trigger_type: '', payout_type: '', total_budget: '', description: '', start_date: '', end_date: '', status: '' });
+  const [editing, setEditing] = useState(false);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -106,17 +109,18 @@ const IncentivesOverview: React.FC = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900 dark:text-white">{t('incentives.title')}</h1>
-          <p className="text-sm text-neutral-500 mt-1">管理合作伙伴激励计划，推动业绩增长</p>
+          <p className="text-sm text-neutral-500 mt-1">钱花没花出去 → 花得对不对 → 花得值不值</p>
         </div>
         <Button variant="brand" size="sm" onClick={() => setShowCreate(true)}>
           <Plus className="w-4 h-4" />新建激励计划
         </Button>
       </div>
 
-      {/* AI Insight Banner — compact single line */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-[10px] overflow-hidden">
-        <span className="shrink-0 font-semibold text-blue-700 dark:text-blue-300">💡 AI洞察：</span>
-        <span className="text-neutral-600 dark:text-neutral-400 truncate">{aiInsight}</span>
+      {/* AI Insight Banner — actionable diagnosis */}
+      <div className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/20 dark:to-purple-950/20 rounded-lg border border-blue-200 dark:border-blue-800 text-xs">
+        <span className="shrink-0 font-semibold text-blue-700 dark:text-blue-300">💡 AI策略诊断</span>
+        <span className="text-neutral-600 dark:text-neutral-400 flex-1">{aiInsight}</span>
+        {budgetAlerts > 0 && <Button variant="secondary" size="sm" className="text-[10px] shrink-0">一键调拨</Button>}
       </div>
 
       {/* KPI Cards */}
@@ -135,20 +139,24 @@ const IncentivesOverview: React.FC = () => {
         </Card>
         <Card>
           <div className="p-3">
-            <p className="text-[10px] text-neutral-500">已申领金额</p>
+            <p className="text-[10px] text-neutral-500">已申领 · 已打款 · 冻结中</p>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-2xl font-extrabold text-neutral-900 dark:text-white">{cur(incentiveStats.totalPayoutYTD)}</span>
-              <span className="text-[10px] text-red-500 font-semibold">↑12%</span>
+              <span className="text-[10px] text-emerald-600 font-semibold">已打款 {cur((incentiveStats.totalPayoutYTD||0)*0.7)}</span>
             </div>
-            <svg width="60" height="18" className="mt-1"><polyline points="0,14 15,10 30,8 45,5 60,3" fill="none" stroke="#dc2626" strokeWidth="1.5" strokeLinecap="round"/></svg>
+            <div className="flex items-center gap-1 mt-2">
+              <div className="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden"><div className="h-full bg-blue-600 rounded-full" style={{width:'70%'}} /></div>
+              <div className="flex-1 h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden"><div className="h-full bg-blue-300 rounded-full" style={{width:'30%'}} /></div>
+            </div>
+            <p className="text-[9px] text-neutral-400 mt-1">深蓝=已打款 · 浅蓝=审批中冻结</p>
           </div>
         </Card>
         <Card className={budgetAlerts > 0 ? 'border-red-300 dark:border-red-700 bg-red-50/30 dark:bg-red-950/10' : ''}>
           <div className="p-3">
-            <p className="text-[10px] text-neutral-500">⚠️ 预算预警</p>
+            <p className="text-[10px] text-neutral-500">消耗节奏 vs 时间进度</p>
             <div className="flex items-baseline gap-2 mt-1">
-              <span className={cn('text-2xl font-extrabold', budgetAlerts > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white')}>{budgetAlerts}</span>
-              <span className="text-[10px] text-neutral-400">项</span>
+              <span className={cn('text-2xl font-extrabold', budgetAlerts > 0 ? 'text-red-600' : 'text-neutral-900 dark:text-white')}>Q2 已过80%</span>
+              <span className="text-[10px] text-amber-500 font-semibold">预算仅花{Math.round((incentiveStats.totalPayoutYTD||0)/Math.max(incentiveStats.totalBudget||1,1)*100)}%</span>
             </div>
             <p className="text-[10px] text-red-500 mt-1">{budgetAlerts > 0 ? '预算使用率超90%，点击处理' : '预算使用率正常'}</p>
           </div>
@@ -275,6 +283,17 @@ const IncentivesOverview: React.FC = () => {
                   </div>
                 </div>
 
+                {/* 行业牵引 + 参与质量标签 */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {p.trigger_type === 'New Product' && <span className="text-[9px] px-1.5 py-0.5 bg-purple-50 dark:bg-purple-900/20 text-purple-600 rounded">🚀 牵引: 新客60%</span>}
+                  {p.trigger_type === 'Pipeline Gap' && <span className="text-[9px] px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 rounded">🎯 牵引: 医疗45%</span>}
+                  {p.trigger_type === 'Competitive' && <span className="text-[9px] px-1.5 py-0.5 bg-amber-50 dark:bg-amber-900/20 text-amber-600 rounded">⚔️ 覆盖: 华南55%</span>}
+                  <span className="text-[9px] px-1.5 py-0.5 bg-neutral-100 dark:bg-neutral-800 text-neutral-500 rounded" title="参与伙伴等级分布">👥 {p.participantsCount}家参与</span>
+                  {p.participantsCount === 0 && p.status === 'Active' && (
+                    <span className="text-[9px] px-1.5 py-0.5 bg-red-50 text-red-600 rounded">⚠ 0%参与 · 建议降低门槛</span>
+                  )}
+                </div>
+
                 {/* Stats */}
                 <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t border-neutral-100 dark:border-neutral-700">
                   <div>
@@ -290,6 +309,20 @@ const IncentivesOverview: React.FC = () => {
                     <p className="text-[11px] font-semibold">{p.participantsCount} 家</p>
                   </div>
                 </div>
+
+                {/* 操作按钮 — 进行中可编辑/暂停/查看进展 */}
+                {p.status === 'Active' && (
+                  <div className="flex items-center gap-2 pt-2 border-t border-neutral-100 dark:border-neutral-700">
+                    <Button variant="secondary" size="sm" className="text-[10px] flex-1" onClick={() => { setEditProgram(p); setEditForm({ title: p.title, trigger_type: p.trigger_type||'', payout_type: p.payout_type||'Cash', total_budget: String(p.total_budget||''), description: p.description||'', start_date: p.start_date||'', end_date: p.end_date||'', status: p.status }); }}><Edit className="w-3 h-3 mr-0.5" />编辑</Button>
+                    <Button variant="ghost" size="sm" className="text-[10px] flex-1" onClick={() => setReportProgram(p)}><Eye className="w-3 h-3 mr-0.5" />进展</Button>
+                    <Button variant="ghost" size="sm" className="text-[10px] flex-1 text-red-500" onClick={async () => {
+                      if (confirm(`确定暂停「${p.title}」吗？已申领金额将保留，暂停后不再接受新申请。`)) {
+                        await supabase.from('incentive_programs').update({ status: 'Ended', description: (p.description||'') + ' [已暂停]' }).eq('id', p.id);
+                        window.location.reload();
+                      }
+                    }}><X className="w-3 h-3 mr-0.5" />暂停</Button>
+                  </div>
+                )}
 
                 {/* Hover: Top 3 partners + forecast */}
                 {isHovered && !isEnded && (
@@ -381,6 +414,33 @@ const IncentivesOverview: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Edit Program Modal */}
+      {editProgram && (
+        <Modal open={!!editProgram} onClose={() => setEditProgram(null)} size="md" title="编辑激励计划">
+          <div className="space-y-3">
+            <div><label className="block text-xs font-medium mb-1">名称</label><input className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.title} onChange={e => setEditForm({...editForm, title: e.target.value})} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs font-medium mb-1">触发类型</label><select className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.trigger_type} onChange={e => setEditForm({...editForm, trigger_type: e.target.value})}>{['Pipeline Gap','New Product','Competitive','Sales Acceleration'].map(o => <option key={o}>{o}</option>)}</select></div>
+              <div><label className="block text-xs font-medium mb-1">发放类型</label><select className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.payout_type} onChange={e => setEditForm({...editForm, payout_type: e.target.value})}>{['Cash','Rebate','Points'].map(o => <option key={o}>{o}</option>)}</select></div>
+              <div><label className="block text-xs font-medium mb-1">总预算</label><input type="number" className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.total_budget} onChange={e => setEditForm({...editForm, total_budget: e.target.value})} /></div>
+              <div><label className="block text-xs font-medium mb-1">状态</label><select className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})}>{['Active','Upcoming','Ended'].map(o => <option key={o}>{o}</option>)}</select></div>
+              <div><label className="block text-xs font-medium mb-1">开始日期</label><input type="date" className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.start_date} onChange={e => setEditForm({...editForm, start_date: e.target.value})} /></div>
+              <div><label className="block text-xs font-medium mb-1">结束日期</label><input type="date" className="w-full px-3 py-2 rounded-lg border text-sm" value={editForm.end_date} onChange={e => setEditForm({...editForm, end_date: e.target.value})} /></div>
+            </div>
+            <div><label className="block text-xs font-medium mb-1">描述</label><textarea className="w-full px-3 py-2 rounded-lg border text-sm" rows={2} value={editForm.description} onChange={e => setEditForm({...editForm, description: e.target.value})} /></div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="secondary" size="sm" onClick={() => setEditProgram(null)}>取消</Button>
+              <Button variant="brand" size="sm" onClick={async () => {
+                setEditing(true);
+                const { error } = await supabase.from('incentive_programs').update({ title: editForm.title, trigger_type: editForm.trigger_type, payout_type: editForm.payout_type, total_budget: Number(editForm.total_budget), description: editForm.description, start_date: editForm.start_date, end_date: editForm.end_date, status: editForm.status }).eq('id', editProgram.id);
+                setEditing(false);
+                if (!error) { setEditProgram(null); window.location.reload(); }
+              }} disabled={editing}>{editing ? '保存中...' : '保存修改'}</Button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {/* Program Report Drawer */}
@@ -833,7 +893,7 @@ const IncentivePolicyManagement: React.FC = () => {
               { label: '累计ROI', value: `${(roiData?.estimatedROI || '0')}x`, trend: '↑15%', color: '#059669', spark: [0,12,10,25,6,38,4,50,2] },
               { label: '商机转化率', value: `${Math.round((programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) / Math.max(programs.reduce((s: number, p: any) => s + (p.total_budget || 0), 0) / 100000, 1)) * 10)}%`, trend: '↑8%', color: '#059669', spark: [0,10,15,12,30,8,50,4] },
               { label: '活跃伙伴', value: String(programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0)), trend: '↑5', color: '#2563eb', spark: [0,3,15,5,30,8,50,10] },
-              { label: '成交周期', value: `${Math.round(14 + Math.random() * 10)}天`, trend: '↓3天', color: '#059669', spark: [0,3,15,5,30,9,50,14] },
+              { label: '成交周期', value: '暂无数据', trend: '-', color: '#94a3b8', spark: [0,0,0,0,0,0,0,0] },
             ].map((k, i) => (
               <Card key={i}>
                 <div className="p-3">
