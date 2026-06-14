@@ -531,7 +531,7 @@ const IncentivesOverview: React.FC = () => {
   );
 };
 
-// 政策管理页面组件 - 完整优化版
+// 政策管理页面组件 - 完整优化版 v2 (page nav)
 const IncentivePolicyManagement: React.FC = () => {
   const { config } = useConfig();
   const navigate = useNavigate();
