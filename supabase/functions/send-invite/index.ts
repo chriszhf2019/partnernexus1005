@@ -19,8 +19,10 @@ Deno.serve(async (req: Request) => {
       partner_admin: '合作伙伴管理员', partner_sales: '合作伙伴销售', partner_tech: '合作伙伴技术',
     };
 
+    const EMAIL_FROM = Deno.env.get('EMAIL_FROM') || 'PartnerNexus <noreply@partner.velolabs.top>';
+
     const { data, error } = await resend.emails.send({
-      from: 'PartnerNexus <noreply@partner.velolabs.top>',
+      from: EMAIL_FROM,
       to: [email],
       subject: `🎉 欢迎加入 PartnerNexus — ${name} 的账户已创建`,
       html: `

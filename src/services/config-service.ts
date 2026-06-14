@@ -21,7 +21,7 @@ export const configService = {
 
   subscribe: (
     onData: (config: GlobalConfig) => void,
-    _onError: (error: Error) => void,
+    onError?: (error: Error) => void,
   ): (() => void) => {
     // Try to load from Supabase, fall back to default
     void db.settings().select('data').eq('id', 'global').single().then((res: any) => {
@@ -32,7 +32,10 @@ export const configService = {
       } else {
         onData(defaultConfig);
       }
-    }, () => onData(defaultConfig));
+    }, (err: Error) => {
+      onError?.(err);
+      onData(defaultConfig);
+    });
 
     const channel = supabase
       .channel('config-changes')

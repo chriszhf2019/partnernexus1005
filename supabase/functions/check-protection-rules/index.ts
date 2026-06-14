@@ -109,10 +109,12 @@ Deno.serve(async (_req: Request) => {
         // 5. 到期处理
         if (rule.expire_action === 'auto_release') {
           // 自动释放到公海
+          // ⚠️ 当前 DealStatus 类型不包含 'Released' 状态，暂时使用 'Pending'
+          // 未来如需支持公海概念，在 types.ts 中添加 'Released' | 'PublicSea' 状态
           const { error } = await supabase
             .from('deals')
             .update({
-              status: '公海',
+              status: 'Pending',
               stage: 'Registered',
               updated_at: now.toISOString(),
             })

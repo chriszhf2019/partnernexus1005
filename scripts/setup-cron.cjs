@@ -8,7 +8,11 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-const serviceKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6a2JqdWZsdWN6cHhkaXhwbHh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTM5MDA5NCwiZXhwIjoyMDk0OTY2MDk0fQ.oPeUBuyHl2Zh-9ueOO7yCWHKG0oAxgdzjYGIUgzVw7E';
+const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!serviceKey) {
+  console.error('❌ SUPABASE_SERVICE_ROLE_KEY is required. Source scripts/.env.scripts or set env var.');
+  process.exit(1);
+}
 const functionUrl1 = 'https://ezkbjufluczpxdixplxu.supabase.co/functions/v1/check-protection-rules';
 const functionUrl2 = 'https://ezkbjufluczpxdixplxu.supabase.co/functions/v1/check-expiry-reminders';
 

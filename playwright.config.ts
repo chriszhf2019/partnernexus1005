@@ -10,7 +10,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: process.env.APP_URL || 'http://localhost:3000',
+    baseURL: process.env.APP_URL || 'http://localhost:3099',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -19,5 +19,6 @@ export default defineConfig({
     port: 3099,
     reuseExistingServer: !process.env.CI,
     timeout: 120000,
+    env: { VITE_USE_MOCK_AUTH: 'true' },
   },
 });

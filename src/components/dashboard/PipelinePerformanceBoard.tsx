@@ -1,5 +1,6 @@
 import React from 'react';
-import { 
+import { useNavigate } from 'react-router-dom';
+import {
   TrendingUp, 
   TrendingDown, 
   ChevronRight, 
@@ -13,6 +14,7 @@ import {
 import { cn } from '../../lib/utils';
 
 export const PipelinePerformanceBoard: React.FC = () => {
+  const navigate = useNavigate();
   const funnelStages = [
     { name: '发现与报备', amount: '¥12.5M', inflow: '+2.1M', outflow: '-0.4M' },
     { name: '方案与报价', amount: '¥10.2M', inflow: '+1.8M', outflow: '-1.2M' },
@@ -74,7 +76,7 @@ export const PipelinePerformanceBoard: React.FC = () => {
             <Zap className="w-4 h-4 text-amber-500" />
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">本季度各销售阶段流转动态</h4>
           </div>
-          <button className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
+          <button onClick={() => navigate('/deals')} className="text-[10px] font-bold text-blue-600 hover:underline flex items-center gap-1">
             查看详情 <ChevronRight className="w-3 h-3" />
           </button>
         </div>

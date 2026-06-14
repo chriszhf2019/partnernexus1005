@@ -1271,7 +1271,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
   });
 
   const t = useCallback((key: string, params?: InterpolationParams) => {
-    const text = translations[language][key];
+    const text = translations[language][key] || (language !== 'zh' ? translations['zh'][key] : undefined);
     if (!text) return key;
     if (!params) return text;
     let result = text;

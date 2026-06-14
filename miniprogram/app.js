@@ -6,7 +6,7 @@ App({
     companyId: null,
     companyName: '',
     token: null,
-    apiBase: 'https://partner-management-1-main.vercel.app/api',
+    apiBase: 'https://partner.velolabs.top/api',
     scoreRules: {
       register: 20,
       checkin: 30,

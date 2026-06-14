@@ -79,7 +79,6 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [quickPeekPartner, setQuickPeekPartner] = useState<Partner | null>(null);
-  const [kpiDetail, setKpiDetail] = useState<{ title: string; items: { label: string; value: string; extra?: string }[] } | null>(null);
   const [showMap, setShowMap] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showAdvFilter, setShowAdvFilter] = useState(false);
@@ -365,12 +364,12 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
       {/* KPI 卡片 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { icon: TrendingUp, label: '活跃贡献率', value: `${partners.length > 0 ? Math.round(partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length / partners.length * 100) : 0}%`, sub: `${partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length}家活跃`, tip: '过去90天内有报备或成交记录的伙伴占比。点击查看明细', color: 'text-emerald-600 bg-emerald-50', onClick: () => setKpiDetail({ title: '活跃贡献率明细', items: [{ label: '活跃伙伴', value: `${partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length} 家`, extra: '有产出' }, { label: '沉睡伙伴', value: `${sleepingCount} 家`, extra: '无产出' }, { label: '待批复', value: `${pendingCount} 家`, extra: '尚未合作' }] }) },
-          { icon: Clock, label: '待批复停留', value: `${pendingCount} 家`, sub: `最长 ${Math.max(0, ...partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)))} 天`, tip: '点击查看每家等待天数', color: 'text-amber-600 bg-amber-50', onClick: () => setKpiDetail({ title: '待批复明细', items: partners.filter(p => p.status === 'Prospective').map(p => ({ label: p.name, value: `${Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)} 天`, extra: p.tier })) }) },
-          { icon: MapPin, label: '区域饱和度', value: `${partnerRegions.length} 区`, sub: `${partnerRegions.filter((r: string) => partners.filter(p => p.region === r).length >= 3).length} 区密集`, tip: '点击查看各区伙伴分布', color: 'text-cyan-600 bg-cyan-50', onClick: () => setShowMap(true) },
-          { icon: Award, label: '管线覆盖率', value: `${partners.filter(p => (p.winRate || 0) >= 50).length} 家高产出`, sub: `≥50%赢单率`, tip: '点击查看高产出伙伴名单', color: 'text-purple-600 bg-purple-50', onClick: () => setKpiDetail({ title: '高产出伙伴 (赢单率≥50%)', items: partners.filter(p => (p.winRate || 0) >= 50).sort((a,b) => (b.winRate||0)-(a.winRate||0)).map(p => ({ label: p.name, value: `${p.winRate}%`, extra: p.tier })) }) },
+          { icon: TrendingUp, label: '活跃贡献率', value: `${partners.length > 0 ? Math.round(partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length / partners.length * 100) : 0}%`, sub: `${partners.filter(p => p.status === 'Cooperating' && (p.winRate || 0) > 0).length}家活跃`, tip: '过去90天内有报备或成交记录的伙伴占比。点击查看明细', color: 'text-emerald-600 bg-emerald-50', path: '/detail/partners-active' },
+          { icon: Clock, label: '待批复停留', value: `${pendingCount} 家`, sub: `最长 ${Math.max(0, ...partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)))} 天`, tip: '点击查看每家等待天数', color: 'text-amber-600 bg-amber-50', path: '/detail/partners-summary' },
+          { icon: MapPin, label: '区域饱和度', value: `${partnerRegions.length} 区`, sub: `${partnerRegions.filter((r: string) => partners.filter(p => p.region === r).length >= 3).length} 区密集`, tip: '点击查看各区伙伴分布', color: 'text-cyan-600 bg-cyan-50', path: '/detail/partners-coverage' },
+          { icon: Award, label: '管线覆盖率', value: `${partners.filter(p => (p.winRate || 0) >= 50).length} 家高产出`, sub: `≥50%赢单率`, tip: '点击查看高产出伙伴名单', color: 'text-purple-600 bg-purple-50', path: '/detail/partners-efficiency' },
         ].map((s, i) => (
-          <div key={i} className="group/tip relative bg-white dark:bg-neutral-900 rounded-xl border p-4 shadow-card cursor-pointer hover:shadow-md" onClick={s.onClick}>
+          <div key={i} className="group/tip relative bg-white dark:bg-neutral-900 rounded-xl border p-4 shadow-card cursor-pointer hover:shadow-md" onClick={() => navigate(s.path)}>
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-neutral-500">{s.label}</p>
@@ -738,32 +737,6 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
       {/* Map View */}
       <PartnerMapView open={showMap} onClose={() => setShowMap(false)} partners={partners} />
 
-      {/* KPI Detail Modal */}
-      {kpiDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setKpiDetail(null)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-[480px] max-w-[90vw] max-h-[70vh] overflow-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-6 py-4 flex items-center justify-between">
-              <h3 className="text-base font-semibold">{kpiDetail.title}</h3>
-              <button onClick={() => setKpiDetail(null)} className="p-1 hover:bg-neutral-100 rounded"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-4 space-y-1">
-              {kpiDetail.items.length === 0 ? (
-                <p className="text-sm text-neutral-400 text-center py-8">暂无数据</p>
-              ) : (
-                kpiDetail.items.map((item, idx) => (
-                  <div key={idx} className="flex items-center justify-between px-4 py-3 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-sm">
-                    <span className="font-medium text-neutral-900 dark:text-white">{item.label}</span>
-                    <div className="flex items-center gap-3">
-                      <span className="text-neutral-500">{item.extra}</span>
-                      <span className="font-semibold text-neutral-900 dark:text-white">{item.value}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

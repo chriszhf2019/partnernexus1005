@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, useEffect } from 'react';
+import { useMemo, useRef, useState, useEffect, useCallback } from 'react';
 import { dealService } from '../services/deal-service';
 import { partnerService } from '../services/partner-service';
 import { marketingService } from '../services/marketing-service';
@@ -37,15 +37,7 @@ interface NetworkData {
 }
 
 // 阶段概率配置
-const STAGE_PROBABILITIES: Record<string, { probability: number; avgCycleDays: number }> = {
-  'Registered':    { probability: 10, avgCycleDays: 3 },
-  'UnderReview':  { probability: 20, avgCycleDays: 5 },
-  'Approved':     { probability: 35, avgCycleDays: 7 },
-  'Solution':     { probability: 50, avgCycleDays: 14 },
-  'Commercial':   { probability: 80, avgCycleDays: 21 },
-  'ClosedWon':    { probability: 100, avgCycleDays: 0 },
-  'ClosedLost':   { probability: 0, avgCycleDays: 0 },
-};
+import { computeRealStageProbabilities, DEAL_EXPIRY_DAYS } from '../lib/dealStageCalc';
 
 export function usePartners() {
   const [partners, setPartners] = useState<Partner[]>([]);
@@ -60,7 +52,6 @@ export function usePartners() {
 
   return useMemo(() => ({
     partners,
-    partnerDetails: null as Partner | null,
     partnerListRef,
   }), [partners]);
 }
@@ -74,65 +65,85 @@ export function useDeals() {
     conflictCount: 0, overdueCount: 0,
   });
 
-  useEffect(() => {
-    dealService.list().then((result) => {
-      const items = result.items;
-      
-      // 计算每个商机的额外字段
-      const enrichedDeals = items.map((deal: Deal) => {
-        const lifecycleEvents = deal.lifecycle || [];
-        const currentStageEvent = lifecycleEvents[lifecycleEvents.length - 1];
-        const daysInCurrentStage = currentStageEvent?.durationDays || 0;
-        const avgDays = STAGE_PROBABILITIES[deal.stage]?.avgCycleDays || 7;
-        const isStagnant = daysInCurrentStage > avgDays * 2;
-        const createdDate = new Date(deal.createdDate || Date.now());
-        const expireDate = new Date(createdDate.getTime() + 90 * 24 * 60 * 60 * 1000);
-        const now = new Date();
-        const expiresInDays = Math.max(0, Math.ceil((expireDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
-        const probability = STAGE_PROBABILITIES[deal.stage]?.probability || 0;
-        const weightedValue = Math.round(deal.value * probability / 100);
-        return { ...deal, daysInCurrentStage, isStagnant, expiresInDays, weightedValue };
-      });
-      
-      setDeals(enrichedDeals);
-      
+  // 共享函数：从 Deal 列表计算出 enrichedDeals 和 stats
+  const enrichAndComputeStats = useCallback((items: Deal[]) => {
+    const stageProbs = computeRealStageProbabilities(items);
+
+    const enrichedDeals: Deal[] = items.map((deal: Deal) => {
+      const lifecycleEvents = deal.lifecycle || [];
+      const currentStageEvent = lifecycleEvents[lifecycleEvents.length - 1];
+      const daysInCurrentStage = currentStageEvent?.durationDays || 0;
+      const avgDays = stageProbs[deal.stage]?.avgCycleDays || 7;
+      const isStagnant = daysInCurrentStage > avgDays * 2;
+      const createdDate = new Date(deal.createdDate || Date.now());
+      const expireDate = new Date(createdDate.getTime() + DEAL_EXPIRY_DAYS * 24 * 60 * 60 * 1000);
       const now = new Date();
-      const yearStart = new Date(now.getFullYear(), 0, 1);
-      const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const weekStart = new Date(now.getTime() - now.getDay() * 86400000);
-      
-      setStats({
-        yearNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= yearStart).length,
-        quarterNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= quarterStart).length,
-        monthNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
-        weekNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
-        rejected: enrichedDeals.filter(d => d.status === 'Rejected').length,
-        closed: enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length,
-        totalPipelineValue: enrichedDeals.reduce((s, d) => s + Number(d.value || 0), 0),
-        avgCycleDays: enrichedDeals.filter(d => d.conversionMetrics?.totalCycleDays).length > 0
-          ? Math.round(enrichedDeals.reduce((s, d) => s + (d.conversionMetrics?.totalCycleDays || 0), 0) / enrichedDeals.filter(d => d.conversionMetrics?.totalCycleDays).length)
-          : 0,
-        conversionRate: enrichedDeals.length > 0
-          ? Math.round((enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length / enrichedDeals.length) * 100)
-          : 0,
-        stageDistribution: enrichedDeals.reduce((acc, d) => {
-          const stage = d.stage || 'Registered';
-          acc[stage] = (acc[stage] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>),
-        sourceDistribution: enrichedDeals.reduce((acc, d) => {
-          const source = d.sourceInfo?.source || 'Unknown';
-          acc[source] = (acc[source] || 0) + 1;
-          return acc;
-        }, {} as Record<string, number>),
-        conflictCount: enrichedDeals.filter(d => d.hasConflict).length,
-        overdueCount: enrichedDeals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost').length,
-      });
-    }).catch(() => debug.warn('[useData] useDeals failed'));
+      const expiresInDays = Math.max(0, Math.ceil((expireDate.getTime() - now.getTime()) / (24 * 60 * 60 * 1000)));
+      const probability = stageProbs[deal.stage]?.probability || 0;
+      const weightedValue = Math.round(deal.value * probability / 100);
+      return { ...deal, daysInCurrentStage, isStagnant, expiresInDays, weightedValue };
+    });
+
+    setDeals(enrichedDeals);
+
+    const now = new Date();
+    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const weekStart = new Date(now.getTime() - now.getDay() * 86400000);
+
+    setStats({
+      yearNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= yearStart).length,
+      quarterNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= quarterStart).length,
+      monthNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
+      weekNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
+      rejected: enrichedDeals.filter(d => d.status === 'Rejected').length,
+      closed: enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length,
+      totalPipelineValue: enrichedDeals.reduce((s, d) => s + Number(d.value || 0), 0),
+      avgCycleDays: (() => {
+        const cycleDays: number[] = [];
+        enrichedDeals.forEach(d => {
+          const events = d.lifecycle || [];
+          if (events.length >= 2) {
+            const dates = events.map(e => new Date(e.date)).filter(d => !isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
+            if (dates.length >= 2) {
+              cycleDays.push(Math.round((dates[dates.length - 1].getTime() - dates[0].getTime()) / 86400000));
+            }
+          }
+        });
+        return cycleDays.length > 0 ? Math.round(cycleDays.reduce((s, d) => s + d, 0) / cycleDays.length) : 0;
+      })(),
+      conversionRate: enrichedDeals.length > 0
+        ? Math.round((enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length / enrichedDeals.length) * 100)
+        : 0,
+      stageDistribution: enrichedDeals.reduce((acc, d) => {
+        const stage = d.stage || 'Registered';
+        acc[stage] = (acc[stage] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      sourceDistribution: enrichedDeals.reduce((acc, d) => {
+        const source = d.sourceInfo?.source || 'Unknown';
+        acc[source] = (acc[source] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>),
+      conflictCount: enrichedDeals.filter(d => d.hasConflict).length,
+      overdueCount: enrichedDeals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost').length,
+    });
   }, []);
 
-  return useMemo(() => ({ deals, stats }), [deals, stats]);
+  useEffect(() => {
+    dealService.list().then((result) => {
+      enrichAndComputeStats(result.items);
+    }).catch(() => debug.warn('[useData] useDeals failed'));
+  }, [enrichAndComputeStats]);
+
+  const refreshDeals = useCallback(() => {
+    dealService.list().then((result) => {
+      enrichAndComputeStats(result.items);
+    }).catch(() => debug.warn('[useData] useDeals refresh failed'));
+  }, [enrichAndComputeStats]);
+
+  return useMemo(() => ({ deals, stats, refreshDeals }), [deals, stats, refreshDeals]);
 }
 
 export function useActivities() {
@@ -299,11 +310,11 @@ function fallbackCockpitData(): CockpitData {
     dimensional_achievements: [],
   });
   return {
-    revenue: emptyMetric('Revenue'),
+    revenue: emptyMetric('营收完成度'),
     activePartners: emptyMetric('活跃伙伴数'),
-    pipeline: emptyMetric('Pipeline'),
+    pipeline: emptyMetric('商机报备与流转'),
     leadsConversion: emptyMetric('线索转化率'),
-    marketing: emptyMetric('营销'),
+    marketing: emptyMetric('营销与激励'),
     insights: [],
   };
 }
@@ -315,7 +326,14 @@ export function useCockpitData(): { data: CockpitData; loading: boolean } {
     // Static import - more reliable than dynamic import
     import('../lib/realCockpitData').then((mod) => {
       mod.getRealCockpitData().then((realData) => {
-        if (realData?.revenue?.current_value > 0) {
+        // Use real data if any metric has meaningful values
+        const hasAnyData =
+          (realData?.revenue?.current_value ?? 0) > 0 ||
+          (realData?.activePartners?.current_value ?? 0) > 0 ||
+          (realData?.pipeline?.current_value ?? 0) > 0 ||
+          (realData?.marketing?.current_value ?? 0) > 0 ||
+          (realData?.revenue?.monthly_data?.length ?? 0) > 0;
+        if (hasAnyData) {
           setData(realData);
         } else {
           console.warn('[useCockpitData] Empty real data, using fallback');

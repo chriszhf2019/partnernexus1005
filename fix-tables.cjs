@@ -1,8 +1,12 @@
 #!/usr/bin/env node
+// ⚠️ 已废弃 — 请改用 scripts/create-remaining-tables.cjs
+//     参考 scripts/SCRIPTS.md
 const {Client}=require('pg');
+const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+if (!dbPassword) { console.error('❌ SUPABASE_DB_PASSWORD required'); process.exit(1); }
 const c=new Client({
   host:'db.ezkbjufluczpxdixplxu.supabase.co',port:5432,database:'postgres',user:'postgres',
-  password:'tmee9YJt4ryV3rbZ',ssl:{rejectUnauthorized:false}
+  password:dbPassword,ssl:{rejectUnauthorized:false}
 });
 c.connect().then(async()=>{
   console.log('Creating missing tables...');

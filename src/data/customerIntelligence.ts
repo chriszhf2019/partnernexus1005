@@ -1,3 +1,16 @@
+// ⚠️⚠️⚠️ 安全警告 ⚠️⚠️⚠️
+// 此文件包含客户商业情报数据（CIO姓名、战略分析、攻击计划等）。
+// 当前这些数据被硬编码并打包到前端 JS 中——任何用户都可以通过浏览器 DevTools 查看所有客户的敏感信息。
+//
+// 紧急迁移计划：
+// 1. 在 Supabase 中创建 customer_intelligence 表
+// 2. 将这些数据迁移到后端数据库中
+// 3. 创建 /api/customer-intelligence API 端点
+// 4. 前端只通过 API 按需加载，并加权限控制
+// 5. 此文件中的数据全部迁移到数据库后删除此文件
+//
+// 迁移完成前，以下是仅用于开发的临时数据。
+//
 // 客户情报数据库 — 基于公开信息与AI分析生成
 // 后续迁移到 customer_intelligence 表后，从 Supabase 查询替换
 
@@ -242,6 +255,7 @@ function generateDefaultIntel(customerName: string, deals: any[]): CustomerIntel
   };
 }
 
+// ⚠️ 这些导出函数将敏感数据暴露给前端。尽快迁移到 API 后端按需加载。
 export function getCustomerIntel(customerName: string, deals: any[] = []): CustomerIntel {
   // Try exact match first
   if (intel[customerName]) return intel[customerName];

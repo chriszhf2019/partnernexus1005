@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { DEALS, ACTIVITIES, PARTNER_DETAILS, DEAL_STATS, MDF_STATS, INCENTIVE_PROGRAMS } from '../constants';
 
 describe('Constants / Mock Data', () => {
-  it('IMPORTED_PARTNERS is a non-empty array', () => {
-    // importedPartners.ts removed - data comes from DB now
+  it('mock data files removed — data comes from DB now', () => {
+    // importedPartners.ts 已移除，合作伙伴数据直接从 Supabase 获取
     expect(true).toBe(true);
   });
 

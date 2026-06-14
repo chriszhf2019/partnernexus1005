@@ -534,6 +534,7 @@ const IncentivesOverview: React.FC = () => {
 // 政策管理页面组件 - 完整优化版
 const IncentivePolicyManagement: React.FC = () => {
   const { config } = useConfig();
+  const navigate = useNavigate();
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
   const [loading, setLoading] = useState(true);
@@ -546,8 +547,6 @@ const IncentivePolicyManagement: React.FC = () => {
   
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [selectedPlan, setSelectedPlan] = useState<any | null>(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
   const [showTierModal, setShowTierModal] = useState(false);
   const [showTargetingModal, setShowTargetingModal] = useState(false);
 
@@ -704,7 +703,7 @@ const IncentivePolicyManagement: React.FC = () => {
                 预算预警: {budgetAlerts.length} 个计划接近或超出预算阈值
               </p>
             </div>
-            <Button variant="outline" size="sm" className="border-amber-300 text-amber-700 hover:bg-amber-100">
+            <Button variant="outline" size="sm" className="border-amber-300 text-amber-700 hover:bg-amber-100" onClick={() => navigate('/marketing/budget')}>
               <Bell className="w-4 h-4" />查看详情
             </Button>
           </CardContent>
@@ -780,7 +779,7 @@ const IncentivePolicyManagement: React.FC = () => {
               const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
               const isOverBudget = pct >= 90;
               return (
-                <Card key={p.id} hover onClick={() => { setSelectedPlan(p); setShowDetailModal(true); }}>
+                <Card key={p.id} hover onClick={() => navigate(`/incentives/${p.id}`)}>
                   <div className="space-y-3">
                     <div className="flex items-start justify-between">
                       <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{p.title}</h3>
@@ -1281,41 +1280,6 @@ const IncentivePolicyManagement: React.FC = () => {
         </Modal>
       )}
 
-      {/* 详情模态框 */}
-      {showDetailModal && selectedPlan && (
-        <Modal title={selectedPlan.title} onClose={() => { setShowDetailModal(false); setSelectedPlan(null); }} open={showDetailModal}>
-          <div className="space-y-4 p-4">
-            <div className="flex items-center gap-2">
-              <Badge variant={statusVariant(selectedPlan.status)}>{statusLabel(selectedPlan.status)}</Badge>
-              <Badge variant="outline">{selectedPlan.trigger_type}</Badge>
-              <Badge variant="outline">{selectedPlan.payout_type}</Badge>
-            </div>
-            <p className="text-sm text-neutral-600">{selectedPlan.description}</p>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                <p className="text-xs text-neutral-500">总预算</p>
-                <p className="text-lg font-semibold">{cur(selectedPlan.total_budget)}</p>
-              </div>
-              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                <p className="text-xs text-neutral-500">已申领</p>
-                <p className="text-lg font-semibold">{cur(selectedPlan.claimed_amount)}</p>
-              </div>
-              <div className="text-center p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
-                <p className="text-xs text-neutral-500">参与伙伴</p>
-                <p className="text-lg font-semibold">{selectedPlan.participants_count || 0}</p>
-              </div>
-            </div>
-            <div className="border-t pt-4">
-              <p className="text-xs text-neutral-500 mb-2">有效期</p>
-              <p className="text-sm">{selectedPlan.start_date} ~ {selectedPlan.end_date}</p>
-            </div>
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline"><Edit className="w-4 h-4" />编辑</Button>
-              <Button variant="brand"><Download className="w-4 h-4" />导出报表</Button>
-            </div>
-          </div>
-        </Modal>
-      )}
     </div>
   );
 };

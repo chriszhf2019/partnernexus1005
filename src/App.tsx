@@ -49,6 +49,8 @@ const SettingsPage = retryableLazy(() => import('./components/settings/SettingsP
 const IncentivesPage = retryableLazy(() => import('./components/marketing/IncentivesPage').then(m => ({ default: m.IncentivesPage })));
 const IncentiveClosingDashboard = retryableLazy(() => import('./components/marketing/IncentiveClosingDashboard').then(m => ({ default: m.IncentiveClosingDashboard })));
 const CustomerAnalysis = retryableLazy(() => import('./components/deals/CustomerAnalysis').then(m => ({ default: m.CustomerAnalysis })));
+const DealMetricDetail = retryableLazy(() => import('./components/deals/DealMetricDetail').then(m => ({ default: m.DealMetricDetail })));
+const MetricDetailPage = retryableLazy(() => import('./components/dashboard/MetricDetailPage').then(m => ({ default: m.MetricDetailPage })));
 const EnablementPage = retryableLazy(() => import('./components/marketing/EnablementPage').then(m => ({ default: m.EnablementPage })));
 const AnalyticsPage = retryableLazy(() => import('./components/marketing/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const ChannelDashboard = retryableLazy(() => import('./components/marketing/ChannelDashboard').then(m => ({ default: m.ChannelDashboard })));
@@ -60,6 +62,8 @@ const CampaignDetailPage = retryableLazy(() => import('./components/marketing/Ca
 const BudgetManagementPage = retryableLazy(() => import('./components/marketing/BudgetManagementPage').then(m => ({ default: m.BudgetManagementPage })));
 const ChannelCampaignPage = retryableLazy(() => import('./components/marketing/ChannelCampaignPage').then(m => ({ default: m.ChannelCampaignPage })));
 const MarketingActivityDetail = retryableLazy(() => import('./components/marketing/MarketingActivityDetail').then(m => ({ default: m.MarketingActivityDetail })));
+const IncentivePlanDetailPage = retryableLazy(() => import('./components/marketing/IncentivePlanDetailPage').then(m => ({ default: m.IncentivePlanDetailPage })));
+const CourseDetailPage = retryableLazy(() => import('./components/marketing/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
 
 function EcosystemRoute() {
   const navigate = useNavigate();
@@ -182,7 +186,7 @@ function PartnerProfileRoute() {
     ...baseDetails,
     pipeline: dealPipeline.registered > 0 ? dealPipeline : baseDetails.pipeline,
     topProjects: relatedDeals.map((d: any) => ({
-      name: d.title, amount: Number(d.value || 0), progress: d.status === 'Approved' ? 75 : d.status === 'Pending' ? 40 : d.status === 'Converted' ? 100 : 20,
+      name: d.title, amount: Number(d.value || 0), progress: 0,  // TODO: replace with real progress field from deals table when available
       closeDate: d.end_date || d.created_date || '',
     })),
   };
@@ -217,7 +221,7 @@ function DealsRoute() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const partnerFilter = searchParams.get('partner') || '';
-  const { deals, stats } = useDeals();
+  const { deals, stats, refreshDeals } = useDeals();
 
   const filtered = partnerFilter
     ? deals.filter(d => d.partnerId === partnerFilter)
@@ -242,7 +246,7 @@ function DealsRoute() {
                 stage: updatedDeal.stage,
                 status: updatedDeal.status || (updatedDeal.stage === 'ClosedWon' ? 'Closed Won' : updatedDeal.stage === 'ClosedLost' ? 'Closed Lost' : 'Approved'),
               });
-              window.location.reload();
+              refreshDeals();
             } catch (e: any) { alert('更新失败: ' + e.message); }
           }}
         />
@@ -343,30 +347,34 @@ function AppLayout() {
             <Route path="/" element={<Navigate to="/ecosystem" replace />} />
               <Route path="/ecosystem" element={<EcosystemRoute />} />
               <Route path="/partners" element={<PartnersRoute />} />
-              <Route path="/partners/new" element={<Suspense fallback={<PageLoader />}><PartnerFormPage /></Suspense>} />
+              <Route path="/partners/new" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerFormPage /></Suspense></ErrorBoundary>} />
             <Route path="/partners/:id" element={<PartnerProfileRoute />} />
-              <Route path="/partners/:id/staff" element={<Suspense fallback={<PageLoader />}><PartnerStaffPage /></Suspense>} />
+              <Route path="/partners/:id/staff" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerStaffPage /></Suspense></ErrorBoundary>} />
               <Route path="/deals" element={<DealsRoute />} />
               <Route path="/deals/new" element={<NewDealRoute />} />
-              <Route path="/deals/:id" element={<Suspense fallback={<PageLoader />}><DealDetailPage /></Suspense>} />
-              <Route path="/deals/:id/edit" element={<Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense>} />
-              <Route path="/customer/:name/analysis" element={<Suspense fallback={<PageLoader />}><CustomerAnalysis /></Suspense>} />
+              <Route path="/deals/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealDetailPage /></Suspense></ErrorBoundary>} />
+              <Route path="/deals/:id/edit" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense></ErrorBoundary>} />
+              <Route path="/deals/metric/:type" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealMetricDetail /></Suspense></ErrorBoundary>} />
+              <Route path="/detail/:type" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><MetricDetailPage /></Suspense></ErrorBoundary>} />
+              <Route path="/customer/:name/analysis" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CustomerAnalysis /></Suspense></ErrorBoundary>} />
               <Route path="/marketing" element={<MarketingRoute />} />
-              <Route path="/marketing/activity/:id" element={<Suspense fallback={<PageLoader />}><MarketingActivityDetail /></Suspense>} />
-              <Route path="/marketing/plan" element={<Suspense fallback={<PageLoader />}><MarketingPlanPage /></Suspense>} />
-              <Route path="/marketing/campaigns" element={<Suspense fallback={<PageLoader />}><CampaignManagementPage /></Suspense>} />
-              <Route path="/marketing/campaigns/:id" element={<Suspense fallback={<PageLoader />}><CampaignDetailPage /></Suspense>} />
-              <Route path="/marketing/budget" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
-              <Route path="/marketing/budget/:year" element={<Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense>} />
-              <Route path="/marketing/channel-campaigns" element={<Suspense fallback={<PageLoader />}><ChannelCampaignPage /></Suspense>} />
+              <Route path="/marketing/activity/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><MarketingActivityDetail /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/plan" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><MarketingPlanPage /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/campaigns" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CampaignManagementPage /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/campaigns/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CampaignDetailPage /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/budget" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/budget/:year" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><BudgetManagementPage /></Suspense></ErrorBoundary>} />
+              <Route path="/marketing/channel-campaigns" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChannelCampaignPage /></Suspense></ErrorBoundary>} />
               <Route path="/marketing/incentive-policy" element={<Navigate to="/incentives" replace />} />
               <Route path="/incentives" element={<IncentivesRoute />} />
-              <Route path="/incentives/:id/report" element={<Suspense fallback={<PageLoader />}><IncentiveClosingDashboard /></Suspense>} />
+              <Route path="/incentives/:id/report" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><IncentiveClosingDashboard /></Suspense></ErrorBoundary>} />
+              <Route path="/incentives/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><IncentivePlanDetailPage /></Suspense></ErrorBoundary>} />
+              <Route path="/enablement/course/:courseId" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><CourseDetailPage /></Suspense></ErrorBoundary>} />
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />
               <Route path="/settings" element={<SettingsRoute />} />
-              <Route path="/channels" element={<Suspense fallback={<PageLoader />}><ChannelDashboard /></Suspense>} />
-              <Route path="/invitation/:code" element={<Suspense fallback={<PageLoader />}><InvitationPage /></Suspense>} />
+              <Route path="/channels" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChannelDashboard /></Suspense></ErrorBoundary>} />
+              <Route path="/invitation/:code" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><InvitationPage /></Suspense></ErrorBoundary>} />
             </Routes>
         </main>
 

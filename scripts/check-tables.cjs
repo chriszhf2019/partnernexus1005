@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 const { Client } = require('pg');
+const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+if (!dbPassword) { console.error('❌ SUPABASE_DB_PASSWORD required'); process.exit(1); }
 const client = new Client({
   host: 'db.ezkbjufluczpxdixplxu.supabase.co',
   port: 5432,
   database: 'postgres',
   user: 'postgres',
-  password: 'tmee9YJt4ryV3rbZ',
+  password: dbPassword,
   ssl: { rejectUnauthorized: false }
 });
 

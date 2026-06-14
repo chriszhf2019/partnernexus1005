@@ -123,8 +123,8 @@ export const GrowthLabCockpits = ({
           <Button size="sm" variant="ghost" className="text-xs" onClick={() => onOpenPanel('mdf')}>
             {t('gl.cockpit.mdfClaims')} <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
-          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/marketing/plan')}>
-            {t('gl.cockpit.viewPlan')} <ArrowRight className="w-3 h-3 ml-1" />
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/detail/marketing-budget')}>
+            查看详情 <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </div>
       </Card>
@@ -185,8 +185,8 @@ export const GrowthLabCockpits = ({
           <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/partners')}>
             <Building2 className="w-3 h-3 mr-1" />{t('gl.cockpit.partnersLabel')} <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
-          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/enablement')}>
-            <GraduationCap className="w-3 h-3 mr-1" />{t('gl.cockpit.enablement')} <ArrowRight className="w-3 h-3 ml-1" />
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/detail/partners-summary')}>
+            查看详情 <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </div>
       </Card>
@@ -231,8 +231,8 @@ export const GrowthLabCockpits = ({
           <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/deals')}>
             <DollarSign className="w-3 h-3 mr-1" />{t('gl.cockpit.deals')} <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
-          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/incentives')}>
-            <BarChart3 className="w-3 h-3 mr-1" />{t('gl.cockpit.incentives')} <ArrowRight className="w-3 h-3 ml-1" />
+          <Button size="sm" variant="ghost" className="text-xs" onClick={() => navigate('/detail/marketing-roi')}>
+            查看详情 <ArrowRight className="w-3 h-3 ml-1" />
           </Button>
         </div>
       </Card>

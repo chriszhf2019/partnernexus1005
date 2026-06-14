@@ -8,7 +8,7 @@ import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   MessageSquare, Users, CalendarDays, Flag, Timer, AlertTriangle,
   Phone, Mail, ListTodo, RefreshCw, Send, Share2, Star, Bookmark,
   Filter, Layout, ChevronLeft, Award, Clock8, Handshake, Sparkles,
-  BarChart2, PieChart, Settings, TrendingDown, X,
+  BarChart2, PieChart, Settings, TrendingDown,
 } from 'lucide-react';
 import { InlineEdit } from './components/InlineEdit';
 import { WinLossPanel } from './components/WinLossPanel';
@@ -61,15 +61,7 @@ interface DealRegistrationPageProps {
 }
 
 // 阶段概率配置 - 每个阶段的成交概率和平均周期
-const STAGE_PROBABILITIES: Record<DealLifecycleStage, DealStageProbability> = {
-  'Registered':    { stage: 'Registered', probability: 10, avgCycleDays: 3 },
-  'UnderReview':  { stage: 'UnderReview', probability: 20, avgCycleDays: 5 },
-  'Approved':     { stage: 'Approved', probability: 35, avgCycleDays: 7 },
-  'Solution':     { stage: 'Solution', probability: 50, avgCycleDays: 14 },
-  'Commercial':   { stage: 'Commercial', probability: 80, avgCycleDays: 21 },
-  'ClosedWon':    { stage: 'ClosedWon', probability: 100, avgCycleDays: 0 },
-  'ClosedLost':   { stage: 'ClosedLost', probability: 0, avgCycleDays: 0 },
-};
+import { computeRealStageProbabilities, DEAL_EXPIRY_DAYS } from '../../lib/dealStageCalc';
 
 const STAGE_CONFIG: Record<DealLifecycleStage, { label: string; color: string; bgColor: string; icon: typeof Clock }> = {
   'Registered':    { label: '已报备', color: 'text-neutral-700', bgColor: 'bg-neutral-100 dark:bg-neutral-800', icon: FileText },
@@ -129,7 +121,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [editValue, setEditValue] = useState('');
   const [hoveredDeal, setHoveredDeal] = useState<Deal | null>(null);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
-  const [metricDetail, setMetricDetail] = useState<string | null>(null);
+
   const [showActivityDrawer, setShowActivityDrawer] = useState(false);
   const [newActivityContent, setNewActivityContent] = useState('');
   
@@ -168,11 +160,30 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
     });
   }, []);
   
-  const [savedViews, setSavedViews] = useState<SavedView[]>([
-    { id: 'v1', name: '本周待审批', filters: { region: 'All', stage: 'UnderReview', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
-    { id: 'v2', name: '逾期未更新', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
-    { id: 'v3', name: '金额大于100万', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
-  ]);
+  // Load saved views from localStorage; fall back to defaults on first visit
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => {
+    const defaults: SavedView[] = [
+      { id: 'v1', name: '本周待审批', filters: { region: 'All', stage: 'UnderReview', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+      { id: 'v2', name: '逾期未更新', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+      { id: 'v3', name: '金额大于100万', filters: { region: 'All', stage: 'All', productType: 'All', partnerType: 'All', source: 'All', search: '' } },
+    ];
+    try {
+      const raw = localStorage.getItem('deals_saved_views');
+      if (raw) {
+        const parsed: SavedView[] = JSON.parse(raw);
+        // Merge stored with defaults (stored takes precedence, defaults fill gaps for unchanged views)
+        const byId = new Map(defaults.map(v => [v.id, v]));
+        parsed.forEach(v => byId.set(v.id, v));
+        return Array.from(byId.values());
+      }
+    } catch { /* ignore parse errors */ }
+    return defaults;
+  });
+  // Persist saved views to localStorage
+  useEffect(() => {
+    try { localStorage.setItem('deals_saved_views', JSON.stringify(savedViews)); } catch { /* ignore */ }
+  }, [savedViews]);
+  
   const [showViewManager, setShowViewManager] = useState(false);
   const [currentViewName, setCurrentViewName] = useState('');
   
@@ -185,8 +196,11 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [activePreset, setActivePreset] = useState<string | null>(null);
 
   // 计算加权管线金额
+  // Weighted value: uses real win rates from lifecycle events, falls back to industry defaults
+  const stageProbs = useMemo(() => computeRealStageProbabilities(deals), [deals]);
+  
   const calculateWeightedValue = (deal: Deal): number => {
-    const probability = STAGE_PROBABILITIES[deal.stage]?.probability || 0;
+    const probability = stageProbs[deal.stage]?.probability || 0;
     return Math.round(deal.value * probability / 100);
   };
 
@@ -215,8 +229,8 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
     return stages.map(stage => ({
       stage,
       ...STAGE_CONFIG[stage],
-      probability: STAGE_PROBABILITIES[stage].probability,
-      avgCycleDays: STAGE_PROBABILITIES[stage].avgCycleDays,
+      probability: stageProbs[stage].probability,
+      avgCycleDays: stageProbs[stage].avgCycleDays,
       count: deals.filter(d => d.stage === stage).length,
       value: deals.filter(d => d.stage === stage).reduce((s, d) => s + d.value, 0),
       weightedValue: deals.filter(d => d.stage === stage).reduce((s, d) => s + calculateWeightedValue(d), 0),
@@ -240,9 +254,17 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
 
   const sourceDistribution = useMemo(() => {
     const dist: Record<string, { count: number; value: number }> = {};
+    const SOURCE_LABELS: Record<string, string> = {
+      'PartnerInitiated': '伙伴自主报备',
+      'ChannelAssigned': '渠道经理指派',
+      'MDFCampaign': 'MDF活动转化',
+      'MarketingEvent': '市场活动',
+      'IncentiveProgram': '激励计划',
+      'Referral': '客户推荐',
+    };
     deals.forEach(d => {
-      const src = d.salesTeam || d.sourceInfo?.source || '未分类';
-      const label = src === '渠道报备' ? '渠道报备' : src === '销售自建' ? '销售自建' : src === '市场来源' ? '市场来源' : src;
+      const rawSrc = d.sourceInfo?.source || 'PartnerInitiated';
+      const label = SOURCE_LABELS[rawSrc] || rawSrc;
       if (!dist[label]) dist[label] = { count: 0, value: 0 };
       dist[label].count++;
       dist[label].value += d.value;
@@ -447,7 +469,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
           { key: 'won', label: '赢单进展', value: formatCurrency(wonValue), sub: `${Math.round(wonValue / 150000000 * 100)}% 达成 · 目标 ¥150M`, icon: CheckCircle2, color: 'text-emerald-600 bg-emerald-50', tip: '已赢单金额 vs 年度目标。时间过半但业绩未过半说明转化周期偏长或赢单率偏低。', trend: `${Math.round(wonValue / 150000000 * 100)}%` },
           { key: 'cycle', label: '周期健康', value: `21天`, sub: `${stagnantDeals.length}笔停滞 · 行业基准25天`, icon: Clock, color: stagnantDeals.length > 0 ? 'text-amber-600 bg-amber-50' : 'text-emerald-600 bg-emerald-50', tip: '商机从报备到结单的平均周期。超过 30 天表示流程拥堵。停滞笔数反映商机管理秩序。', trend: stagnantDeals.length > 0 ? `⚠${stagnantDeals.length}笔停滞` : '✓正常' },
         ].map((s, i) => (
-          <Card key={s.key} hover className="group/tip relative cursor-pointer" onClick={() => setMetricDetail(s.key)}>
+          <Card key={s.key} hover className="group/tip relative cursor-pointer" onClick={() => navigate(`/detail/deals-${s.key}`)}>
             <div className="p-4">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs text-neutral-500">{s.label}</p>
@@ -459,49 +481,18 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
               <p className="text-[10px] text-neutral-400 mt-1">{s.sub}</p>
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-700">
                 <span className="text-[10px] text-neutral-400">{s.trend}</span>
-                <button className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">查看详情 →</button>
+                <button onClick={(e) => { e.stopPropagation(); navigate(`/detail/deals-${s.key}`); }} className="text-[10px] text-blue-500 hover:text-blue-700 font-medium">查看详情 →</button>
               </div>
             </div>
             <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-3 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs leading-relaxed rounded-xl opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-10 max-w-[300px] text-center shadow-lg">
-              <p className="mb-1.5">{s.tip}</p>
-              <p className="text-blue-400 dark:text-blue-600 font-semibold">点击查看详情 →</p>
+              <p>{s.tip}</p>
               <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
             </div>
           </Card>
         ))}
       </div>
 
-      {/* Metric Detail Modal */}
-      {metricDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setMetricDetail(null)}>
-          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl w-full max-w-lg max-h-[70vh] overflow-auto" onClick={e => e.stopPropagation()}>
-            <div className="sticky top-0 bg-white dark:bg-neutral-900 border-b px-5 py-4 flex items-center justify-between">
-              <h3 className="text-sm font-bold">
-                {metricDetail === 'pipeline' ? '📦 管线覆盖 — 各阶段商机分布' : metricDetail === 'weighted' ? '🎯 加权预期 — 阶段概率×金额' : metricDetail === 'won' ? '💰 赢单进展 — 业绩 vs 目标' : '⏱ 周期健康 — 各阶段耗时分析'}
-              </h3>
-              <button onClick={() => setMetricDetail(null)} className="p-1 hover:bg-neutral-100 rounded"><X className="w-5 h-5" /></button>
-            </div>
-            <div className="p-4 space-y-2 text-sm">
-              {metricDetail === 'pipeline' && ['Registered','UnderReview','Approved','Solution','Commercial'].map(stage => {
-                const c = deals.filter(d => d.stage === stage).length;
-                const v = deals.filter(d => d.stage === stage).reduce((s, d) => s + (d.value||0), 0);
-                return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span>{STAGE_CONFIG[stage]?.label||stage}</span><span>{c}笔 · {formatCurrency(v)}</span></div>;
-              })}
-              {metricDetail === 'weighted' && ['Registered','UnderReview','Approved','Solution','Commercial','ClosedWon'].map(stage => {
-                const c = deals.filter(d => d.stage === stage).length;
-                const v = deals.filter(d => d.stage === stage).reduce((s, d) => s + (d.value||0), 0);
-                const prob = {Registered:10,UnderReview:20,Approved:35,Solution:50,Commercial:80,ClosedWon:100}[stage]||0;
-                return <div key={stage} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800 rounded-lg"><span>{STAGE_CONFIG[stage]?.label||stage} ({prob}%)</span><span>{c}笔 · {formatCurrency(v * prob / 100)}</span></div>;
-              })}
-              {metricDetail === 'won' && (<><div className="p-3 bg-neutral-50 rounded-lg">已赢单 {formatCurrency(wonValue)} / 年度目标 ¥150M ({Math.round(wonValue/150000000*100)}%)</div><div className="h-3 bg-neutral-100 rounded-full overflow-hidden"><div className="h-full bg-emerald-500 rounded-full" style={{width:`${Math.round(wonValue/150000000*100)}%`}}/></div><p className="text-xs text-neutral-400 mt-1">时间已过 50%，业绩达成 {Math.round(wonValue/150000000*100)}%{wonValue < 75000000 ? '，缺口明显' : ''}</p></>)}
-              {metricDetail === 'cycle' && ['报备→审批','审批→批复','批复→方案','方案→商务','商务→结单'].map((t,i) => {
-                const d=[3,5,7,10,8][i]; const b=[2,4,6,8,5][i];
-                return <div key={t} className="flex items-center justify-between p-2 bg-neutral-50 rounded-lg"><span>{t}</span><span className={d>b?'text-amber-600':'text-emerald-600'}>{d}天 (基准{b}天) {d>b?'⚠':''}</span></div>;
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         <div className="lg:col-span-8 space-y-6">
@@ -597,15 +588,14 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {['渠道报备','销售自建','市场来源'].map(source => {
-                  const data = sourceDistribution[source] || { count: 0, value: 0 };
-                  const icons: Record<string,any> = { '渠道报备': FileText, '销售自建': User, '市场来源': Zap };
-                  const colors: Record<string,string> = { '渠道报备': 'text-emerald-600', '销售自建': 'text-blue-600', '市场来源': 'text-purple-600' };
+                {Object.entries(sourceDistribution).map(([source, data]) => {
+                  const icons: Record<string,any> = { '伙伴自主报备': FileText, '渠道经理指派': User, 'MDF活动转化': Zap, '市场活动': BarChart3, '激励计划': TrendingUp, '客户推荐': ExternalLink };
+                  const colors: Record<string,string> = { '伙伴自主报备': 'text-emerald-600', '渠道经理指派': 'text-blue-600', 'MDF活动转化': 'text-purple-600', '市场活动': 'text-amber-600', '激励计划': 'text-rose-500', '客户推荐': 'text-cyan-600' };
                   const Icon = icons[source] || FileText;
                   return (
                     <div key={source} className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
                       <div className="flex items-center gap-2 mb-2">
-                        <Icon className={`w-4 h-4 ${colors[source]}`} />
+                        <div className={`w-2 h-2 rounded-full ${colors[source]}`} />
                         <span className="text-xs font-medium text-neutral-600 dark:text-neutral-400">{source}</span>
                       </div>
                       <div className="flex items-end justify-between">
@@ -859,11 +849,11 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                   const isSelected = selectedDeals.includes(deal.id);
                   const isStagnant = deal.isStagnant;
                   const daysInStage = deal.daysInCurrentStage || 0;
-                  const avgDays = STAGE_PROBABILITIES[deal.stage]?.avgCycleDays || 0;
+                  const avgDays = stageProbs[deal.stage]?.avgCycleDays || 0;
                   const isOverdue = daysInStage > avgDays;
                   
                   return (
-                      <tr
+                      <tr key={deal.id}
                         className={cn(
                           'hover:bg-neutral-50 dark:hover:bg-neutral-800/50 transition-colors group cursor-pointer',
                           isStagnant && 'bg-amber-50/50 dark:bg-amber-900/10'

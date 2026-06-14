@@ -33,16 +33,6 @@ const toSnake = (camel: Record<string, unknown>): Record<string, unknown> => {
   return out;
 };
 
-// Generate a random start date within a reasonable range
-function generateStartDate(): string {
-  const now = new Date();
-  const minYears = 1;
-  const maxYears = 8;
-  const randomDays = Math.floor(Math.random() * (maxYears - minYears) * 365) + minYears * 365;
-  const date = new Date(now.getTime() - randomDays * 24 * 60 * 60 * 1000);
-  return date.toISOString().split('T')[0];
-}
-
 // Ensure contacts have proper isPrimary flag
 function normalizeContacts(contacts: any[]): any[] {
   if (!contacts || contacts.length === 0) return [];
@@ -60,11 +50,7 @@ const normalizePartner = (p: Record<string, any>): Partner => {
   let startDate = p.startDate || p.start_date || '';
   // Normalize status to ensure consistent casing
   const status = (p.status || 'Prospective').trim();
-  // Auto-generate startDate if missing for Cooperating partners
-  if (!startDate && status === 'Cooperating') {
-    startDate = generateStartDate();
-  }
-  // Auto-calculate years from startDate if not explicitly set
+  // Auto-calculate years from DB startDate only — never generate fake dates
   let years = p.years || 0;
   if (!years && startDate) {
     const d = new Date(startDate);
@@ -89,7 +75,7 @@ const normalizePartner = (p: Record<string, any>): Partner => {
     isCorePartner: p.isCorePartner ?? p.is_core_partner ?? (p.tier === 'Diamond' || p.tier === 'Platinum'),
     englishName: p.englishName || p.english_name || '',
     website: p.website || '',
-    applicationDate: p.applicationDate || p.application_date || startDate,
+    applicationDate: p.applicationDate || p.application_date || (startDate || ''),
   } as Partner;
 };
 
@@ -143,7 +129,7 @@ export const partnerService = {
       province: input.province || '',
       city: input.city || '',
       district: input.district || '',
-      start_date: input.startDate || input.start_date || new Date().toISOString().split('T')[0],
+      start_date: input.startDate || input.start_date || null,
       years: input.years || 0,
       prev_tier: input.prevTier || input.prev_tier || 'Registered',
       tags: input.tags || [],
@@ -225,7 +211,7 @@ export const partnerService = {
   // ── Batch approve ────────────────────────────────────
   batchApprove: async (ids: string[], data: { tier: string; status: string; manager: string; tags: string[] }, operator?: string): Promise<void> => {
     try {
-      const dbIds = ids.filter(id => !false);
+      const dbIds = ids.filter(Boolean);
       if (dbIds.length > 0) {
         await db.partners().update({ tier: data.tier, status: data.status, manager: data.manager, tags: data.tags, start_date: new Date().toISOString().split('T')[0] }).in('id', dbIds);
         for (const id of dbIds) await logOp(id, 'approve', operator || 'system', { batch: true, ...data });
@@ -236,7 +222,7 @@ export const partnerService = {
   // ── Batch reject ─────────────────────────────────────
   batchReject: async (ids: string[], operator?: string): Promise<void> => {
     try {
-      const dbIds = ids.filter(id => !false);
+      const dbIds = ids.filter(Boolean);
       if (dbIds.length > 0) { await db.partners().update({ status: 'Prospective' }).in('id', dbIds); for (const id of dbIds) await logOp(id, 'reject', operator || 'system', { batch: true }); }
     } catch (e) { debug.warn('[partnerService] batchReject failed:', e); }
   },

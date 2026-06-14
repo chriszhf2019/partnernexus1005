@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
@@ -11,7 +12,7 @@ import {
   Award, Users, BookOpen, GraduationCap, Target, Zap, Clock, Trophy, Monitor, Handshake,
   Megaphone, Star, Play, Calendar, Gift, TrendingUp, AlertTriangle, ChevronRight, Search,
   Plus, Download, Share2, Radar, Lightbulb, ShoppingCart, Package, CheckCircle2, X,
-  MessageSquare, Eye, BarChart3, UserCheck, Building2,
+  MessageSquare, Eye, BarChart3, UserCheck, Building2, ArrowRight,
 } from 'lucide-react';
 import { AdminKpiCards } from './enablement/AdminKpiCards';
 import { AdminCourseList } from './enablement/AdminCourseList';
@@ -48,6 +49,7 @@ export const EnablementPage = () => {
   const [radarFilter, setRadarFilter] = useState<string | null>(null);
   const [pointsAnim, setPointsAnim] = useState<number | null>(null);
   const [selectedProgram, setSelectedProgram] = useState<string | null>(null);
+  const navigate = useNavigate();
   const [showAssessment, setShowAssessment] = useState(false);
   const [assessmentType, setAssessmentType] = useState<'pre' | 'post'>('pre');
   const [assessmentQ, setAssessmentQ] = useState<Record<string, string>>({});
@@ -305,7 +307,19 @@ export const EnablementPage = () => {
               { icon: TrendingUp, label: '评估次数', value: `${assessments.filter(a => a.user_name === myName).length}`, sub: '次评估记录', color: 'text-emerald-600 bg-emerald-50' },
               { icon: Star, label: '能力解锁返利', value: '+1.5%', sub: completedCount >= 2 ? '额外返利已激活' : `再完成${Math.max(0,2-completedCount)}门解锁`, color: 'text-purple-600 bg-purple-50' },
             ].map((s, i) => (
-              <Card key={i}><div className="p-3 flex items-center gap-3"><div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center`}><s.icon className="w-5 h-5" /></div><div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div></div></Card>
+              <Card key={i}>
+                <div className="p-3">
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className={`w-10 h-10 rounded-lg ${s.color} flex items-center justify-center shrink-0`}><s.icon className="w-5 h-5" /></div>
+                    <div><p className="text-xs text-neutral-500">{s.label}</p><p className="text-lg font-bold">{s.value}</p><p className="text-[10px] text-neutral-400">{s.sub}</p></div>
+                  </div>
+                  <div className="pt-2 border-t border-neutral-100 dark:border-neutral-800">
+                    <button onClick={() => navigate('/detail/partners-growth')} className="flex items-center gap-1 text-[10px] text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                      查看详情 <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
           <Card><div className="p-3 text-center"><h4 className="text-xs font-semibold text-neutral-500 mb-2">能力雷达 · 点我补弱</h4>
@@ -339,8 +353,8 @@ export const EnablementPage = () => {
           avgRating={feedback.length > 0 ? +(feedback.reduce((s, f) => s + f.rating, 0) / feedback.length).toFixed(1) : 0}
           totalFeedback={feedback.length}
           lowFeedbackCount={feedback.filter(f => f.rating <= 2).length}
-          onStagnantClick={() => {}}
-          onFeedbackClick={() => setActiveTab('feedbackTab')}
+          onStagnantClick={() => navigate('/detail/enablement-stagnant')}
+          onFeedbackClick={() => navigate('/detail/enablement-feedback')}
         />
       )}
 
@@ -530,10 +544,7 @@ export const EnablementPage = () => {
               enrollmentStatus: enr?.status,
             };
           })}
-          onSelectCourse={(id) => {
-            const p = programs.find((prog: any) => prog.id === id);
-            alert(`课程详情: ${p?.name}\n\n${p?.description || ''}\n\n等级: ${p?.level} | 积分: ${p?.points} | 时长: ${p?.duration}h`);
-          }}
+          onSelectCourse={(id) => navigate(`/enablement/course/${id}`)}
         />
       )}
       {activeTab === 'framework' && mode === 'admin' && (

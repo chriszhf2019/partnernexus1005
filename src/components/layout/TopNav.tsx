@@ -2,10 +2,13 @@ import React, { useState, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Search, Bell } from 'lucide-react';
 import { useLanguage } from '../../contexts/LanguageContext';
+import { useConfig } from '../../contexts/ConfigContext';
+import { VisionPanel } from '../ui/VisionPanel';
 
 export const TopNav: React.FC = memo(() => {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const { config } = useConfig();
   const [query, setQuery] = useState('');
 
   const handleSearch = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -33,6 +36,10 @@ export const TopNav: React.FC = memo(() => {
       </div>
 
       <div className="flex items-center gap-4">
+        <VisionPanel
+          apiKey={config.aiVisionApiKey || config.aiApiKey}
+          model={config.aiVisionModel || 'doubao-seed-2-0-pro-260215'}
+        />
         <button className="relative p-1.5 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Notifications">
           <Bell className="w-4 h-4" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full ring-2 ring-white dark:ring-neutral-950" />

@@ -61,3 +61,28 @@ export async function aiQuery(prompt: string, context?: string, config?: AIConfi
 export function isAIConfigured(config?: AIConfig): boolean {
   return !!(config?.aiApiKey);
 }
+
+// ── Vision (Image Recognition) ──────────────────────────────────
+
+export async function visionQuery(
+  image: string,
+  prompt?: string,
+  apiKey?: string,
+  model = 'doubao-seed-2-0-pro-260215'
+): Promise<string> {
+  // ⚠️ 该功能需要 Vercel API route /api/ai/vision 存在。
+  //    当前项目只有 /api/ai/query.js，因此该函数会始终返回错误。
+  //    如需启用，在 api/ 目录下创建 vision 路由（参考 query.js 的实现）。
+  try {
+    const res = await fetch('/api/ai/vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image, prompt, apiKey, model }),
+    });
+    const data = await res.json();
+    if (data.error) return `[识别失败] ${data.error}`;
+    return data.text || '';
+  } catch (err: any) {
+    return `[识别失败] ${err.message}`;
+  }
+}

@@ -93,6 +93,15 @@ service cloud.firestore {
     // Rules
     // ===============================================================
 
+    // Assumed Data Model (users collection expected by isAdmin())
+    //
+    // Collection: users
+    // Fields:
+    //   - role: string (e.g. "admin")
+    //   - email: string
+    //
+    // ===============================================================
+
     match /users/{userId} {
       allow read: if isOwner(userId) || isAdmin();
       allow write: if isAdmin();

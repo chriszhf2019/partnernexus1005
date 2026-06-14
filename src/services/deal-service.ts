@@ -97,7 +97,7 @@ function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {
     protectionRemainingDays: 'protection_remaining_days',
   };
   // Complex objects stored as JSONB
-  const skipFields = new Set(['lifecycle', 'sourceInfo', 'conversionMetrics', 'activities', 'winLossAnalysis']);
+  const skipFields = new Set(['lifecycle', 'sourceInfo', 'conversionMetrics', 'activities', 'winLossAnalysis', 'weightedValue', 'daysInCurrentStage', 'isStagnant', 'expiresInDays']);
   for (const [k, v] of Object.entries(deal)) {
     if (v === undefined || skipFields.has(k)) continue;
     out[map[k] || k] = v;
@@ -202,7 +202,7 @@ export const dealService = {
       const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
       const weekStart = new Date(now.getTime() - now.getDay() * 86400000);
 
-      const wonDeals = deals.filter(d => d.status === 'Converted' || d.status === 'Closed Won' || d.status === 'Approved');
+      const wonDeals = deals.filter(d => d.status === 'Converted' || d.status === 'Closed Won');
       const stageDist = {} as Record<DealLifecycleStage, number>;
       const sourceDist = {} as Record<string, number>;
       deals.forEach(d => {
@@ -219,9 +219,19 @@ export const dealService = {
         rejected: deals.filter(d => d.status === 'Rejected').length,
         closed: wonDeals.length,
         totalPipelineValue: deals.reduce((s, d) => s + Number(d.value || 0), 0),
-        avgCycleDays: deals.filter(d => d.conversionMetrics?.totalCycleDays).length > 0
-          ? Math.round(deals.reduce((s, d) => s + (d.conversionMetrics?.totalCycleDays || 0), 0) / deals.filter(d => d.conversionMetrics?.totalCycleDays).length)
-          : 0,
+        avgCycleDays: (() => {
+          const cycleDays: number[] = [];
+          deals.forEach(d => {
+            const events = d.lifecycle || [];
+            if (events.length >= 2) {
+              const dates = events.map(e => new Date(e.date)).filter(d => !isNaN(d.getTime())).sort((a, b) => a.getTime() - b.getTime());
+              if (dates.length >= 2) {
+                cycleDays.push(Math.round((dates[dates.length - 1].getTime() - dates[0].getTime()) / 86400000));
+              }
+            }
+          });
+          return cycleDays.length > 0 ? Math.round(cycleDays.reduce((s, d) => s + d, 0) / cycleDays.length) : 0;
+        })(),
         conversionRate: deals.length > 0
           ? Math.round((wonDeals.length / deals.length) * 100)
           : 0,

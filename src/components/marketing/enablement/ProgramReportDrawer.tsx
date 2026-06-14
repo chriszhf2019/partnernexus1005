@@ -247,7 +247,7 @@ export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipeline
                 <Button variant="secondary" size="sm" onClick={() => alert('已保存为成功模版，可在模版库中查看')}>
                   <Save className="w-3 h-3 mr-1" />保存为模版
                 </Button>
-                <Button variant="outline" size="sm" onClick={() => alert(`已向 ${TOP_PARTNERS.slice(0, 10).map(p => p.name).join('、')} 发送感谢信和积分奖励`)}>
+                <Button variant="outline" size="sm" onClick={() => alert(`已向 ${(topPartners || []).slice(0, 10).map(p => p.name).join('、')} 发送感谢信和积分奖励`)}>
                   <ThumbsUp className="w-3 h-3 mr-1" />感谢Top10伙伴
                 </Button>
               </div>

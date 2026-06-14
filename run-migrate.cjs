@@ -1,6 +1,14 @@
 #!/usr/bin/env node
+// ⚠️ 已废弃 — 请改用 scripts/run-migration.ts
+//     参考 scripts/SCRIPTS.md
 const { Client } = require('pg');
 const fs = require('fs');
+
+const dbPassword = process.env.SUPABASE_DB_PASSWORD;
+if (!dbPassword) {
+  console.error('❌ SUPABASE_DB_PASSWORD is required. Source scripts/.env.scripts or set env var.');
+  process.exit(1);
+}
 
 async function migrate() {
   const client = new Client({
@@ -8,7 +16,7 @@ async function migrate() {
     port: 5432,
     database: 'postgres',
     user: 'postgres',
-    password: 'tmee9YJt4ryV3rbZ',
+    password: dbPassword,
     ssl: { rejectUnauthorized: false }
   });
 

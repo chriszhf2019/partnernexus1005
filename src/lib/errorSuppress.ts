@@ -1,13 +1,19 @@
-// 抑制已知的生产环境运行时错误：
-// motion/react 的 AnimatePresence 退出动画与 React 协调的冲突
-// 通过确保组件有稳定 key 来解决，此处仅保留未捕获拒绝的日志
+// 抑制已知的生产环境运行时错误。
+// 只抑制明确无害且无法通过代码修复的未捕获 Promise 拒绝。
+// 其他错误会正常传播到控制台以便调试。
 
 export function suppressKnownErrors() {
   window.addEventListener('unhandledrejection', (e) => {
     const msg = (e.reason?.message || e.reason || '') as string;
     if (typeof msg === 'string') {
-      // 仅抑制 Supabase URL 配置错误
-      if (msg.includes('supabaseUrl is required') || msg.includes('Missing supabase')) {
+      // 仅抑制因 Supabase 配置缺失导致的初始化拒绝
+      // 这些错误在首次加载时无法避免，且不会影响应用正常运行
+      if (
+        msg === 'supabaseUrl is required' ||
+        msg === 'Missing supabase URL in config' ||
+        msg === 'supabaseUrl is required.' ||
+        msg.startsWith('supabaseUrl')
+      ) {
         e.preventDefault();
         return;
       }

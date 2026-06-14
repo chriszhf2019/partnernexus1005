@@ -1,5 +1,6 @@
 import { SafeGrid } from '../../lib/safeRecharts';
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -11,6 +12,7 @@ import { formatCurrency } from '../../lib/utils';
 const barColors = ['#18181b', '#3f3f46', '#52525b', '#71717a', '#a1a1aa', '#d4d4d8'];
 
 export const AnalyticsPage = () => {
+  const navigate = useNavigate();
   const { t } = useLanguage();
   const [loading, setLoading] = useState(true);
   const [revenueByRegion, setRevenueByRegion] = useState<{ name: string; value: number }[]>([]);
@@ -133,15 +135,25 @@ export const AnalyticsPage = () => {
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((kpi) => (
-          <Card key={kpi.label}>
-            <div>
-              <p className="text-xs text-neutral-500">{kpi.label}</p>
-              <p className="text-xl font-semibold text-neutral-900 dark:text-white mt-1">{kpi.value}</p>
-              {kpi.change && (
-                <span className={`text-xs font-medium ${kpi.up ? 'text-emerald-600' : 'text-red-500'}`}>
-                  {kpi.change}
-                </span>
-              )}
+          <Card key={kpi.label} className="relative group">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-xs text-neutral-500">{kpi.label}</p>
+                <p className="text-xl font-semibold text-neutral-900 dark:text-white mt-1">{kpi.value}</p>
+                {kpi.change && (
+                  <span className={`text-xs font-medium ${kpi.up ? 'text-emerald-600' : 'text-red-500'}`}>
+                    {kpi.change}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  const paths: Record<string, string> = { '渠道营收': '/detail/marketing-budget', '活跃伙伴': '/detail/partners-active', '商机转化率': '/detail/ecosystem-conversion', '平均客单价': '/detail/ecosystem-revenue' };
+                  navigate(paths[kpi.label] || '#');
+                }}
+                className="text-[10px] text-blue-500 hover:text-blue-700 font-medium shrink-0 ml-2">
+                查看详情 →
+              </button>
             </div>
           </Card>
         ))}

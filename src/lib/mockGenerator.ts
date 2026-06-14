@@ -1,13 +1,16 @@
 import { TimeSeriesMetric, CockpitData } from '../types';
 
 export const generateTimeSeriesMetric = (
-  name: string, 
-  baseValue: number, 
+  name: string,
+  baseValue: number,
   target: number
 ): TimeSeriesMetric => {
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  
-  const monthly_data = months.slice(3, 6).map((month, idx) => {
+
+  // 动态计算当前季度的月份索引
+  const now = new Date();
+  const currentQuarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+  const monthly_data = months.slice(currentQuarterStartMonth, currentQuarterStartMonth + 3).map((month, idx) => {
     const value = baseValue * (0.8 + Math.random() * 0.4);
     const prevValue = baseValue * (0.8 + Math.random() * 0.4);
     const qoq = ((value - prevValue) / prevValue) * 100;

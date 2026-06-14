@@ -1273,6 +1273,23 @@ export const SettingsPage = () => {
               <Input value={editingConfig.aiModel || 'deepseek-chat'} onChange={(e) => setEditingConfig({ ...editingConfig, aiModel: e.target.value })} placeholder="deepseek-chat" />
               <p className="text-xs text-neutral-400 mt-1">如 deepseek-chat、gpt-4o、claude-3-opus 等</p>
             </div>
+
+            {/* ── 视觉模型配置 ── */}
+            <div className="pt-4 border-t border-neutral-200 dark:border-neutral-700">
+              <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-3">图片识别配置</h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">视觉 API Key</label>
+                  <Input type="password" value={editingConfig.aiVisionApiKey || ''} onChange={(e) => setEditingConfig({ ...editingConfig, aiVisionApiKey: e.target.value })} placeholder="ark-xxxxxxxx" />
+                  <p className="text-xs text-neutral-400 mt-1">默认使用 AI API Key，单独设置可覆盖</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">视觉模型名称</label>
+                  <Input value={editingConfig.aiVisionModel || 'doubao-seed-2-0-pro-260215'} onChange={(e) => setEditingConfig({ ...editingConfig, aiVisionModel: e.target.value })} placeholder="doubao-seed-2-0-pro-260215" />
+                  <p className="text-xs text-neutral-400 mt-1">Doubao（豆包）视觉模型，通过火山引擎 Ark API 调用</p>
+                </div>
+              </div>
+            </div>
             <div className="flex gap-2">
               <Button variant="brand" size="sm" onClick={handleSave} loading={saving}><Save className="w-4 h-4" />保存 AI 配置</Button>
               <Button variant="secondary" size="sm" onClick={async () => {

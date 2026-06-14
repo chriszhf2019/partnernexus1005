@@ -155,6 +155,7 @@ export const authService = {
     if (!hasValidSupabaseConfig()) {
       const stored = localStorage.getItem(`role_${uid}`);
       if (stored && Object.keys(ROLE_LABELS).includes(stored)) return stored as UserRole;
+      debug.warn('[authService] no role found for uid, defaulting to partner_sales (least privilege)');
       return 'partner_sales';
     }
 

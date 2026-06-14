@@ -4,6 +4,7 @@ import {
   TrendingUp, TrendingDown, Users, Target, Activity, Clock,
   ArrowUpRight, ArrowDownRight, AlertTriangle, Zap, CheckCircle2,
   MapPin, Building2, Layers, Info, BarChart3, ChevronRight, Shield, Sparkles, X, Newspaper,
+  ArrowRight,
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -61,10 +62,10 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
   const currency = config?.currency || 'CNY';
 
   const kpis = useMemo(() => [
-    { label: '季度营收', value: formatCurrency(revenue?.achievements?.quarterly?.current ?? 0, currency), target: formatCurrency(revenue?.achievements?.quarterly?.target ?? 0, currency), rate: revenue?.achievements?.quarterly?.rate ?? 0, change: revenue?.qoq ?? 0, spark: revenue?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#18181b', diagnosis: (revenue?.qoq ?? 0) >= 0 ? '华东区贡献42%增长，华南新伙伴发力明显' : '华北制造业需求放缓拖累整体，需重点关注' },
-    { label: '活跃伙伴数', value: Math.round(activePartners?.current_value ?? 0).toLocaleString(), target: Math.round(activePartners?.achievements?.quarterly?.target ?? 0).toLocaleString(), rate: activePartners?.achievements?.quarterly?.rate ?? 0, change: activePartners?.qoq ?? 0, spark: activePartners?.monthly_data?.map((d) => Math.round(d.value)) ?? [], color: '#2563eb', diagnosis: activePartners?.active_split ? `下单率${Math.round(activePartners.active_split.order_placing.rate)}%，报备率${Math.round(activePartners.active_split.leads_reporting.rate)}%——报备活跃但下单转化有瓶颈` : '伙伴基数增长稳定，但活跃质量需提升' },
-    { label: 'Pipeline 商机额', value: formatCurrency(pipeline?.current_value ?? 0, currency), target: formatCurrency(pipeline?.achievements?.quarterly?.target ?? 0, currency), rate: pipeline?.achievements?.quarterly?.rate ?? 0, change: pipeline?.qoq ?? 0, spark: pipeline?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#52525b', diagnosis: pipeline?.pipeline_batch ? `当季新增占${pipeline.pipeline_batch.new_in_q_ratio}%，历史积存${pipeline.pipeline_batch.historical_ratio}%——需警惕死单堆积` : '商机储备充裕，但转化周期在拉长' },
-    { label: '线索转化率', value: `${(leadsConversion?.current_value ?? 0).toFixed(1)}%`, target: `${(leadsConversion?.achievements?.quarterly?.target ?? 0).toFixed(1)}%`, rate: leadsConversion?.achievements?.quarterly?.rate ?? 0, change: leadsConversion?.qoq ?? 0, spark: leadsConversion?.monthly_data?.map((d) => d.value) ?? [], color: '#a1a1aa', diagnosis: leadsConversion?.conversion_details ? `转化周期${leadsConversion.conversion_details.cycle_days}天，POC→签约环节耗时最长——方案能力是瓶颈` : '转化效率低于目标，需关注POC阶段流失' },
+    { label: '季度营收', value: formatCurrency(revenue?.achievements?.quarterly?.current ?? 0, currency), target: formatCurrency(revenue?.achievements?.quarterly?.target ?? 0, currency), rate: revenue?.achievements?.quarterly?.rate ?? 0, change: revenue?.qoq ?? 0, spark: revenue?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#18181b', diagnosis: (revenue?.qoq ?? 0) >= 0 ? '华东区贡献42%增长，华南新伙伴发力明显' : '华北制造业需求放缓拖累整体，需重点关注', detailPath: 'ecosystem-revenue' },
+    { label: '活跃伙伴数', value: Math.round(activePartners?.current_value ?? 0).toLocaleString(), target: Math.round(activePartners?.achievements?.quarterly?.target ?? 0).toLocaleString(), rate: activePartners?.achievements?.quarterly?.rate ?? 0, change: activePartners?.qoq ?? 0, spark: activePartners?.monthly_data?.map((d) => Math.round(d.value)) ?? [], color: '#2563eb', diagnosis: activePartners?.active_split ? `下单率${Math.round(activePartners.active_split.order_placing.rate)}%，报备率${Math.round(activePartners.active_split.leads_reporting.rate)}%——报备活跃但下单转化有瓶颈` : '伙伴基数增长稳定，但活跃质量需提升', detailPath: 'partners-active' },
+    { label: 'Pipeline 商机额', value: formatCurrency(pipeline?.current_value ?? 0, currency), target: formatCurrency(pipeline?.achievements?.quarterly?.target ?? 0, currency), rate: pipeline?.achievements?.quarterly?.rate ?? 0, change: pipeline?.qoq ?? 0, spark: pipeline?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#52525b', diagnosis: pipeline?.pipeline_batch ? `当季新增占${pipeline.pipeline_batch.new_in_q_ratio}%，历史积存${pipeline.pipeline_batch.historical_ratio}%——需警惕死单堆积` : '商机储备充裕，但转化周期在拉长', detailPath: 'deals-pipeline' },
+    { label: '线索转化率', value: `${(leadsConversion?.current_value ?? 0).toFixed(1)}%`, target: `${(leadsConversion?.achievements?.quarterly?.target ?? 0).toFixed(1)}%`, rate: leadsConversion?.achievements?.quarterly?.rate ?? 0, change: leadsConversion?.qoq ?? 0, spark: leadsConversion?.monthly_data?.map((d) => d.value) ?? [], color: '#a1a1aa', diagnosis: leadsConversion?.conversion_details ? `转化周期${leadsConversion.conversion_details.cycle_days}天，POC→签约环节耗时最长——方案能力是瓶颈` : '转化效率低于目标，需关注POC阶段流失', detailPath: 'ecosystem-conversion' },
   ], [revenue, activePartners, pipeline, leadsConversion, currency]);
 
   const dimensionOptions = [
@@ -155,22 +156,18 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                 <Badge variant={kpi.rate >= 80 ? 'success' : kpi.rate >= 60 ? 'warning' : 'danger'} size="sm" className="ml-auto">{Math.round(kpi.rate)}%</Badge>
               </div>
               <div className="mt-2 pt-3 border-t border-neutral-100 dark:border-neutral-800">
-                <div className="flex items-start gap-1.5">
+                <div className="flex items-start gap-1.5 mb-2">
                   <Info className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (kpi.label === '活跃伙伴数') {
-                        handleShowPartners('活跃合作伙伴 (Cooperating)', { status: 'Cooperating' });
-                      } else {
-                        onViewChange(kpi.label === '季度营收' ? 'analytics' : kpi.label === 'Pipeline 商机额' ? 'deals' : 'marketing');
-                      }
-                    }}
-                    className="text-xs text-neutral-500 hover:text-blue-600 hover:underline text-left leading-relaxed transition-colors">
-                    {kpi.diagnosis}
-                    <span className="ml-1 text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity">→</span>
-                  </button>
+                  <span className="text-xs text-neutral-500 leading-relaxed">{kpi.diagnosis}</span>
                 </div>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    window.open(`/detail/${kpi.detailPath}`, '_blank');
+                  }}
+                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                  查看详情 <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
               </div>
             </Card>
@@ -199,6 +196,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                 <span className="text-amber-500">⚠ 按当前趋势，季末缺口约 ¥{(revenue?.achievements?.quarterly?.target ?? 0) > (revenue?.achievements?.quarterly?.current ?? 0) ? ((revenue?.achievements?.quarterly?.target ?? 0) - (revenue?.achievements?.quarterly?.current ?? 0)) / 10000 : 0}万</span>
               </div>
             </CardContent>
+            <div className="px-6 pb-4 pt-0">
+              <button onClick={(e) => { e.stopPropagation(); window.open('/detail/ecosystem-revenue', '_blank'); }}
+                className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                查看详情 <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </Card>
 
           {config?.sections?.revenueAlignment && (
@@ -233,6 +236,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     })}</div>
                   ) : <EmptyState title="覆盖数据加载中" />}
                 </CardContent>
+                <div className="px-6 pb-4 pt-0">
+                  <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-coverage', '_blank'); }}
+                    className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                    查看详情 <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
               </Card>
               <Card>
                 <CardHeader><CardTitle>等级结构</CardTitle></CardHeader>
@@ -245,6 +254,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     })}</div>
                   ) : <EmptyState title="等级数据加载中" />}
                 </CardContent>
+                <div className="px-6 pb-4 pt-0">
+                  <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-health', '_blank'); }}
+                    className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                    查看详情 <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
               </Card>
             </div>
           </div>
@@ -270,6 +285,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     </div>
                   ) : <EmptyState title="活跃度数据加载中" />}
                 </CardContent>
+                <div className="px-6 pb-4 pt-0">
+                  <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-active', '_blank'); }}
+                    className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                    查看详情 <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
               </Card>
               <Card>
                 <CardHeader><CardTitle>活跃度维度透视</CardTitle></CardHeader>
@@ -283,6 +304,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     </div>
                   )) : <EmptyState title="维度数据加载中" />}
                 </CardContent>
+                <div className="px-6 pb-4 pt-0">
+                  <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-active', '_blank'); }}
+                    className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                    查看详情 <ArrowRight className="w-3 h-3" />
+                  </button>
+                </div>
               </Card>
             </div>
           </div>
@@ -351,6 +378,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                   </div>
                 )}
               </CardContent>
+              <div className="px-6 pb-4 pt-0">
+                <button onClick={(e) => { e.stopPropagation(); window.open('/detail/ecosystem-partners', '_blank'); }}
+                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                  查看详情 <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
             </Card>
           </div>
         </div>
@@ -390,6 +423,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                   </button>
                 ))}
               </div>
+              <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                <button onClick={(e) => { e.stopPropagation(); window.open('/detail/ecosystem-revenue', '_blank'); }}
+                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                  查看详情 <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
             </CardContent>
           </Card>
 
@@ -420,6 +459,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
                   </button>
                 ))}
+              </div>
+              <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                <button onClick={(e) => { e.stopPropagation(); window.open('/detail/marketing-roi', '_blank'); }}
+                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                  查看详情 <ArrowRight className="w-3 h-3" />
+                </button>
               </div>
             </CardContent>
           </Card>
@@ -453,6 +498,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                 <button onClick={() => onViewChange('partners')} className="ml-auto text-amber-600 hover:underline text-[10px] whitespace-nowrap">处理 →</button>
               </div>
             </CardContent>
+            <div className="px-6 pb-4 pt-0">
+              <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-health', '_blank'); }}
+                className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                查看详情 <ArrowRight className="w-3 h-3" />
+              </button>
+            </div>
           </Card>
 
           {/* Health Scorecards */}
@@ -486,6 +537,12 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                   </button>
                 ))}
               </div>
+              <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
+                <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-health', '_blank'); }}
+                  className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                  查看详情 <ArrowRight className="w-3 h-3" />
+                </button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -510,9 +567,15 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                       <p className="text-xs text-neutral-500 mt-1">{task.desc}</p>
                     </div>
                   </div>
-                  <Button variant="brand" size="sm" className="w-full text-[11px]" onClick={() => onViewChange(task.action)}>
-                    {task.btn}
-                  </Button>
+                  <div className="flex flex-col gap-2">
+                    <Button variant="brand" size="sm" className="w-full text-[11px]" onClick={() => onViewChange(task.action)}>
+                      {task.btn}
+                    </Button>
+                    <button onClick={(e) => { e.stopPropagation(); window.open('/detail/ecosystem-partners', '_blank'); }}
+                      className="flex items-center justify-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
+                      查看详情 <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
                 </CardContent>
               </Card>
             ))}

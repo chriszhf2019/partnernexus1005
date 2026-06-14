@@ -38,6 +38,9 @@ function getPhoneNumber(e) {
 }
 
 // 订阅消息（会议提醒）
+// ⚠️ 请将 TEMPLATE_ID_REMINDER 和 TEMPLATE_ID_CHECKIN
+//    替换为微信公众平台中申请的实际模板 ID。
+//    可在 微信公众平台 → 功能 → 订阅消息 中获取。
 function subscribeReminder() {
   return new Promise((resolve, reject) => {
     wx.requestSubscribeMessage({

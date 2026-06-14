@@ -1594,6 +1594,8 @@ export interface GlobalConfig {
   aiApiKey?: string;
   aiBaseUrl?: string;
   aiModel?: string;
+  aiVisionApiKey?: string;
+  aiVisionModel?: string;
   timelineEvents?: string[];
 }
 

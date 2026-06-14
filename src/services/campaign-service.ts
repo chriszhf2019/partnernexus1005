@@ -984,10 +984,17 @@ export const campaignService = {
     }
   },
   
-  // 创建或更新评估
+  // 创建或更新评估（手动 upsert：先查后改）
   async saveEvaluation(evaluation: Partial<CampaignEvaluation>): Promise<boolean> {
     try {
-      const insertData: any = {
+      // 检查是否已存在评估记录
+      const { data: existing } = await supabase
+        .from('campaign_evaluations')
+        .select('id')
+        .eq('campaign_id', evaluation.campaignId!)
+        .maybeSingle();
+
+      const record = {
         campaign_id: evaluation.campaignId,
         overall_quality: evaluation.overallQuality,
         dimensions: evaluation.dimensions,
@@ -1001,20 +1008,29 @@ export const campaignService = {
         evaluator: evaluation.evaluator,
         evaluated_at: evaluation.evaluatedAt || new Date().toISOString(),
       };
-      
-      const { error } = await supabase
-        .from('campaign_evaluations')
-        .upsert(insertData)
-        .eq('campaign_id', evaluation.campaignId!);
-      
+
+      let error;
+      if (existing) {
+        // 更新已有记录
+        ({ error } = await supabase
+          .from('campaign_evaluations')
+          .update(record)
+          .eq('id', existing.id));
+      } else {
+        // 插入新记录
+        ({ error } = await supabase
+          .from('campaign_evaluations')
+          .insert(record));
+      }
+
       if (error) throw error;
-      
+
       // 更新活动评估标记
       await supabase
         .from('marketing_campaigns')
         .update({ has_evaluation: true })
         .eq('id', evaluation.campaignId!);
-      
+
       return true;
     } catch (e) {
       console.error('Failed to save evaluation:', e);
@@ -1041,10 +1057,17 @@ export const campaignService = {
     }
   },
   
-  // 保存小程序配置
+  // 保存小程序配置（手动 upsert：先查后改）
   async saveMiniAppConfig(config: Partial<CampaignMiniAppConfig>): Promise<boolean> {
     try {
-      const insertData: any = {
+      // 检查是否已存在配置
+      const { data: existing } = await supabase
+        .from('campaign_mini_app_configs')
+        .select('id')
+        .eq('campaign_id', config.campaignId!)
+        .maybeSingle();
+
+      const record = {
         campaign_id: config.campaignId,
         enabled: config.enabled !== false,
         allow_registration: config.allowRegistration !== false,
@@ -1062,12 +1085,19 @@ export const campaignService = {
         max_attendees: config.maxAttendees,
         registration_deadline: config.registrationDeadline,
       };
-      
-      const { error } = await supabase
-        .from('campaign_mini_app_configs')
-        .upsert(insertData)
-        .eq('campaign_id', config.campaignId!);
-      
+
+      let error;
+      if (existing) {
+        ({ error } = await supabase
+          .from('campaign_mini_app_configs')
+          .update(record)
+          .eq('id', existing.id));
+      } else {
+        ({ error } = await supabase
+          .from('campaign_mini_app_configs')
+          .insert(record));
+      }
+
       if (error) throw error;
       return true;
     } catch (e) {

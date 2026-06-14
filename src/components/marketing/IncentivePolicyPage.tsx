@@ -8,14 +8,16 @@ import { supabase } from '../../lib/supabase';
 import { 
   Target, TrendingUp, Users, Calendar, DollarSign, CheckCircle, Clock,
   Plus, Edit, Eye, Send, ThumbsUp, BarChart3, Award, AlertCircle, Check, X, Gift,
-  Layers, Zap, FileText, Download, RefreshCw, Filter, Bell, StopCircle, Settings
+  Layers, Zap, FileText, Download, RefreshCw, Filter, Bell, StopCircle, Settings, ChevronRight
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useConfig } from '../../contexts/ConfigContext';
+import { useNavigate } from 'react-router-dom';
 
 // 简化版的激励政策管理页面
 export const IncentivePolicyPage: React.FC = () => {
   const { config } = useConfig();
+  const navigate = useNavigate();
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
   const [loading, setLoading] = useState(true);
@@ -130,7 +132,7 @@ export const IncentivePolicyPage: React.FC = () => {
           {programs.map((p) => {
             const pct = p.total_budget > 0 ? Math.round((p.claimed_amount / p.total_budget) * 100) : 0;
             return (
-              <Card key={p.id} hover onClick={() => { setSelectedPlan(p); setShowDetailModal(true); }}>
+              <Card key={p.id} hover className="cursor-pointer" onClick={() => navigate(`/detail/incentive-${p.id}`)}>
                 <div className="space-y-3">
                   <div className="flex items-start justify-between">
                     <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{p.title}</h3>
@@ -167,6 +169,9 @@ export const IncentivePolicyPage: React.FC = () => {
                       <p className="text-xs font-semibold">{p.participants_count || 0}</p>
                     </div>
                   </div>
+                  <button onClick={(e) => { e.stopPropagation(); navigate(`/detail/incentive-${p.id}`); }} className="w-full text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-blue-50 transition-colors">
+                    查看详情 <ChevronRight className="w-3 h-3" />
+                  </button>
                 </div>
               </Card>
             );
@@ -186,7 +191,7 @@ export const IncentivePolicyPage: React.FC = () => {
       {activeTab === 'templates' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {templates.map((t) => (
-            <Card key={t.id} hover>
+            <Card key={t.id} hover className="cursor-pointer" onClick={() => navigate(`/detail/template-${t.id}`)}>
               <div className="space-y-3">
                 <div className="flex items-start justify-between">
                   <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">{t.name}</h3>
@@ -197,9 +202,14 @@ export const IncentivePolicyPage: React.FC = () => {
                   <Users className="w-3 h-3" />
                   已使用 {t.usage_count || 0} 次
                 </div>
-                <Button variant="outline" size="sm" className="w-full">
-                  <Layers className="w-4 h-4" />使用模板
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" className="flex-1" onClick={(e) => { e.stopPropagation(); }}>
+                    <Layers className="w-4 h-4" />使用模板
+                  </Button>
+                  <button onClick={(e) => { e.stopPropagation(); navigate(`/detail/template-${t.id}`); }} className="flex-1 text-xs text-blue-600 hover:text-blue-800 font-medium flex items-center justify-center gap-1 py-1 rounded-lg hover:bg-blue-50 transition-colors border border-neutral-200">
+                    查看详情 <ChevronRight className="w-3 h-3" />
+                  </button>
+                </div>
               </div>
             </Card>
           ))}

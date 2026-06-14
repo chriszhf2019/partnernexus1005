@@ -146,6 +146,18 @@ export function buildPartnerDetails(partner: Partner): PartnerDetails {
   const generatedTimeline: any[] = [];
   const today = new Date().toISOString().split('T')[0];
 
+  // 级别排序映射：用于比较级别升降（而非字符串比较）
+  const TIER_RANK: Record<string, number> = {
+    'Registered': 0, 'Standard': 0,
+    'Silver': 1,
+    'Gold': 2,
+    'Premier': 3,
+    'Platinum': 4,
+    'Diamond': 5,
+  };
+  const compareTier = (a: string, b: string): number =>
+    (TIER_RANK[a] ?? -1) - (TIER_RANK[b] ?? -1);
+
   // 1. 合作伙伴批复 (approved) — always the first milestone
   if (partner.startDate) {
     generatedTimeline.push({
@@ -177,8 +189,8 @@ export function buildPartnerDetails(partner: Partner): PartnerDetails {
       if (th.fromTier && th.toTier && th.date) {
         generatedTimeline.push({
           id: `${partner.id}-tl-tier${i}`,
-          type: th.toTier > th.fromTier ? 'tier_upgrade' : 'tier_downgrade',
-          title: th.toTier > th.fromTier
+          type: compareTier(th.toTier, th.fromTier) > 0 ? 'tier_upgrade' : 'tier_downgrade',
+          title: compareTier(th.toTier, th.fromTier) > 0
             ? `${th.fromTier} → ${th.toTier} 级别提升`
             : `${th.fromTier} → ${th.toTier} 级别调整`,
           description: th.reason || '',

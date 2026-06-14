@@ -108,8 +108,6 @@ export const CampaignManagementPage: React.FC = () => {
   });
   
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [selectedCampaign, setSelectedCampaign] = useState<MarketingCampaign | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -969,129 +967,7 @@ export const CampaignManagementPage: React.FC = () => {
           </div>
         </div>
       </Modal>
-      
-      {/* 活动详情模态框 */}
-      {showDetailModal && selectedCampaign && (
-        <Modal
-          open={showDetailModal}
-          onClose={() => setShowDetailModal(false)}
-          title={selectedCampaign.name}
-          size="xl"
-        >
-          <div className="space-y-6">
-            {/* 基本信息 */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3">基本信息</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-gray-600">活动类型</div>
-                  <div>{TYPE_CONFIG[selectedCampaign.type].label}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">当前阶段</div>
-                  <div className="flex items-center gap-1">
-                    <span>{PHASE_CONFIG[selectedCampaign.currentPhase].icon}</span>
-                    <span>{PHASE_CONFIG[selectedCampaign.currentPhase].label}</span>
-                  </div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">活动状态</div>
-                  <Badge className={STATUS_CONFIG[selectedCampaign.status].color}>
-                    {STATUS_CONFIG[selectedCampaign.status].label}
-                  </Badge>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">预算</div>
-                  <div>{cur(selectedCampaign.budget)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">实际支出</div>
-                  <div>{cur(selectedCampaign.actualSpend)}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">预期参会</div>
-                  <div>{selectedCampaign.expectedAttendees}人</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">实际参会</div>
-                  <div>{selectedCampaign.actualAttendees}人</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">报名人数</div>
-                  <div>{selectedCampaign.registeredCount}人</div>
-                </div>
-              </div>
-            </div>
-            
-            {/* 时间信息 */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3">时间安排</h3>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-sm text-gray-600">计划开始日期</div>
-                  <div>{selectedCampaign.plannedStartDate || '待定'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">计划结束日期</div>
-                  <div>{selectedCampaign.plannedEndDate || '待定'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">实际开始日期</div>
-                  <div>{selectedCampaign.actualStartDate || '待定'}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">实际结束日期</div>
-                  <div>{selectedCampaign.actualEndDate || '待定'}</div>
-                </div>
-              </div>
-            </div>
-            
-            {/* 描述 */}
-            {selectedCampaign.description && (
-              <div>
-                <h3 className="text-lg font-semibold mb-3">活动描述</h3>
-                <p className="text-gray-700">{selectedCampaign.description}</p>
-              </div>
-            )}
-            
-            {/* 转化数据 */}
-            <div>
-              <h3 className="text-lg font-semibold mb-3">转化数据</h3>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <div className="text-sm text-gray-600">产生线索</div>
-                  <div className="text-2xl font-bold text-blue-600">{selectedCampaign.leadsGenerated}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">创建商机</div>
-                  <div className="text-2xl font-bold text-green-600">{selectedCampaign.dealsCreated}</div>
-                </div>
-                <div>
-                  <div className="text-sm text-gray-600">商机金额</div>
-                  <div className="text-2xl font-bold text-purple-600">{cur(selectedCampaign.dealsValue)}</div>
-                </div>
-              </div>
-            </div>
-            
-            {/* 操作按钮 */}
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setShowDetailModal(false)}>
-                关闭
-              </Button>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setShowDetailModal(false);
-                  navigate(`/marketing/campaigns/${selectedCampaign.id}`);
-                }}
-              >
-                详细管理
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        </Modal>
-      )}
+
     </div>
   );
 };

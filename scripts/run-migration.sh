@@ -1,10 +1,16 @@
 #!/bin/bash
 
 # 数据库迁移脚本
-# 执行 supabase/migrations 目录下的所有迁移文件
+# 用法: SUPABASE_SERVICE_ROLE_KEY="your_key" bash scripts/run-migration.sh
 
-SUPABASE_URL="https://ezkbjufluczpxdixplxu.supabase.co"
-SUPABASE_SERVICE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6a2JqdWZsdWN6cHhkaXhwbHh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTM5MDA5NCwiZXhwIjoyMDk0OTY2MDk0fQ.oPeUBuyHl2Zh-9ueOO7yCWHKG0oAxgdzjYGIUgzVw7E"
+SUPABASE_URL="${SUPABASE_URL:-https://ezkbjufluczpxdixplxu.supabase.co}"
+SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_ROLE_KEY}"
+
+if [ -z "$SUPABASE_SERVICE_KEY" ]; then
+    echo "❌ SUPABASE_SERVICE_ROLE_KEY is required."
+    echo "   Source scripts/.env.scripts or pass as env var."
+    exit 1
+fi
 
 echo "开始执行数据库迁移..."
 

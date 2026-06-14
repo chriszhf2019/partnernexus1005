@@ -48,7 +48,7 @@ export const Sidebar = memo(() => {
   const { language, setLanguage, t } = useLanguage();
   const { theme, toggleTheme } = useTheme();
   const { config } = useConfig();
-  const { logout } = useAuth();
+  const { user, role, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -154,11 +154,11 @@ export const Sidebar = memo(() => {
         {/* User info + Logout */}
         <div className="flex items-center gap-2 p-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors group">
           <div className="w-7 h-7 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] font-semibold text-neutral-600 dark:text-neutral-300 shrink-0">
-            AR
+            {(user?.displayName || user?.email || '?')[0]?.toUpperCase() || '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-[12px] font-medium text-neutral-900 dark:text-white truncate">Alex Rivera</p>
-            <p className="text-[11px] text-neutral-400 truncate">Ecosystem Admin</p>
+            <p className="text-[12px] font-medium text-neutral-900 dark:text-white truncate">{user?.displayName || user?.email || '用户'}</p>
+            <p className="text-[11px] text-neutral-400 truncate">{role === 'admin' ? '系统管理员' : role === 'channel_manager' ? '渠道经理' : role === 'marketing_manager' ? '市场经理' : role === 'partner_admin' ? '渠道商管理员' : role === 'partner_sales' ? '合作伙伴销售' : role}</p>
           </div>
           <button
             onClick={logout}

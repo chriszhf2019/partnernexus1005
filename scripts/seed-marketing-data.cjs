@@ -2,7 +2,8 @@
 // Fixes marketing_plan (broken year=2025, budget=0), budget_config (too low), aligns everything
 const https = require('https');
 
-const KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6a2JqdWZsdWN6cHhkaXhwbHh1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3OTM5MDA5NCwiZXhwIjoyMDk0OTY2MDk0fQ.oPeUBuyHl2Zh-9ueOO7yCWHKG0oAxgdzjYGIUgzVw7E';
+const KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!KEY) { console.error('❌ SUPABASE_SERVICE_ROLE_KEY required'); process.exit(1); }
 const HOST = 'ezkbjufluczpxdixplxu.supabase.co';
 
 function api(method, path, body) {

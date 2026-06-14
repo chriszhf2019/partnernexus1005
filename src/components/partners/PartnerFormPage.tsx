@@ -71,8 +71,7 @@ export const PartnerFormPage = () => {
         type: form.type,
         manager: '',
         location: form.location,
-        region: form.regionCustom || form.regions?.[0] || '华北',
-        startDate: new Date().toISOString().split('T')[0],
+        region: form.regionCustom || form.regions?.[0] || '',
         years: 0,
         prevTier: 'Registered',
         tags: Object.keys(form.vendors).filter(Boolean),
@@ -88,9 +87,7 @@ export const PartnerFormPage = () => {
         registeredAddress: form.location,
         customerPortfolio: targetCustomers.filter(c => c.name).map(c => ({
           id: crypto.randomUUID(), name: c.name, industry: c.industry || '',
-          relationship: '潜在客户', annualRevenue: 0, majorProjects: [],
-          salesLead: '', products: [], status: '跟进中', since: new Date().toISOString().split('T')[0],
-          contactPerson: '', contactPhone: '', notes: c.potential || '',
+          relationship: '潜在客户', status: '跟进中', notes: c.potential || '',
         })),
       });
       toast('success', '提交成功，等待批复');
