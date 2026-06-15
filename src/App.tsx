@@ -35,6 +35,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import { AuthGuard } from './components/auth/AuthGuard';
 import { LoginPage } from './components/auth/LoginPage';
 import type { PartnerDetails } from './types';
+const RunMigration = retryableLazy(() => import('./components/debug/RunMigration').then(m => ({ default: m.RunMigration })));
 import { retryableLazy } from './lib/retryableLazy';
 
 const EcosystemDashboard = retryableLazy(() => import('./components/dashboard/EcosystemDashboard').then(m => ({ default: m.EcosystemDashboard })));
@@ -375,6 +376,7 @@ function AppLayout() {
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />
               <Route path="/settings" element={<SettingsRoute />} />
+              <Route path="/migrate" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><RunMigration /></Suspense></ErrorBoundary>} />
               <Route path="/channels" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChannelDashboard /></Suspense></ErrorBoundary>} />
               <Route path="/invitation/:code" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><InvitationPage /></Suspense></ErrorBoundary>} />
               {/* 404 Not Found */}
