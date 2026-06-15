@@ -52,7 +52,7 @@ export const ProgramReportDrawer = ({ open, onClose, program, cur, roi, pipeline
         color: p.tier === '钻石' ? 'text-purple-600' : p.tier === '金牌' ? 'text-amber-600' : p.tier === '银牌' ? 'text-neutral-500' : 'text-orange-600',
         deals: p.count,
         incentive: p.total,
-        conversion: Math.round(20 + Math.random() * 40),
+        conversion: 0,
       }))
     : [];
 

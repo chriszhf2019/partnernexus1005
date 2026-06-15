@@ -12,7 +12,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useCockpitData } from '../../hooks/useData';
 import { supabase } from '../../lib/supabase';
 import { dealService } from '../../services/deal-service';
-import { Deal } from '../../types';
+import { Deal, isDealWon } from '../../types';
 
 const METRIC_CONFIG: Record<string, { 
   title: string; 
@@ -61,16 +61,17 @@ export const MetricDetailPage = () => {
   const [loading, setLoading] = useState(true);
   
   const { data: cockpitData } = useCockpitData();
+  const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
       try {
         const [dealRes, partnerRes] = await Promise.all([
-          dealService.list().catch(() => ({ items: [] })),
-          supabase.from('partners').select('*').catch(() => ({ data: [] })),
+          dealService.list().catch(() => ({ items: [] as any[], total: 0, page: 1, pageSize: 0 })),
+          Promise.resolve(supabase.from('partners').select('*')).then(r => r, () => ({ data: [] as any[] })),
         ]);
-        setDeals(dealRes.items || []);
+        setDeals(dealRes?.items || []);
         setPartners((partnerRes as any)?.data || []);
       } finally {
         setLoading(false);
@@ -78,6 +79,9 @@ export const MetricDetailPage = () => {
     };
     fetchData();
   }, []);
+
+  const pipelineValue = useMemo(() => deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0), [deals]);
+  const wonValue = useMemo(() => deals.filter(d => isDealWon(d)).reduce((s, d) => s + (d.value || 0), 0), [deals]);
 
   const config = METRIC_CONFIG[type || ''] || null;
 
@@ -94,13 +98,9 @@ export const MetricDetailPage = () => {
   const Icon = config.icon;
   const module = config.module;
 
-  const pipelineValue = useMemo(() => deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0), [deals]);
-  const wonValue = useMemo(() => deals.filter(d => d.stage === 'ClosedWon').reduce((s, d) => s + (d.value || 0), 0), [deals]);
-
   const renderDealDetails = () => {
     if (!type?.startsWith('deals-')) return null;
     const dealType = type.replace('deals-', '');
-    const [selectedStage, setSelectedStage] = useState<string | null>(null);
 
     if (dealType === 'pipeline') {
       const stages = ['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial'];
@@ -262,7 +262,7 @@ export const MetricDetailPage = () => {
     }
 
     if (dealType === 'won') {
-      const wonDeals = deals.filter(d => d.stage === 'ClosedWon');
+      const wonDeals = deals.filter(d => isDealWon(d));
       return (
         <Card>
           <CardHeader>
@@ -337,7 +337,7 @@ export const MetricDetailPage = () => {
                   const cfg = STAGE_CONFIG[stage];
                   const stageDeals = deals.filter(d => d.stage === stage);
                   const avgDays = stageDeals.length > 0 
-                    ? Math.round(stageDeals.reduce((s, d) => s + (d.daysInStage || 0), 0) / stageDeals.length)
+                    ? Math.round(stageDeals.reduce((s, d) => s + (d.daysInCurrentStage || 0), 0) / stageDeals.length)
                     : 0;
                   return (
                     <div key={stage} className="flex items-center justify-between px-4 py-3">
@@ -366,7 +366,7 @@ export const MetricDetailPage = () => {
                     <div key={deal.id} className="flex items-center justify-between py-2 border-b hover:bg-amber-50">
                       <div>
                         <p className="font-medium">{deal.title || '未命名商机'}</p>
-                        <p className="text-xs text-neutral-400">{deal.partnerName || '-'} · 停滞 {deal.daysInStage || 0} 天</p>
+                        <p className="text-xs text-neutral-400">{deal.partnerName || '-'} · 停滞 {deal.daysInCurrentStage || 0} 天</p>
                       </div>
                       <Badge variant="warning" size="sm">{formatCurrency(deal.value || 0)}</Badge>
                     </div>
@@ -401,7 +401,7 @@ export const MetricDetailPage = () => {
               <span className="text-2xl font-bold">{activePartners.length}</span>
               <span className="text-sm text-neutral-400 ml-2">活跃合作伙伴</span>
             </div>
-            {Object.entries(groupedByTier).map(([tier, items]) => (
+            {Object.entries(groupedByTier as Record<string, any[]>).map(([tier, items]) => (
               <div key={tier} className="border-b last:border-b-0">
                 <div className="px-4 py-2 bg-neutral-50 dark:bg-neutral-800/50 font-medium text-sm">
                   {tier} · {items.length} 家
@@ -461,7 +461,7 @@ export const MetricDetailPage = () => {
                         <p className="font-medium">{p.name}</p>
                         <p className="text-xs text-neutral-400">{p.region} · {p.tier}</p>
                       </div>
-                      <Badge variant="destructive">{p.health_score}分</Badge>
+                      <Badge variant="danger">{p.health_score}分</Badge>
                     </div>
                   ))}
                 </div>
@@ -475,10 +475,23 @@ export const MetricDetailPage = () => {
     }
 
     if (partnerType === 'coverage') {
+      const allRegions = ['华东', '华南', '华北', '华中', '西部', '西北', '西南'];
       const regions = [...new Set(partners.map(p => p.region).filter(Boolean))];
-      const whiteSpaces = ['西北', '西南'].filter(r => !regions.includes(r));
-      const newThisQ = 2;
+      const whiteSpaces = allRegions.filter(r => !regions.includes(r));
+      
+      const now = new Date();
+      const currentQuarter = Math.floor((now.getMonth() / 3)) + 1;
+      const currentYear = now.getFullYear();
+      const newThisQ = partners.filter(p => {
+        const startDate = new Date(p.startDate || p.start_date || '');
+        if (isNaN(startDate.getTime())) return false;
+        const quarter = Math.floor((startDate.getMonth() / 3)) + 1;
+        const year = startDate.getFullYear();
+        return year === currentYear && quarter === currentQuarter;
+      }).length;
+      
       const coopCount = partners.filter(p => p.status === 'Cooperating').length;
+      const industries = [...new Set(partners.map(p => p.industry).filter(Boolean))];
       
       return (
         <div className="space-y-4">
@@ -496,7 +509,7 @@ export const MetricDetailPage = () => {
                 <div className="p-3 bg-amber-50 rounded-lg">
                   <p className="text-xs text-neutral-400">空白市场</p>
                   <p className="text-xl font-bold text-amber-600">{whiteSpaces.length} 个</p>
-                  <p className="text-xs text-amber-500">{whiteSpaces.join(' · ')}</p>
+                  <p className="text-xs text-amber-500">{whiteSpaces.join(' · ') || '-'}</p>
                 </div>
                 <div className="p-3 bg-emerald-50 rounded-lg">
                   <p className="text-xs text-neutral-400">新签伙伴(本季)</p>
@@ -508,8 +521,8 @@ export const MetricDetailPage = () => {
                 </div>
                 <div className="p-3 bg-indigo-50 rounded-lg">
                   <p className="text-xs text-neutral-400">行业覆盖</p>
-                  <p className="text-xl font-bold text-indigo-600">4 个</p>
-                  <p className="text-xs text-indigo-500">制造 · 医疗 · 金融 · 政务</p>
+                  <p className="text-xl font-bold text-indigo-600">{industries.length} 个</p>
+                  <p className="text-xs text-indigo-500">{industries.join(' · ') || '-'}</p>
                 </div>
                 <div className="p-3 bg-orange-50 rounded-lg">
                   <p className="text-xs text-neutral-400">待招募区域</p>
@@ -569,8 +582,8 @@ export const MetricDetailPage = () => {
             <CardContent className="p-0">
               <div className="grid grid-cols-2 md:grid-cols-3 gap-4 p-4">
                 <div className="p-3 bg-purple-50 rounded-lg">
-                  <p className="text-xs text-neutral-400">ARPP(单伙伴平均产出)</p>
-                  <p className="text-xl font-bold text-purple-600">¥{(107100000 / Math.max(coopCount, 1) / 10000).toFixed(0)}万</p>
+                  <p className="text-xs text-neutral-400">ARPP(有赢单伙伴平均产出)</p>
+                  <p className="text-xl font-bold text-purple-600">¥{(wonValue / Math.max(wonCount, 1) / 10000).toFixed(0)}万</p>
                 </div>
                 <div className="p-3 bg-emerald-50 rounded-lg">
                   <p className="text-xs text-neutral-400">有赢单伙伴</p>
@@ -650,7 +663,7 @@ export const MetricDetailPage = () => {
                 <div>
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-xs font-semibold text-red-600">零产出(无赢单)</span>
-                    <Badge variant="destructive" size="sm">{noWin.length} 家</Badge>
+                    <Badge variant="danger" size="sm">{noWin.length} 家</Badge>
                   </div>
                   <div className="space-y-1">
                     {noWin.map(p => (
@@ -676,9 +689,18 @@ export const MetricDetailPage = () => {
       const coopCount = partners.filter(p => p.status === 'Cooperating').length;
       const pendingCount = partners.filter(p => p.status === 'Prospective').length;
       const wonCount = partners.filter(p => (p.winRate || 0) > 0).length;
-      const healthy = partners.filter(p => p.health_score >= 80).length;
-      const warning = partners.filter(p => p.health_score >= 50 && p.health_score < 80).length;
-      const critical = partners.filter(p => p.health_score < 50).length;
+      
+      const healthScores = partners.map(p => p.health_score || p.healthScore || 0);
+      const avgHealthScore = healthScores.length > 0 
+        ? Math.round(healthScores.reduce((sum, score) => sum + score, 0) / healthScores.length) 
+        : 0;
+      
+      const healthy = partners.filter(p => (p.health_score || p.healthScore || 0) >= 80).length;
+      const warning = partners.filter(p => {
+        const score = p.health_score || p.healthScore || 0;
+        return score >= 50 && score < 80;
+      }).length;
+      const critical = partners.filter(p => (p.health_score || p.healthScore || 0) < 50).length;
       const noWin = partners.filter(p => !(p.winRate || 0));
       
       return (
@@ -690,7 +712,7 @@ export const MetricDetailPage = () => {
             <CardContent className="p-0">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50">
                 <div className="text-center">
-                  <p className="text-3xl font-bold text-amber-600">{Math.round((78+72+65)/3)}</p>
+                  <p className="text-3xl font-bold text-amber-600">{avgHealthScore}</p>
                   <p className="text-xs text-neutral-400">综合健康指数</p>
                 </div>
                 <div className="text-center">
@@ -734,7 +756,7 @@ export const MetricDetailPage = () => {
                   <div className="p-3 bg-red-50 rounded-lg">
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-semibold text-red-600">待批复伙伴</span>
-                      <Badge variant="destructive" size="sm">{pendingCount} 家</Badge>
+                      <Badge variant="danger" size="sm">{pendingCount} 家</Badge>
                     </div>
                     <div className="space-y-1 max-h-32 overflow-y-auto">
                       {partners.filter(p => p.status === 'Prospective').slice(0, 5).map(p => (

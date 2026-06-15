@@ -4,6 +4,7 @@ import { partnerService } from '../services/partner-service';
 import { marketingService } from '../services/marketing-service';
 import type { CockpitData, Partner, Deal, MDFMonthlyActivity, IncentiveProgram, MDFStats, IncentiveStats } from '../types';
 import type { MatrixData } from '../types';
+import { isDealWon } from '../types';
 import { debug } from '../lib/debug';
 
 export interface ActivityItem {
@@ -47,7 +48,11 @@ export function usePartners() {
     partnerService.list().then((result) => {
       setPartners(result.items);
       partnerListRef.current = result.items;
-    }).catch(() => debug.warn('[useData] usePartners failed'));
+    }).catch(() => {
+      debug.warn('[useData] usePartners failed, database unavailable');
+      setPartners([]);
+      partnerListRef.current = [];
+    });
   }, []);
 
   return useMemo(() => ({
@@ -98,7 +103,7 @@ export function useDeals() {
       monthNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= monthStart).length,
       weekNew: enrichedDeals.filter(d => d.createdDate && new Date(d.createdDate) >= weekStart).length,
       rejected: enrichedDeals.filter(d => d.status === 'Rejected').length,
-      closed: enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length,
+      closed: enrichedDeals.filter(d => isDealWon(d)).length,
       totalPipelineValue: enrichedDeals.reduce((s, d) => s + Number(d.value || 0), 0),
       avgCycleDays: (() => {
         const cycleDays: number[] = [];
@@ -114,7 +119,7 @@ export function useDeals() {
         return cycleDays.length > 0 ? Math.round(cycleDays.reduce((s, d) => s + d, 0) / cycleDays.length) : 0;
       })(),
       conversionRate: enrichedDeals.length > 0
-        ? Math.round((enrichedDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').length / enrichedDeals.length) * 100)
+        ? Math.round((enrichedDeals.filter(d => isDealWon(d)).length / enrichedDeals.length) * 100)
         : 0,
       stageDistribution: enrichedDeals.reduce((acc, d) => {
         const stage = d.stage || 'Registered';
@@ -127,20 +132,30 @@ export function useDeals() {
         return acc;
       }, {} as Record<string, number>),
       conflictCount: enrichedDeals.filter(d => d.hasConflict).length,
-      overdueCount: enrichedDeals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && d.status !== 'Closed Won' && d.status !== 'Closed Lost').length,
+      overdueCount: enrichedDeals.filter(d => d.expectedCloseDate && new Date(d.expectedCloseDate) < now && !isDealWon(d) && d.status !== 'Closed Lost').length,
     });
   }, []);
 
   useEffect(() => {
     dealService.list().then((result) => {
-      enrichAndComputeStats(result.items);
-    }).catch(() => debug.warn('[useData] useDeals failed'));
+      if (result.items.length > 0) {
+        enrichAndComputeStats(result.items);
+      } else {
+        debug.warn('[useData] useDeals empty from server');
+      }
+    }).catch(() => {
+      debug.warn('[useData] useDeals failed, database unavailable');
+    });
   }, [enrichAndComputeStats]);
 
   const refreshDeals = useCallback(() => {
     dealService.list().then((result) => {
-      enrichAndComputeStats(result.items);
-    }).catch(() => debug.warn('[useData] useDeals refresh failed'));
+      if (result.items.length > 0) {
+        enrichAndComputeStats(result.items);
+      }
+    }).catch(() => {
+      debug.warn('[useData] useDeals refresh failed, database unavailable');
+    });
   }, [enrichAndComputeStats]);
 
   return useMemo(() => ({ deals, stats, refreshDeals }), [deals, stats, refreshDeals]);
@@ -181,7 +196,7 @@ export function useDashboardStats() {
         const rawDeals: Record<string, any>[] = (dRes as any)?.data || [];
         const active = rawPartners.filter(p => p.status === 'Cooperating').length;
         const totalDealValue = rawDeals.reduce((s: number, d) => s + Number(d.value || 0), 0);
-        const wonValue = rawDeals.filter(d => d.status === 'Converted' || d.status === 'Closed Won').reduce((s: number, d) => s + Number(d.value || 0), 0);
+        const wonValue = rawDeals.filter(d => isDealWon(d)).reduce((s: number, d: any) => s + Number(d.value || 0), 0);
         setStats({
           activePartners: { value: active, growth: Math.round((active / Math.max(1, rawPartners.length)) * 100) },
           pipelineValue: totalDealValue,
@@ -320,31 +335,22 @@ function fallbackCockpitData(): CockpitData {
 }
 
 export function useCockpitData(): { data: CockpitData; loading: boolean } {
-  const [data, setData] = useState<CockpitData>(fallbackCockpitData);
+  const [data, setData] = useState<CockpitData>(fallbackCockpitData());
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    // Static import - more reliable than dynamic import
+    // Only use real Supabase data — no seed fallback
     import('../lib/realCockpitData').then((mod) => {
       mod.getRealCockpitData().then((realData) => {
-        // Use real data if any metric has meaningful values
-        const hasAnyData =
-          (realData?.revenue?.current_value ?? 0) > 0 ||
-          (realData?.activePartners?.current_value ?? 0) > 0 ||
-          (realData?.pipeline?.current_value ?? 0) > 0 ||
-          (realData?.marketing?.current_value ?? 0) > 0 ||
-          (realData?.revenue?.monthly_data?.length ?? 0) > 0;
-        if (hasAnyData) {
-          setData(realData);
-        } else {
-          console.warn('[useCockpitData] Empty real data, using fallback');
-        }
+        setData(realData);
         setLoading(false);
-      }).catch((e) => {
-        console.warn('[useCockpitData] Query failed:', e?.message || e);
+      }).catch(() => {
+        console.warn('[useCockpitData] Query failed, showing empty data');
+        setData(fallbackCockpitData());
         setLoading(false);
       });
-    }).catch((e) => {
-      console.warn('[useCockpitData] Import failed:', e?.message || e);
+    }).catch(() => {
+      console.warn('[useCockpitData] Import failed, showing empty data');
+      setData(fallbackCockpitData());
       setLoading(false);
     });
   }, []);

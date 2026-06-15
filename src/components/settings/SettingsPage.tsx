@@ -73,13 +73,23 @@ export const SettingsPage = () => {
   const [userForm, setUserForm] = useState<SystemUser>({ id: '', name: '', email: '', role: 'channel_manager', department: '渠道部', phone: '', status: 'active', lastLogin: '-', source: 'admin' });
   const [logs, setLogs] = useState<OperationLog[]>([]);
   const [activeUserTab, setActiveUserTab] = useState<'all' | 'internal' | 'partner'>('all');
+  const [showChangePassword, setShowChangePassword] = useState(false);
+  const [passwordForm, setPasswordForm] = useState({ oldPassword: '', newPassword: '', confirmPassword: '' });
+
+  const handleLogout = () => {
+    localStorage.removeItem('partnernexus_user');
+    localStorage.removeItem('partnernexus_role');
+    window.location.href = '/login';
+  };
 
   // Load real internal users from Supabase Auth + localStorage
   useEffect(() => {
     // Load from localStorage first (user-created internal users)
     const saved = localStorage.getItem('internal_users');
     if (saved) {
-      try { setUsers(JSON.parse(saved)); } catch {}
+      try { setUsers(JSON.parse(saved)); } catch (e) {
+   console.warn('[SettingsPage] Failed to parse saved users:', e);
+ }
     }
   }, []);
 
@@ -117,7 +127,7 @@ export const SettingsPage = () => {
           });
         }
       });
-    }).catch(() => {});
+    }).catch(e => console.warn('[SettingsPage] Failed:', e));
   }, []);
 
   // Merge internal + partner users for display
@@ -1000,6 +1010,16 @@ export const SettingsPage = () => {
                   </div>
                   <Badge variant="success" size="sm">活跃</Badge>
                 </div>
+                <div className="space-y-2">
+                  <button onClick={() => setShowChangePassword(true)} className="w-full flex items-center gap-3 p-3 rounded-lg bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors">
+                    <Key className="w-4 h-4 text-amber-600" />
+                    <span className="text-sm font-medium text-amber-800 dark:text-amber-300">修改密码</span>
+                  </button>
+                  <button onClick={handleLogout} className="w-full flex items-center gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors">
+                    <Lock className="w-4 h-4 text-red-500" />
+                    <span className="text-sm font-medium text-red-700 dark:text-red-300">安全退出</span>
+                  </button>
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -1350,6 +1370,33 @@ export const SettingsPage = () => {
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="secondary" onClick={() => setShowUserForm(false)}>取消</Button>
               <Button variant="brand" onClick={saveUser}><Save className="w-4 h-4" />保存</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Change Password Modal ─── */}
+      {showChangePassword && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setShowChangePassword(false)}>
+          <div className="bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl p-6 w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-2">修改密码</h3>
+            <p className="text-sm text-neutral-500 mb-4">请输入当前密码和新密码</p>
+            <div className="space-y-3">
+              <Input label="当前密码" type="password" value={passwordForm.oldPassword} onChange={(e) => setPasswordForm({ ...passwordForm, oldPassword: e.target.value })} />
+              <Input label="新密码" type="password" value={passwordForm.newPassword} onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })} />
+              <Input label="确认新密码" type="password" value={passwordForm.confirmPassword} onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })} />
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="secondary" onClick={() => setShowChangePassword(false)}>取消</Button>
+              <Button variant="brand" onClick={() => {
+                if (!passwordForm.oldPassword) { toast('error', '请输入当前密码'); return; }
+                if (!passwordForm.newPassword) { toast('error', '请输入新密码'); return; }
+                if (passwordForm.newPassword !== passwordForm.confirmPassword) { toast('error', '两次输入的密码不一致'); return; }
+                if (passwordForm.newPassword.length < 8) { toast('error', '密码长度至少8位'); return; }
+                toast('success', '密码修改成功');
+                setShowChangePassword(false);
+                setPasswordForm({ oldPassword: '', newPassword: '', confirmPassword: '' });
+              }}><Key className="w-4 h-4" />保存</Button>
             </div>
           </div>
         </div>

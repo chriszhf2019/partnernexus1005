@@ -17,6 +17,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; bgColor: stri
   'Registered':    { label: '已报备', color: 'text-neutral-700', bgColor: 'bg-neutral-100' },
   'UnderReview':  { label: '审批中', color: 'text-blue-600', bgColor: 'bg-blue-50' },
   'Approved':     { label: '已批复', color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
+  'Migrated':     { label: '迁单', color: 'text-cyan-600', bgColor: 'bg-cyan-50' },
   'Solution':     { label: '方案跟进', color: 'text-purple-600', bgColor: 'bg-purple-50' },
   'Commercial':   { label: '商务洽谈', color: 'text-amber-600', bgColor: 'bg-amber-50' },
   'ClosedWon':    { label: '赢单', color: 'text-emerald-600', bgColor: 'bg-emerald-50' },
@@ -31,10 +32,10 @@ const METRIC_META: Record<string, { title: string; icon: any; color: string; des
 };
 
 const STAGE_ORDER: Record<string, DealLifecycleStage[]> = {
-  pipeline: ['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial'],
-  weighted: ['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial', 'ClosedWon'],
+  pipeline: ['Registered', 'UnderReview', 'Approved', 'Migrated', 'Solution', 'Commercial'],
+  weighted: ['Registered', 'UnderReview', 'Approved', 'Migrated', 'Solution', 'Commercial', 'ClosedWon'],
   won: ['ClosedWon'],
-  cycle: ['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial'],
+  cycle: ['Registered', 'UnderReview', 'Approved', 'Migrated', 'Solution', 'Commercial'],
 };
 
 export const DealMetricDetail = () => {

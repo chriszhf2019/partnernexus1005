@@ -66,6 +66,12 @@ const StatCard = ({ title, value, change, icon: Icon, sparklineData, sparklineCo
         <span className={cn('text-xs font-semibold', isPositive ? 'text-emerald-600' : 'text-red-500')}>{isPositive ? '+' : ''}{change}%</span>
         <span className="text-xs text-zinc-400 ml-1">vs last month</span>
       </div>
+      <button
+        onClick={() => window.open('/detail/channels', '_blank')}
+        className="mt-auto pt-3 border-t border-zinc-100 dark:border-zinc-800 w-full flex items-center justify-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors"
+      >
+        查看详情 <ExternalLink className="w-3 h-3" />
+      </button>
     </div>
   );
 };
@@ -267,6 +273,11 @@ export const ChannelDashboard = () => {
           ) : (
             <div className="flex items-center justify-center h-full text-sm text-neutral-400">暂无活动数据</div>
           )}
+        </div>
+        <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-zinc-800">
+          <button onClick={() => window.open('/detail/channel-performance', '_blank')} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 font-medium transition-colors">
+            查看详情 <ExternalLink className="w-3 h-3" />
+          </button>
         </div>
       </div>
 

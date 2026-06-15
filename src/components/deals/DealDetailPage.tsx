@@ -24,6 +24,7 @@ const STAGE_CONFIG: Record<string, { label: string; color: string; bgColor: stri
   'Registered':    { label: '已报备', color: 'text-neutral-700', bgColor: 'bg-neutral-100', icon: FileText },
   'UnderReview':   { label: '审批中', color: 'text-blue-600', bgColor: 'bg-blue-50', icon: Clock },
   'Approved':      { label: '已批复', color: 'text-emerald-600', bgColor: 'bg-emerald-50', icon: CheckCircle2 },
+  'Migrated':      { label: '迁单', color: 'text-cyan-600', bgColor: 'bg-cyan-50', icon: ArrowRight },
   'Solution':      { label: '方案跟进', color: 'text-purple-600', bgColor: 'bg-purple-50', icon: Target },
   'Commercial':    { label: '商务洽谈', color: 'text-amber-600', bgColor: 'bg-amber-50', icon: DollarSign },
   'ClosedWon':     { label: '赢单', color: 'text-emerald-600', bgColor: 'bg-emerald-50', icon: CheckCircle2 },

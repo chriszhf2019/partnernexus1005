@@ -16,43 +16,62 @@ DELETE FROM incentive_programs;
 DELETE FROM partner_contacts;
 DELETE FROM partners;
 
--- ─── Partners (20 realistic partners) ─────────────────
+-- ─── Partners (22 realistic partners) ─────────────────
 INSERT INTO partners (name, tier, status, type, manager, location, region, start_date, years, prev_tier, tags, win_rate, industry, is_core_partner, cooperation_scope) VALUES
-(DEFAULT, '神州数码集团股份有限公司', 'Platinum', 'Cooperating', 'VAD', '高波', '北京海淀', '华北', '2016-03-15', 10, 'Gold', ARRAY['VAD','信创','全国覆盖'], 72, '金融', true, '全国总代理，覆盖金融、政务、医疗三大行业'),
-(DEFAULT, '东软集团股份有限公司', 'Platinum', 'Cooperating', 'ISV', '陈明', '沈阳浑南', '华北', '2017-06-01', 8, 'Gold', ARRAY['ISV','医疗行业','信创入围'], 68, '医疗', true, '医疗行业核心ISV，具备全院级解决方案交付能力'),
-(DEFAULT, '中科软科技股份有限公司', 'Gold', 'Cooperating', 'ISV', '刘洋', '北京中关村', '华北', '2018-09-20', 7, 'Silver', ARRAY['ISV','金融','保险行业'], 65, '金融', false, '金融保险行业ISV，核心系统迁移专家'),
-(DEFAULT, '浪潮电子信息产业股份有限公司', 'Diamond', 'Cooperating', 'OEM', '王强', '济南高新区', '华东', '2017-01-10', 9, 'Platinum', ARRAY['OEM','政务','制造'], 70, '政务', true, '政务云基础设施核心伙伴，具备全国交付能力'),
-(DEFAULT, '华为技术有限公司', 'Diamond', 'Cooperating', 'OEM', '李娜', '深圳龙岗', '华南', '2015-05-01', 11, 'Diamond', ARRAY['OEM','全行业','全球覆盖'], 75, '制造', true, '全行业基础设施伙伴，联合产品定义参与方'),
-(DEFAULT, '软通动力信息技术股份有限公司', 'Gold', 'Cooperating', 'SI', '赵华', '北京朝阳', '华北', '2019-02-15', 7, 'Silver', ARRAY['SI','金融','互联网'], 62, '金融', false, '金融行业SI，核心业务系统集成能力'),
-(DEFAULT, '亚信科技控股有限公司', 'Gold', 'Cooperating', 'ISV', '周伟', '北京西城', '华北', '2018-04-01', 8, 'Silver', ARRAY['ISV','通信','5G'], 58, '互联网', false, '通信行业ISV，5G核心网方案合作伙伴'),
-(DEFAULT, '中软国际有限公司', 'Gold', 'Cooperating', 'Service', '吴明', '深圳南山', '华南', '2019-07-12', 6, 'Registered', ARRAY['Service','外包','金融'], 55, '金融', false, 'IT服务合作伙伴，具备大规模交付和运维能力'),
-(DEFAULT, '太极计算机股份有限公司', 'Gold', 'Cooperating', 'SI', '张伟', '北京海淀', '华北', '2017-11-20', 8, 'Silver', ARRAY['SI','政务','信创'], 63, '政务', true, '政务行业SI，信创替代项目核心交付方'),
-(DEFAULT, '上海宝信软件股份有限公司', 'Silver', 'Cooperating', 'ISV', '陈强', '上海浦东', '华东', '2020-03-08', 6, 'Registered', ARRAY['ISV','制造','钢铁'], 48, '制造', false, '制造业ISV，钢铁行业MES系统专家'),
-(DEFAULT, '用友网络科技股份有限公司', 'Silver', 'Cooperating', 'ISV', '林芳', '北京海淀', '华北', '2019-10-01', 6, 'Registered', ARRAY['ISV','ERP','SaaS'], 52, '互联网', false, '企业管理软件ISV，ERP与财务系统合作伙伴'),
-(DEFAULT, '广州赛意信息科技股份有限公司', 'Silver', 'Cooperating', 'Service', '黄磊', '广州天河', '华南', '2020-06-15', 5, 'Registered', ARRAY['Service','制造','实施'], 45, '制造', false, '制造行业实施服务伙伴，MES/WMS系统部署'),
-(DEFAULT, '南京华苏科技有限公司', 'Silver', 'Inactive', 'Reseller', '孙鹏', '南京建邺', '华东', '2021-01-20', 5, 'Registered', ARRAY['Reseller','教育','SMB'], 32, '教育', false, '教育行业转售商，区域SMB市场覆盖'),
-(DEFAULT, '武汉达梦数据库股份有限公司', 'Silver', 'Cooperating', 'ISV', '郑涛', '武汉光谷', '华中', '2020-08-10', 5, 'Registered', ARRAY['ISV','数据库','信创'], 55, '政务', false, '国产数据库ISV，信创替代核心伙伴'),
-(DEFAULT, '成都四方伟业软件股份有限公司', 'Registered', 'Cooperating', 'ISV', '杨帆', '成都高新区', '西部', '2022-04-01', 4, 'Registered', ARRAY['ISV','大数据','能源'], 40, '能源', false, '大数据平台ISV，能源行业数据治理伙伴'),
-(DEFAULT, '西安未来国际信息股份有限公司', 'Registered', 'Cooperating', 'SI', '马超', '西安雁塔', '西部', '2021-08-15', 4, 'Registered', ARRAY['SI','政务','西部'], 42, '政务', false, '西部政务SI，区域电子政务项目'),
-(DEFAULT, '福建顶点软件股份有限公司', 'Registered', 'Cooperating', 'ISV', '何军', '福州鼓楼', '华东', '2022-02-28', 4, 'Registered', ARRAY['ISV','金融','证券'], 45, '金融', false, '金融证券ISV，交易系统合作伙伴'),
-(DEFAULT, '湖南科创信息技术股份有限公司', 'Registered', 'Prospective', 'Reseller', '刘刚', '长沙岳麓', '华中', '2023-03-10', 3, 'Registered', ARRAY['Reseller','政务','教育'], 28, '教育', false, '华中区域潜在伙伴，政务教育行业'),
-(DEFAULT, '重庆梅安森科技股份有限公司', 'Silver', 'Cooperating', 'ISV', '赵勇', '重庆渝北', '西部', '2020-11-05', 5, 'Registered', ARRAY['ISV','能源','安全'], 50, '能源', false, '能源安全ISV，煤矿智能化方案伙伴'),
-(DEFAULT, '深圳华大智造科技股份有限公司', 'Registered', 'Prospective', 'Reseller', '钱进', '深圳南山', '华南', '2023-06-01', 2, 'Registered', ARRAY['Reseller','医疗','基因'], 25, '医疗', false, '生命科学领域潜在伙伴，基因测序设备代理');
+('华东医卫云科技术有限公司', 'Gold', 'Cooperating', 'ISV', '陈伟', '上海浦东', '华东', '2019-03-15', 6, 'Silver', ARRAY['ISV','医疗行业','信创'], 65, '医疗', true, '医疗行业核心ISV，全院级解决方案交付能力'),
+('上海智医科技', 'Gold', 'Cooperating', 'ISV', '王浩', '上海张江', '华东', '2020-06-01', 5, 'Silver', ARRAY['ISV','医疗','AI'], 62, '医疗', true, 'AI医疗解决方案专家，与多家三甲医院合作'),
+('华南智慧科技', 'Silver', 'Cooperating', 'SI', '刘洋', '深圳南山', '华南', '2020-09-20', 5, 'Registered', ARRAY['SI','医疗','智慧城市'], 58, '医疗', false, '华南区域医疗信息化SI，智慧医院建设专家'),
+('华南系统集成', 'Silver', 'Cooperating', 'VAD', '赵敏', '广州天河', '华南', '2019-11-10', 6, 'Silver', ARRAY['VAD','分销','医疗'], 55, '医疗', false, '华南区域分销商，医疗行业覆盖广'),
+('北方信科', 'Silver', 'Cooperating', 'VAR', '孙杰', '北京海淀', '华北', '2021-02-15', 4, 'Registered', ARRAY['VAR','医疗','集成'], 52, '医疗', false, '北方区域VAR，医疗信息化项目实施'),
+('西部云智科技', 'Silver', 'Cooperating', 'ISV', '周琳', '成都高新', '西部', '2021-04-01', 4, 'Registered', ARRAY['ISV','教育','政务'], 48, '教育', false, '西部区域ISV，智慧教育和政务云专家'),
+('华中智慧医疗', 'Silver', 'Cooperating', 'ISV', '吴涛', '武汉光谷', '华中', '2020-08-10', 5, 'Registered', ARRAY['ISV','医疗','大数据'], 55, '医疗', false, '华中区域医疗ISV，医联体解决方案专家'),
+('西北云科技', 'Silver', 'Cooperating', 'VAR', '郑强', '西安雁塔', '西部', '2021-06-15', 4, 'Registered', ARRAY['VAR','医疗','云原生'], 50, '医疗', false, '西北区域VAR，医疗云平台建设专家'),
+('深圳智慧城市科技', 'Gold', 'Cooperating', 'SI', '刘洋', '深圳南山', '华南', '2019-05-20', 6, 'Silver', ARRAY['SI','政务','智慧城市'], 68, '政务', true, '智慧城市和政务信息化SI，大型项目交付能力'),
+('神州数码集团股份有限公司', 'Platinum', 'Cooperating', 'VAD', '高波', '北京海淀', '华北', '2016-03-15', 10, 'Gold', ARRAY['VAD','信创','全国覆盖'], 72, '金融', true, '全国总代理，覆盖金融、政务、医疗三大行业'),
+('东软集团股份有限公司', 'Platinum', 'Cooperating', 'ISV', '陈明', '沈阳浑南', '华北', '2017-06-01', 8, 'Gold', ARRAY['ISV','医疗行业','信创入围'], 68, '医疗', true, '医疗行业核心ISV，具备全院级解决方案交付能力'),
+('中科软科技股份有限公司', 'Gold', 'Cooperating', 'ISV', '刘洋', '北京中关村', '华北', '2018-09-20', 7, 'Silver', ARRAY['ISV','金融','保险行业'], 65, '金融', false, '金融保险行业ISV，核心系统迁移专家'),
+('浪潮电子信息产业股份有限公司', 'Diamond', 'Cooperating', 'OEM', '王强', '济南高新区', '华东', '2017-01-10', 9, 'Platinum', ARRAY['OEM','政务','制造'], 70, '政务', true, '政务云基础设施核心伙伴，具备全国交付能力'),
+('华为技术有限公司', 'Diamond', 'Cooperating', 'OEM', '李娜', '深圳龙岗', '华南', '2015-05-01', 11, 'Diamond', ARRAY['OEM','全行业','全球覆盖'], 75, '制造', true, '全行业基础设施伙伴，联合产品定义参与方'),
+('软通动力信息技术股份有限公司', 'Gold', 'Cooperating', 'SI', '赵华', '北京朝阳', '华北', '2019-02-15', 7, 'Silver', ARRAY['SI','金融','互联网'], 62, '金融', false, '金融行业SI，核心业务系统集成能力'),
+('亚信科技控股有限公司', 'Gold', 'Cooperating', 'ISV', '周伟', '北京西城', '华北', '2018-04-01', 8, 'Silver', ARRAY['ISV','通信','5G'], 58, '互联网', false, '通信行业ISV，5G核心网方案合作伙伴'),
+('中软国际有限公司', 'Gold', 'Cooperating', 'Service', '吴明', '深圳南山', '华南', '2019-07-12', 6, 'Registered', ARRAY['Service','外包','金融'], 55, '金融', false, 'IT服务合作伙伴，具备大规模交付和运维能力'),
+('太极计算机股份有限公司', 'Gold', 'Cooperating', 'SI', '张伟', '北京海淀', '华北', '2017-11-20', 8, 'Silver', ARRAY['SI','政务','信创'], 63, '政务', true, '政务行业SI，信创替代项目核心交付方'),
+('上海宝信软件股份有限公司', 'Silver', 'Cooperating', 'ISV', '陈强', '上海浦东', '华东', '2020-03-08', 6, 'Registered', ARRAY['ISV','制造','钢铁'], 48, '制造', false, '制造业ISV，钢铁行业MES系统专家'),
+('用友网络科技股份有限公司', 'Silver', 'Cooperating', 'ISV', '林芳', '北京海淀', '华北', '2019-10-01', 6, 'Registered', ARRAY['ISV','ERP','SaaS'], 52, '互联网', false, '企业管理软件ISV，ERP与财务系统合作伙伴'),
+('广州赛意信息科技股份有限公司', 'Silver', 'Cooperating', 'Service', '黄磊', '广州天河', '华南', '2020-06-15', 5, 'Registered', ARRAY['Service','制造','实施'], 45, '制造', false, '制造行业实施服务伙伴，MES/WMS系统部署'),
+('南京华苏科技有限公司', 'Silver', 'Inactive', 'Reseller', '孙鹏', '南京建邺', '华东', '2021-01-20', 5, 'Registered', ARRAY['Reseller','教育','SMB'], 32, '教育', false, '教育行业转售商，区域SMB市场覆盖'),
+('武汉达梦数据库股份有限公司', 'Silver', 'Cooperating', 'ISV', '郑涛', '武汉光谷', '华中', '2020-08-10', 5, 'Registered', ARRAY['ISV','数据库','信创'], 55, '政务', false, '国产数据库ISV，信创替代核心伙伴'),
+('成都四方伟业软件股份有限公司', 'Registered', 'Cooperating', 'ISV', '杨帆', '成都高新区', '西部', '2022-04-01', 4, 'Registered', ARRAY['ISV','大数据','能源'], 40, '能源', false, '大数据平台ISV，能源行业数据治理伙伴'),
+('西安未来国际信息股份有限公司', 'Registered', 'Cooperating', 'SI', '马超', '西安雁塔', '西部', '2021-08-15', 4, 'Registered', ARRAY['SI','政务','西部'], 42, '政务', false, '西部政务SI，区域电子政务项目'),
+('福建顶点软件股份有限公司', 'Registered', 'Cooperating', 'ISV', '何军', '福州鼓楼', '华东', '2022-02-28', 4, 'Registered', ARRAY['ISV','金融','证券'], 45, '金融', false, '金融证券ISV，交易系统合作伙伴'),
+('湖南科创信息技术股份有限公司', 'Registered', 'Prospective', 'Reseller', '刘刚', '长沙岳麓', '华中', '2023-03-10', 3, 'Registered', ARRAY['Reseller','政务','教育'], 28, '教育', false, '华中区域潜在伙伴，政务教育行业'),
+('重庆梅安森科技股份有限公司', 'Silver', 'Cooperating', 'ISV', '赵勇', '重庆渝北', '西部', '2020-11-05', 5, 'Registered', ARRAY['ISV','能源','安全'], 50, '能源', false, '能源安全ISV，煤矿智能化方案伙伴'),
+('深圳华大智造科技股份有限公司', 'Registered', 'Prospective', 'Reseller', '钱进', '深圳南山', '华南', '2023-06-01', 2, 'Registered', ARRAY['Reseller','医疗','基因'], 25, '医疗', false, '生命科学领域潜在伙伴，基因测序设备代理'),
+('山东半岛科技', 'Silver', 'Cooperating', 'VAD', '王芳', '青岛崂山', '华东', '2021-05-10', 4, 'Registered', ARRAY['VAD','政务','分销'], 52, '政务', false, '山东半岛区域VAD，政务云分销专家');
 
 -- ─── Partner Contacts ─────────────────────────────────
-INSERT INTO partner_contacts (partner_id, last_name, first_name, title, department, phone, email, is_primary) VALUES
-(DEFAULT, '高', '波', '总经理', '管理层', '13801001001', 'gaobo@digitalchina.com', true),
-(DEFAULT, '刘', '畅', '技术总监', '技术部', '13801001002', 'liuc@digitalchina.com', false),
-(DEFAULT, '陈', '明', '副总裁', '管理层', '13901002001', 'chenm@neusoft.com', true),
-(DEFAULT, '李', '伟', '解决方案架构师', '技术部', '13901002002', 'liw@neusoft.com', false),
-(DEFAULT, '刘', '洋', '销售总监', '销售部', '13501003001', 'liuy@sinosoft.com', true),
-(DEFAULT, '王', '强', '政务事业部总经理', '政务事业部', '13701004001', 'wangq@inspur.com', true),
-(DEFAULT, '李', '娜', '生态合作总监', '生态部', '13601005001', 'lina@huawei.com', true),
-(DEFAULT, '赵', '华', '金融事业部总监', '金融事业部', '13401006001', 'zhaoh@isoftstone.com', true),
-(DEFAULT, '周', '伟', 'CTO', '技术部', '13301007001', 'zhouw@asiainfo.com', true),
-(DEFAULT, '吴', '明', '交付总监', '交付部', '13201008001', 'wum@chinasofti.com', true),
-(DEFAULT, '张', '伟', '政务事业部总监', '政务事业部', '13101009001', 'zhangw@taiji.com', true),
-(DEFAULT, '陈', '强', '总经理', '管理层', '13001010001', 'chenq@baosight.com', true);
+INSERT INTO partner_contacts (partner_id, last_name, first_name, title, department, phone, email, is_primary)
+SELECT id, '伟', '陈', '技术总监', '技术部', '13901000001', 'chenw@huadongmedical.com', true FROM partners WHERE name = '华东医卫云科技术有限公司'
+UNION ALL SELECT id, '浩', '王', '销售总监', '销售部', '13901000002', 'wangh@shanghaizhimei.com', true FROM partners WHERE name = '上海智医科技'
+UNION ALL SELECT id, '洋', '刘', '技术总监', '技术部', '13901000003', 'liuy@huanansmart.com', true FROM partners WHERE name = '华南智慧科技'
+UNION ALL SELECT id, '敏', '赵', '总经理', '管理层', '13901000004', 'zhaom@huanan-system.com', true FROM partners WHERE name = '华南系统集成'
+UNION ALL SELECT id, '杰', '孙', '技术总监', '技术部', '13901000005', 'sunj@beifangxinke.com', true FROM partners WHERE name = '北方信科'
+UNION ALL SELECT id, '琳', '周', '总经理', '管理层', '13901000006', 'zhoul@xibuyunzhi.com', true FROM partners WHERE name = '西部云智科技'
+UNION ALL SELECT id, '涛', '吴', '技术总监', '技术部', '13901000007', 'wut@huananzhihui.com', true FROM partners WHERE name = '华中智慧医疗'
+UNION ALL SELECT id, '强', '郑', '总经理', '管理层', '13901000008', 'zhengq@xibeicloud.com', true FROM partners WHERE name = '西北云科技'
+UNION ALL SELECT id, '洋', '刘', '政务事业部总监', '政务事业部', '13901000009', 'liuy@shenzhen-smartcity.com', true FROM partners WHERE name = '深圳智慧城市科技'
+UNION ALL SELECT id, '波', '高', '总经理', '管理层', '13801001001', 'gaobo@digitalchina.com', true FROM partners WHERE name = '神州数码集团股份有限公司'
+UNION ALL SELECT id, '明', '陈', '副总裁', '管理层', '13901002001', 'chenm@neusoft.com', true FROM partners WHERE name = '东软集团股份有限公司'
+UNION ALL SELECT id, '伟', '李', '解决方案架构师', '技术部', '13901002002', 'liw@neusoft.com', false FROM partners WHERE name = '东软集团股份有限公司'
+UNION ALL SELECT id, '洋', '刘', '销售总监', '销售部', '13501003001', 'liuy@sinosoft.com', true FROM partners WHERE name = '中科软科技股份有限公司'
+UNION ALL SELECT id, '强', '王', '政务事业部总经理', '政务事业部', '13701004001', 'wangq@inspur.com', true FROM partners WHERE name = '浪潮电子信息产业股份有限公司'
+UNION ALL SELECT id, '娜', '李', '生态合作总监', '生态部', '13601005001', 'lina@huawei.com', true FROM partners WHERE name = '华为技术有限公司'
+UNION ALL SELECT id, '华', '赵', '金融事业部总监', '金融事业部', '13401006001', 'zhaoh@isoftstone.com', true FROM partners WHERE name = '软通动力信息技术股份有限公司'
+UNION ALL SELECT id, '伟', '周', 'CTO', '技术部', '13301007001', 'zhouw@asiainfo.com', true FROM partners WHERE name = '亚信科技控股有限公司'
+UNION ALL SELECT id, '明', '吴', '交付总监', '交付部', '13201008001', 'wum@chinasofti.com', true FROM partners WHERE name = '中软国际有限公司'
+UNION ALL SELECT id, '伟', '张', '政务事业部总监', '政务事业部', '13101009001', 'zhangw@taiji.com', true FROM partners WHERE name = '太极计算机股份有限公司'
+UNION ALL SELECT id, '强', '陈', '总经理', '管理层', '13001010001', 'chenq@baosight.com', true FROM partners WHERE name = '上海宝信软件股份有限公司'
+UNION ALL SELECT id, '芳', '林', 'ERP事业部总监', 'ERP事业部', '13001011001', 'linf@yonyou.com', true FROM partners WHERE name = '用友网络科技股份有限公司';
 
 -- ─── Deals (15 realistic deals) ───────────────────────
 INSERT INTO deals (id, title, customer, value, partner_id, partner_name, partner_type, status, region, sales_name, sales_team, product_type, created_date, end_date, is_priority, has_conflict) VALUES

@@ -1,5 +1,5 @@
 import React, { useState, memo, useMemo, useCallback } from 'react';
-import { TrendingUp, TrendingDown, Minus, Info, Clock, Target, Calendar } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, Info, Clock, Target, Calendar, ChevronRight } from 'lucide-react';
 import { cn, formatCurrency } from '../../lib/utils';
 import { TimeSeriesMetric, AchievementData } from '../../types';
 import { motion, AnimatePresence } from 'motion/react';
@@ -240,7 +240,7 @@ export const KpiCard: React.FC<KpiCardProps> = memo(({ data, unit = '', isCurren
           </span>
         </div>
         <div className="h-2 w-full bg-[#f5f5f7] rounded-full overflow-hidden">
-          <motion.div 
+          <motion.div
             initial={{ width: 0 }}
             animate={{ width: `${Math.min(100, currentAchievement.rate)}%` }}
             className={cn(
@@ -249,6 +249,11 @@ export const KpiCard: React.FC<KpiCardProps> = memo(({ data, unit = '', isCurren
             )}
           />
         </div>
+        <button
+          onClick={() => window.open(`/detail/${data.metric_name || data.metric_name.toLowerCase().replace(/\s+/g, '-')}`, '_blank')}
+          className="mt-3 w-full py-2 bg-slate-50 border border-slate-100 text-slate-600 text-[9px] font-black uppercase tracking-wider rounded-xl hover:bg-slate-100 transition-colors flex items-center justify-center gap-1">
+          查看详情 <ChevronRight className="w-3 h-3" />
+        </button>
       </div>
     </div>
   );

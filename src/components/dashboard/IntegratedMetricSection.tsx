@@ -1898,6 +1898,21 @@ export const IntegratedMetricSection: React.FC<IntegratedMetricSectionProps> = (
                 <span className="text-slate-200">|</span>
                 <span>VER: 2026.Q2.V4</span>
               </div>
+              {/* 查看详情按钮 */}
+              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-3">
+                <button
+                  onClick={() => window.open('/detail/ecosystem-metrics', '_blank')}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-xl text-xs font-semibold hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors shadow-sm">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" /></svg>
+                  查看完整详情报告
+                </button>
+                <button
+                  onClick={() => window.open('/analytics', '_blank')}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-semibold hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors border border-slate-200 dark:border-slate-700">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>
+                  前往数据分析
+                </button>
+              </div>
           </div>
         </div>
       </div>

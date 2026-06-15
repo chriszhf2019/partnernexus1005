@@ -64,7 +64,7 @@ export const DealRegistrationForm = () => {
   const [products, setProducts] = useState<{ name: string; qty: number }[]>([]);
 
   useEffect(() => {
-    partnerService.list().then(r => setPartners(r.items || [])).catch(() => {});
+    partnerService.list().then(r => setPartners(r.items || [])).catch(e => console.warn('[DealRegistrationForm] partners error:', e));
     
     // 从路由参数获取编辑ID
     if (routeId) {
@@ -88,7 +88,7 @@ export const DealRegistrationForm = () => {
             salesTeam: '',
           });
         }
-      }).catch(() => {});
+      }).catch(e => console.warn('[DealRegistrationForm] getById error:', e));
       return;
     }
     

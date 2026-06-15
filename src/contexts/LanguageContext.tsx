@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 
 type Language = 'zh' | 'en';
 
@@ -577,6 +577,26 @@ export const translations: Record<Language, Record<string, string>> = {
     'gl.activityZone.filterAll': '全部',
     'gl.activityZone.filterOverBudget': '超支',
     'gl.activityZone.filterZeroLeads': '零线索',
+
+    // Ecosystem Dashboard
+    'ecosys.ioCorrelation': '投入产出相关性',
+    'ecosys.highIncentHighOutput': '高激励·高产出',
+    'ecosys.highIncentLowOutput': '高激励·低产出',
+    'ecosys.lowIncentHighOutput': '低激励·高产出',
+    'ecosys.lowIncentLowOutput': '低激励·低产出',
+    'ecosys.focusMaintenance': '重点维护',
+    'ecosys.needIntervention': '需干预',
+    'ecosys.potential': '潜力股',
+    'ecosys.dormant': '休眠',
+    'ecosys.q1PolicyAdjust': 'Q1 政策调整',
+    'ecosys.q2NewProduct': 'Q2 新品发布',
+    'ecosys.q3Gap': 'Q3 预测缺口',
+    'ecosys.southChinaActivation': '华南伙伴激活',
+    'ecosys.iceBreakingReward': '破冰奖励',
+    'ecosys.q4Gap': 'Q4业绩缺口',
+    'ecosys.financialIndustry': '金融行业',
+    'ecosys.launchMarketing': '发起营销活动',
+    'ecosys.goToIncentives': '前往激励政策',
     'gl.activityZone.filterNotStarted': '未启动',
     'gl.activityZone.filterNormal': '正常',
     'gl.activityZone.noMatch': '暂无匹配的活动',
@@ -1246,6 +1266,26 @@ export const translations: Record<Language, Record<string, string>> = {
     'gl.marketing.executionRate': 'Exec. Rate:',
     'gl.marketing.activityDistribution': 'Activity Type Distribution',
 
+    // Ecosystem Dashboard
+    'ecosys.ioCorrelation': 'Investment-Output Correlation',
+    'ecosys.highIncentHighOutput': 'High Incentive · High Output',
+    'ecosys.highIncentLowOutput': 'High Incentive · Low Output',
+    'ecosys.lowIncentHighOutput': 'Low Incentive · High Output',
+    'ecosys.lowIncentLowOutput': 'Low Incentive · Low Output',
+    'ecosys.focusMaintenance': 'Focus Maintenance',
+    'ecosys.needIntervention': 'Needs Intervention',
+    'ecosys.potential': 'High Potential',
+    'ecosys.dormant': 'Dormant',
+    'ecosys.q1PolicyAdjust': 'Q1 Policy Adjustment',
+    'ecosys.q2NewProduct': 'Q2 New Product',
+    'ecosys.q3Gap': 'Q3 Forecast Gap',
+    'ecosys.southChinaActivation': 'South China Activation',
+    'ecosys.iceBreakingReward': 'Ice Breaking Reward',
+    'ecosys.q4Gap': 'Q4 Revenue Gap',
+    'ecosys.financialIndustry': 'Financial Industry',
+    'ecosys.launchMarketing': 'Launch Campaign',
+    'ecosys.goToIncentives': 'Go to Incentives',
+
     // Months
     'month.1': 'Jan',
     'month.2': 'Feb',
@@ -1266,9 +1306,18 @@ type InterpolationParams = Record<string, string | number>;
 
 export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [language, setLanguage] = useState<Language>(() => {
-    const stored = localStorage.getItem('language');
+    if (typeof window === 'undefined') return 'zh';
+    const stored = localStorage.getItem('partnernexus_language');
     return stored === 'en' ? 'en' : 'zh';
   });
+
+  // Sync language state with localStorage
+  useEffect(() => {
+    const stored = localStorage.getItem('partnernexus_language');
+    if (stored === 'en' && language !== 'en') {
+      setLanguage('en');
+    }
+  }, []);
 
   const t = useCallback((key: string, params?: InterpolationParams) => {
     const text = translations[language][key] || (language !== 'zh' ? translations['zh'][key] : undefined);
@@ -1283,7 +1332,7 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
 
   const setLanguagePersisted = useCallback((lang: Language) => {
     setLanguage(lang);
-    localStorage.setItem('language', lang);
+    localStorage.setItem('partnernexus_language', lang);
   }, []);
 
   const formatDate = useCallback((date: string | Date) => {

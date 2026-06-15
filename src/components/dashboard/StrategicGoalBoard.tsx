@@ -61,7 +61,7 @@ export const StrategicGoalBoard = ({ revenue, insights, onNavigate }: StrategicG
         <div className="grid grid-cols-2 gap-3 flex-1">
           <div className="text-center p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
             <p className="text-[10px] text-neutral-500">YTD</p>
-            <p className="text-sm font-semibold">42.5%</p>
+            <p className="text-sm font-semibold">{Math.round(achievementRate)}%</p>
           </div>
           <div className="text-center p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
             <p className="text-[10px] text-neutral-500">GAP</p>

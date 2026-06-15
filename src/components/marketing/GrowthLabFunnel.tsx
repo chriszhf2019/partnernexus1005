@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
+import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '../ui/Card';
 import { Users, ArrowRight, UserCheck, Target, Award } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 
 interface GrowthLabFunnelProps {
   totalParticipants: number;
@@ -12,6 +13,7 @@ interface GrowthLabFunnelProps {
 
 export const GrowthLabFunnel = ({ totalParticipants, totalLeads, qActivities, cur }: GrowthLabFunnelProps) => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
   const funnelStages = useMemo(() => {
     const reg = totalParticipants || 1;
     const leads = totalLeads;
@@ -60,6 +62,14 @@ export const GrowthLabFunnel = ({ totalParticipants, totalLeads, qActivities, cu
           })}
         </div>
       </CardContent>
+      <CardFooter>
+        <button
+          onClick={() => navigate('/detail/funnel-analysis')}
+          className="w-full flex items-center justify-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700 transition-colors"
+        >
+          查看详情 <ArrowRight className="w-3 h-3" />
+        </button>
+      </CardFooter>
     </Card>
   );
 };

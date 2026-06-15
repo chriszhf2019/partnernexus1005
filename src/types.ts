@@ -7,6 +7,7 @@ export type DealLifecycleStage =
   | 'Registered'    // 已报备
   | 'UnderReview'   // 审批中
   | 'Approved'      // 已批复
+  | 'Migrated'      // 迁单
   | 'Solution'      // 方案跟进
   | 'Commercial'    // 商务洽谈
   | 'ClosedWon'     // 赢单
@@ -21,6 +22,16 @@ export type DealSource =
   | 'MarketingEvent'     // 市场活动
   | 'IncentiveProgram'   // 激励计划
   | 'Referral';          // 客户推荐
+
+/** 判断商机是否已赢单（stage 或 status 任一符合即为赢单） */
+export function isDealWon(deal: { stage?: string; status?: string }): boolean {
+  return deal.stage === 'ClosedWon' || deal.status === 'Closed Won' || deal.status === 'Converted';
+}
+
+/** 判断商机是否已丢单 */
+export function isDealLost(deal: { stage?: string; status?: string }): boolean {
+  return deal.stage === 'ClosedLost' || deal.status === 'Closed Lost';
+}
 
 export type ConflictType =
   | 'SameCustomerSameProduct'   // 同客户同产品
@@ -1364,6 +1375,7 @@ export interface AchievementData {
 export interface TimeSeriesMetric {
   metric_name: string;
   current_value: number;
+  total_partners?: number;
   yoy: number;
   qoq: number;
   mom: number;

@@ -28,11 +28,13 @@ export default defineConfig(({ mode }) => {
       hmr: process.env.DISABLE_HMR !== 'true',
     },
     build: {
+      // 移除sourcemap以减少bundle大小
+      sourcemap: false,
       rollupOptions: {
         output: {
-          entryFileNames: `assets/[name]-[hash].js`,
-          chunkFileNames: `assets/[name]-[hash].js`,
-          assetFileNames: `assets/[name]-[hash].[ext]`,
+          entryFileNames: `assets/[name]-[hash:8].js`,
+          chunkFileNames: `assets/[name]-[hash:8].js`,
+          assetFileNames: `assets/[name]-[hash:8].[ext]`,
         },
       },
     },

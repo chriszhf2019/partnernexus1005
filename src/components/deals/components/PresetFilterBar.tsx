@@ -4,7 +4,7 @@ import {
   Plus, Sparkles, Filter, X,
 } from 'lucide-react';
 import { cn } from '../../../lib/utils';
-import { PresetFilter, Deal } from '../../../types';
+import { PresetFilter, Deal, isDealWon, isDealLost } from '../../../types';
 import { supabase } from '../../../lib/supabase';
 import { Badge } from '../../ui/Badge';
 import { Button } from '../../ui/Button';
@@ -177,6 +177,21 @@ export const PresetFilterBar: React.FC<PresetFilterBarProps> = ({
           isSystem: false,
           isAIRecommended: true,
           sortOrder: 102,
+          badge: 'count',
+        });
+      }
+
+      // 4. 过期商机检测
+      const expiredDeals = deals.filter(d => !isDealWon(d) && !isDealLost(d) && (d.expiresInDays ?? 999) < 0);
+      if (expiredDeals.length > 0) {
+        recommendations.push({
+          id: 'ai-expired',
+          name: '已过期商机',
+          icon: 'alerttriangle',
+          filters: { expiresInDaysMax: -1 },
+          isSystem: false,
+          isAIRecommended: true,
+          sortOrder: 103,
           badge: 'count',
         });
       }

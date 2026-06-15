@@ -66,7 +66,7 @@ export const PartnerStaffPage = () => {
         if (contacts) {
           setStaff(contacts.map((c: any) => mapContactToStaff(c, c.partners?.name || '')));
         }
-      } catch {}
+      } catch (e) { console.warn('[PartnerStaffPage] contacts error:', e); }
 
       try {
         // Fetch deals
@@ -96,7 +96,7 @@ export const PartnerStaffPage = () => {
             lifecycle: [],
           })));
         }
-      } catch {}
+      } catch (e) { console.warn('[PartnerStaffPage] deals error:', e); }
 
       try {
         // Fetch marketing activities
@@ -111,7 +111,7 @@ export const PartnerStaffPage = () => {
             time: '',
           })));
         }
-      } catch {}
+      } catch (e) { console.warn('[PartnerStaffPage] mkt activities error:', e); }
 
       // Build org structure: use partner's org_structure or auto-generate from staff
       try {
@@ -121,7 +121,7 @@ export const PartnerStaffPage = () => {
             setOrgStructure(partner.org_structure);
           }
         }
-      } catch {}
+      } catch (e) { console.warn('[PartnerStaffPage] org structure error:', e); }
 
       setLoading(false);
     }

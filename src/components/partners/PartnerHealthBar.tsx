@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useNavigate } from 'react-router-dom';
+import { PartnerHealthRadar } from './PartnerHealthRadar';
+import { DiagnosisPanel } from './DiagnosisPanel';
+import { ActionCenter } from './ActionCenter';
+import { useHealthData } from '../../hooks/useHealthData';
 import { Card } from '../ui/Card';
 import { cn } from '../../lib/utils';
 import { MapPin, TrendingUp, Award, Activity, ChevronRight, X, Bell, AlertTriangle, Calendar, Target, Clock, DollarSign, Users, Shield } from 'lucide-react';
@@ -8,12 +12,13 @@ import { MapPin, TrendingUp, Award, Activity, ChevronRight, X, Bell, AlertTriang
 interface PartnerHealthBarProps {
   partners: any[];
   pendingCount: number;
+  wonValue?: number;
   onFilterStatus?: (status: string) => void;
   onTabChange?: (tab: string) => void;
 }
 
 export const PartnerHealthBar = ({
-  partners, pendingCount, onFilterStatus, onTabChange,
+  partners, pendingCount, wonValue = 0, onFilterStatus, onTabChange,
 }: PartnerHealthBarProps) => {
   const navigate = useNavigate();
   const [showDrawer, setShowDrawer] = useState(false);
@@ -21,9 +26,21 @@ export const PartnerHealthBar = ({
   const coopCount = partners.filter(p => p.status === 'Cooperating').length;
   const wonCount = partners.filter(p => (p.winRate || 0) > 0).length;
   const regions = [...new Set(partners.map(p => p.region).filter(Boolean))];
-  const newThisQ = 2; // hardcoded
+  const newThisQ = pendingCount; // Use the prop directly
   const whiteSpaces = ['西北', '西南'].filter(r => !regions.includes(r));
 
+      const { 
+    vitality, diagnoses, tasks, allDiagnoses, allTasks,
+    focusMetric, setFocusMetric, loading: healthLoading, 
+  } = useHealthData();
+  
+  const FOCUS_META = [
+    { key: 'OVERALL' as const, label: '综合', color: 'bg-neutral-900 dark:bg-white' },
+    { key: 'COVERAGE' as const, label: '覆盖', color: 'bg-blue-500' },
+    { key: 'VITALITY' as const, label: '活跃', color: 'bg-emerald-500' },
+    { key: 'CAPABILITY' as const, label: '能力', color: 'bg-purple-500' },
+  ];
+  
   return (
     <>
       {/* Three Health Cards — in KPI card 4-column grid style */}
@@ -88,7 +105,7 @@ export const PartnerHealthBar = ({
                 <p className="text-xs text-neutral-500">📊 能效健康</p>
               </div>
               <p className="text-2xl font-bold text-purple-600">65</p>
-              <p className="text-[10px] text-neutral-400 mt-0.5">ARPP ¥{(107100000/Math.max(coopCount,1)/10000).toFixed(0)}万 · 赢单率{Math.round(wonCount/Math.max(partners.length,1)*100)}%</p>
+              <p className="text-[10px] text-neutral-400 mt-0.5">ARPP ¥{wonValue > 0 ? (wonValue/Math.max(coopCount,1)/10000).toFixed(0) : '--'}万 · 赢单率{Math.round(wonCount/Math.max(partners.length,1)*100)}%</p>
             </div>
             <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center shrink-0 ml-2"><Target className="w-5 h-5 text-purple-600" /></div>
           </div>
@@ -176,7 +193,7 @@ export const PartnerHealthBar = ({
                 </div>
 
                 {/* 2. 待批复 */}
-                {pendingCount > 0 && (<div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200"><div className="flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-red-500" /><span className="text-sm font-semibold text-red-700">待批复 ({pendingCount} 家)</span><span className="text-[10px] text-red-400">最长 {Math.max(0, ...partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)))} 天</span></div>
+                {pendingCount > 0 && (<div className="p-4 bg-red-50 dark:bg-red-900/10 rounded-xl border border-red-200"><div className="flex items-center gap-2 mb-3"><Clock className="w-4 h-4 text-red-500" /><span className="text-sm font-semibold text-red-700">待批复 ({pendingCount} 家)</span><span className="text-[10px] text-red-400">最长 {(() => { const days = partners.filter(p => p.status === 'Prospective').map(p => Math.ceil((Date.now() - new Date(p.applicationDate || p.startDate).getTime()) / 86400000)).filter((d: number) => !isNaN(d) && isFinite(d)); return days.length > 0 ? Math.max(...days) : 0; })()} 天</span></div>
                   {partners.filter(p => p.status === 'Prospective').slice(0, 5).map(p => (<div key={p.id} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg mb-1.5"><div><p className="text-xs font-semibold">{p.name}</p><p className="text-[10px] text-neutral-400">{p.tier} · {Math.ceil((Date.now()-new Date(p.applicationDate||p.startDate).getTime())/86400000)}天</p></div><button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="text-[10px] text-red-600 hover:underline shrink-0">批复 →</button></div>))}
                   <button onClick={() => { setShowDrawer(false); onTabChange?.('pending'); }} className="w-full text-center text-[11px] text-red-600 hover:underline mt-2">查看全部 {pendingCount} 条 →</button>
                 </div>)}
@@ -187,7 +204,19 @@ export const PartnerHealthBar = ({
                   <div className="space-y-1.5">
                     {[...new Set(partners.map(p=>p.region).filter(Boolean))].slice(0,6).map(r => {
                       const c = partners.filter(p=>p.region===r).length;
-                      return (<div key={r} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg text-xs"><span>{r}</span><span className="font-bold text-cyan-600">{c} 家</span></div>);
+                          const { 
+    vitality, diagnoses, tasks, allDiagnoses, allTasks,
+    focusMetric, setFocusMetric, loading: healthLoading, 
+  } = useHealthData();
+  
+  const FOCUS_META = [
+    { key: 'OVERALL' as const, label: '综合', color: 'bg-neutral-900 dark:bg-white' },
+    { key: 'COVERAGE' as const, label: '覆盖', color: 'bg-blue-500' },
+    { key: 'VITALITY' as const, label: '活跃', color: 'bg-emerald-500' },
+    { key: 'CAPABILITY' as const, label: '能力', color: 'bg-purple-500' },
+  ];
+  
+  return (<div key={r} className="flex items-center justify-between p-2 bg-white dark:bg-neutral-800 rounded-lg text-xs"><span>{r}</span><span className="font-bold text-cyan-600">{c} 家</span></div>);
                     })}
                   </div>
                   <p className="text-[10px] text-cyan-500 mt-2">
@@ -246,6 +275,60 @@ export const PartnerHealthBar = ({
           </>
         )}
       </AnimatePresence>
+
+      {/* ═══ 智能诊断面板（三层联动） ═══ */}
+      {allDiagnoses.length > 0 && (
+        <div className="bg-white dark:bg-neutral-900 rounded-xl border border-neutral-200 dark:border-neutral-800 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">🩺 智能诊断</h3>
+              <p className="text-xs text-neutral-500 mt-0.5">
+                {focusMetric === 'OVERALL' ? '综合预警' : focusMetric === 'COVERAGE' ? '区域供需热力图' : focusMetric === 'VITALITY' ? '漏斗流失分析' : '技能缺口矩阵'}
+                · 基于 {allDiagnoses.length} 项规则触发 · 当前筛选 {diagnoses.length} 项
+              </p>
+            </div>
+            {vitality && (
+              <div className="text-xs text-neutral-500">
+                活跃评分 <span className="font-semibold text-neutral-700 dark:text-neutral-300">{vitality.score}</span>
+                <span className="ml-1">{vitality.trends}</span>
+              </div>
+            )}
+          </div>
+          <DiagnosisPanel alerts={diagnoses} />
+        </div>
+      )}
+
+      {/* ═══ 行动中心（三层联动） ═══ */}
+      {allTasks.length > 0 && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <h3 className="text-sm font-semibold text-neutral-900 dark:text-white">🎯 行动中心</h3>
+            <span className="text-xs text-neutral-400">
+              {focusMetric === 'OVERALL' ? '紧急任务' : focusMetric === 'COVERAGE' ? '入驻审批与招募任务' : focusMetric === 'VITALITY' ? '激励推送与沉默唤醒' : '课程推荐与标杆案例包装'}
+              · 共 {allTasks.length} 项 · 当前 {tasks.length} 项
+            </span>
+          </div>
+          <ActionCenter tasks={tasks} />
+        </div>
+      )}
+
+      {/* ═══ 活跃度漏斗 ═══ */}
+      {vitality && (
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { label: '注册伙伴', value: vitality.funnel_data.registered, color: 'bg-neutral-300' },
+            { label: '合作中', value: vitality.funnel_data.cooperating, color: 'bg-blue-400' },
+            { label: '有商机', value: vitality.funnel_data.has_leads, color: 'bg-amber-400' },
+            { label: '高产出', value: vitality.funnel_data.high_yield, color: 'bg-emerald-500' },
+          ].map((item, i) => (
+            <div key={item.label} className="p-3 bg-white dark:bg-neutral-900 rounded-xl border border-neutral-100 dark:border-neutral-800 text-center">
+              <div className={cn('w-8 h-8 rounded-full mx-auto mb-1', item.color)} />
+              <p className="text-lg font-bold text-neutral-900 dark:text-white">{item.value}</p>
+              <p className="text-[10px] text-neutral-500">{item.label}</p>
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 };

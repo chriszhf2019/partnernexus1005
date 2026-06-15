@@ -7,6 +7,7 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { PageLoader } from './components/ui/PageLoader';
 import { NetworkStatus } from './components/ui/NetworkStatus';
 import { ToastProvider } from './components/ui/Toast';
+import { NotFoundPage } from './components/layout/NotFoundPage';
 import { usePartners, useDeals, useActivities, type ActivityItem } from './hooks/useData';
 import { partnerService } from './services/partner-service';
 import { dealService } from './services/deal-service';
@@ -41,6 +42,7 @@ const PartnerList = retryableLazy(() => import('./components/partners/PartnerLis
 import { PartnerProfile } from './components/partners/PartnerProfile';
 import { PartnerBusinessPlan } from './components/partners/PartnerBusinessPlan';
 const PartnerFormPage = retryableLazy(() => import('./components/partners/PartnerFormPage').then(m => ({ default: m.PartnerFormPage })));
+const PartnerDetailPage = retryableLazy(() => import('./components/partners/PartnerDetailPage').then(m => ({ default: m.default })));
 const MarketingIncentivePage = retryableLazy(() => import('./components/marketing/MarketingIncentivePage').then(m => ({ default: m.MarketingIncentivePage })));
 const DealRegistrationPage = retryableLazy(() => import('./components/deals/DealRegistrationPage').then(m => ({ default: m.DealRegistrationPage })));
 const DealRegistrationForm = retryableLazy(() => import('./components/deals/DealRegistrationForm').then(m => ({ default: m.DealRegistrationForm })));
@@ -88,16 +90,15 @@ function PartnersRoute() {
   const { partners: initialPartners, partnerListRef } = usePartners();
   const [partners, setPartners] = useState(initialPartners);
 
-  // Fetch Supabase partners and merge with imported/local (Supabase data takes precedence for same ID)
+  // Fetch Supabase partners — if database fails, keep empty
   useEffect(() => {
     partnerService.list().then((result) => {
-      const dbIds = new Set(result.items.map((p: Partner) => p.id));
-      const kept = initialPartners.filter((p) => !dbIds.has(p.id));
-      const merged = [...result.items, ...kept];
-      setPartners(merged);
-      partnerListRef.current = merged;
+      if (result.items.length > 0) {
+        setPartners(result.items);
+        partnerListRef.current = result.items;
+      }
     }).catch(() => {
-      // Keep using initialPartners from usePartners
+      // Database unavailable — keep empty state
     });
   }, []);
 
@@ -347,6 +348,7 @@ function AppLayout() {
             <Route path="/" element={<Navigate to="/ecosystem" replace />} />
               <Route path="/ecosystem" element={<EcosystemRoute />} />
               <Route path="/partners" element={<PartnersRoute />} />
+              <Route path="/partners/detail" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerDetailPage /></Suspense></ErrorBoundary>} />
               <Route path="/partners/new" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerFormPage /></Suspense></ErrorBoundary>} />
             <Route path="/partners/:id" element={<PartnerProfileRoute />} />
               <Route path="/partners/:id/staff" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerStaffPage /></Suspense></ErrorBoundary>} />
@@ -375,6 +377,9 @@ function AppLayout() {
               <Route path="/settings" element={<SettingsRoute />} />
               <Route path="/channels" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChannelDashboard /></Suspense></ErrorBoundary>} />
               <Route path="/invitation/:code" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><InvitationPage /></Suspense></ErrorBoundary>} />
+              {/* 404 Not Found */}
+              <Route path="/404" element={<NotFoundPage />} />
+              <Route path="*" element={<Navigate to="/404" replace />} />
             </Routes>
         </main>
 

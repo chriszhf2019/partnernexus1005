@@ -1,6 +1,7 @@
-import { Users, TrendingUp, AlertTriangle, MessageSquare } from 'lucide-react';
+import { Users, TrendingUp, AlertTriangle, MessageSquare, ArrowRight } from 'lucide-react';
 import { cn } from '../../../lib/utils';
 import { Sparkline } from './Sparkline';
+import { useNavigate } from 'react-router-dom';
 
 interface AdminKpi {
   label: string;
@@ -42,6 +43,7 @@ export const AdminKpiCards = ({
   onStagnantClick,
   onFeedbackClick,
 }: AdminKpiCardsProps) => {
+  const navigate = useNavigate();
   const cards: AdminKpi[] = [
     {
       label: '活跃学员占比',
@@ -101,29 +103,35 @@ export const AdminKpiCards = ({
             card.alert ? 'bg-red-200' : 'bg-neutral-100 dark:bg-neutral-700'
           )} />
           <div className="relative flex items-start justify-between">
-            <div>
-              <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">{card.label}</p>
-              <div className="flex items-baseline gap-1 mt-0.5">
-                <span className={cn('text-xl font-extrabold', card.alert && 'text-red-600 dark:text-red-400')}>
-                  {card.value}
-                </span>
-                {card.trend && (
-                  <span className={cn(
-                    'text-[10px] font-semibold',
-                    card.trend.direction === 'up' ? 'text-emerald-600' : 'text-red-500'
-                  )}>
-                    ↑{card.trend.percent}%
+              <div>
+                <p className="text-[10px] text-neutral-500 dark:text-neutral-400 font-medium">{card.label}</p>
+                <div className="flex items-baseline gap-1 mt-0.5">
+                  <span className={cn('text-xl font-extrabold', card.alert && 'text-red-600 dark:text-red-400')}>
+                    {card.value}
                   </span>
-                )}
+                  {card.trend && (
+                    <span className={cn(
+                      'text-[10px] font-semibold',
+                      card.trend.direction === 'up' ? 'text-emerald-600' : 'text-red-500'
+                    )}>
+                      ↑{card.trend.percent}%
+                    </span>
+                  )}
+                </div>
+                <p className="text-[9px] text-neutral-400 dark:text-neutral-500 mt-0.5">{card.sub}</p>
               </div>
-              <p className="text-[9px] text-neutral-400 dark:text-neutral-500 mt-0.5">{card.sub}</p>
+              {card.sparklineData && card.sparklineColor && (
+                <Sparkline data={card.sparklineData} color={card.sparklineColor} width={56} height={22} />
+              )}
             </div>
-            {card.sparklineData && card.sparklineColor && (
-              <Sparkline data={card.sparklineData} color={card.sparklineColor} width={56} height={22} />
-            )}
+            <button
+              onClick={() => navigate('/detail/enablement')}
+              className="mt-2 pt-2 border-t border-neutral-100 dark:border-neutral-800 w-full flex items-center justify-center gap-1 text-[10px] font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              查看详情 <ArrowRight className="w-3 h-3" />
+            </button>
           </div>
-        </div>
-      ))}
-    </div>
-  );
+        ))}
+      </div>
+    );
 };

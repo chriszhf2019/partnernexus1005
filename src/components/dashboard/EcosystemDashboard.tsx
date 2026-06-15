@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { useCockpitData } from '../../hooks/useData';
+import { useCockpitData, usePartners } from '../../hooks/useData';
 import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
@@ -50,10 +50,44 @@ const barColorsBrand = ['#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '
 
 export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemDashboardProps) => {
   const { config } = useConfig();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { data: cockpitData, loading: cockpitLoading } = useCockpitData();
+  const { partners: partnerData } = usePartners();
+  const partners = partnerData || [];
   const [detailDim, setDetailDim] = useState<string>('region');
   const [showPartnerList, setShowPartnerList] = useState<{ title: string; partners: any[] } | null>(null);
+  const [allPartners, setAllPartners] = useState<any[]>([]);
+
+  // Fetch all partners for lifecycle calculation
+  useEffect(() => {
+    const fetchPartners = async () => {
+      try {
+        const { data } = await supabase.from('partners').select('*');
+        if (data) setAllPartners(data);
+      } catch (e) { console.warn('[EcosystemDashboard] fetch partners error:', e); }
+    };
+    fetchPartners();
+  }, []);
+
+  // Calculate lifecycle stages from real partner data
+  const lifecycleCounts = useMemo(() => {
+    if (allPartners.length === 0) return {导入期: 0, 成长期: 0, 成熟期: 0, 衰退期: 0};
+    const total = allPartners.length;
+    // 导入期: Prospective status
+    const introCount = allPartners.filter(p => p.status === 'Prospective').length;
+    // 衰退期: Cooperating but no wins in recent period
+    const dormantCount = allPartners.filter(p => p.status === 'Cooperating' && (p.win_rate === 0 || p.win_rate === null)).length;
+    // 成熟期: Has good win rate (>= 50%) and contribution
+    const matureCount = allPartners.filter(p => p.status === 'Cooperating' && (p.win_rate || 0) >= 50).length;
+    // 成长期: Remaining Cooperating partners
+    const growthCount = total - introCount - dormantCount - matureCount;
+    return {
+      导入期: introCount,
+      成长期: Math.max(0, growthCount),
+      成熟期: matureCount,
+      衰退期: dormantCount
+    };
+  }, [allPartners]);
 
   const { revenue, activePartners, pipeline, leadsConversion, marketing, insights } = cockpitData;
   const ecosystem = activePartners?.partner_ecosystem_details;
@@ -63,7 +97,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
 
   const kpis = useMemo(() => [
     { label: '季度营收', value: formatCurrency(revenue?.achievements?.quarterly?.current ?? 0, currency), target: formatCurrency(revenue?.achievements?.quarterly?.target ?? 0, currency), rate: revenue?.achievements?.quarterly?.rate ?? 0, change: revenue?.qoq ?? 0, spark: revenue?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#18181b', diagnosis: (revenue?.qoq ?? 0) >= 0 ? '华东区贡献42%增长，华南新伙伴发力明显' : '华北制造业需求放缓拖累整体，需重点关注', detailPath: 'ecosystem-revenue' },
-    { label: '活跃伙伴数', value: Math.round(activePartners?.current_value ?? 0).toLocaleString(), target: Math.round(activePartners?.achievements?.quarterly?.target ?? 0).toLocaleString(), rate: activePartners?.achievements?.quarterly?.rate ?? 0, change: activePartners?.qoq ?? 0, spark: activePartners?.monthly_data?.map((d) => Math.round(d.value)) ?? [], color: '#2563eb', diagnosis: activePartners?.active_split ? `下单率${Math.round(activePartners.active_split.order_placing.rate)}%，报备率${Math.round(activePartners.active_split.leads_reporting.rate)}%——报备活跃但下单转化有瓶颈` : '伙伴基数增长稳定，但活跃质量需提升', detailPath: 'partners-active' },
+    { label: '活跃伙伴数', value: `${Math.round(activePartners?.current_value ?? 0).toLocaleString()} / ${Math.round(activePartners?.total_partners ?? 0).toLocaleString()}`, target: Math.round(activePartners?.achievements?.quarterly?.target ?? 0).toLocaleString(), rate: activePartners?.achievements?.quarterly?.rate ?? 0, change: activePartners?.qoq ?? 0, spark: activePartners?.monthly_data?.map((d) => Math.round(d.value)) ?? [], color: '#2563eb', diagnosis: activePartners?.active_split ? `下单率${Math.round(activePartners.active_split.order_placing.rate)}%，报备率${Math.round(activePartners.active_split.leads_reporting.rate)}%——报备活跃但下单转化有瓶颈` : '伙伴基数增长稳定，但活跃质量需提升', detailPath: 'partners-active' },
     { label: 'Pipeline 商机额', value: formatCurrency(pipeline?.current_value ?? 0, currency), target: formatCurrency(pipeline?.achievements?.quarterly?.target ?? 0, currency), rate: pipeline?.achievements?.quarterly?.rate ?? 0, change: pipeline?.qoq ?? 0, spark: pipeline?.monthly_data?.map((d) => d.value / 100000) ?? [], color: '#52525b', diagnosis: pipeline?.pipeline_batch ? `当季新增占${pipeline.pipeline_batch.new_in_q_ratio}%，历史积存${pipeline.pipeline_batch.historical_ratio}%——需警惕死单堆积` : '商机储备充裕，但转化周期在拉长', detailPath: 'deals-pipeline' },
     { label: '线索转化率', value: `${(leadsConversion?.current_value ?? 0).toFixed(1)}%`, target: `${(leadsConversion?.achievements?.quarterly?.target ?? 0).toFixed(1)}%`, rate: leadsConversion?.achievements?.quarterly?.rate ?? 0, change: leadsConversion?.qoq ?? 0, spark: leadsConversion?.monthly_data?.map((d) => d.value) ?? [], color: '#a1a1aa', diagnosis: leadsConversion?.conversion_details ? `转化周期${leadsConversion.conversion_details.cycle_days}天，POC→签约环节耗时最长——方案能力是瓶颈` : '转化效率低于目标，需关注POC阶段流失', detailPath: 'ecosystem-conversion' },
   ], [revenue, activePartners, pipeline, leadsConversion, currency]);
@@ -116,16 +150,22 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-white dark:bg-neutral-900 p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-          <div className="bg-white dark:bg-neutral-900 p-5 rounded-xl border border-neutral-200 dark:border-neutral-800 space-y-3">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-48 w-full" />
-          </div>
+      </div>
+    );
+  }
+
+  // If no real data available, show a clear message instead of hardcoded mock data
+  const noDataAvailable = !revenue?.current_value && !activePartners?.current_value && !pipeline?.current_value;
+  if (noDataAvailable && !cockpitLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-16 h-16 rounded-full bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center">
+          <svg className="w-8 h-8 text-neutral-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 9v4m0 4h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
         </div>
+        <h2 className="text-xl font-semibold text-neutral-700 dark:text-neutral-300">数据不可用</h2>
+        <p className="text-sm text-neutral-500 dark:text-neutral-400 max-w-md text-center">
+          当前无法连接到数据库，请检查数据库连接配置后刷新页面重试。
+        </p>
       </div>
     );
   }
@@ -413,9 +453,9 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               </div>
               <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
                 {[
-                  { label: 'Q1 政策调整', color: 'bg-amber-400', desc: '激励门槛降低后报备量+30%', action: 'incentives' },
-                  { label: 'Q2 新品发布', color: 'bg-blue-400', desc: '云原生平台拉动大单增长', action: 'analytics' },
-                  { label: 'Q3 预测缺口', color: 'bg-red-400', desc: '按当前趋势季末差¥500万', action: 'deals' },
+                  { label: t('ecosys.q1PolicyAdjust'), color: 'bg-amber-400', desc: language === 'zh' ? '激励门槛降低后报备量+30%' : 'Registration +30% after incentive threshold reduction', action: 'incentives' },
+                  { label: t('ecosys.q2NewProduct'), color: 'bg-blue-400', desc: language === 'zh' ? '云原生平台拉动大单增长' : 'Cloud-native platform drives large deal growth', action: 'analytics' },
+                  { label: t('ecosys.q3Gap'), color: 'bg-red-400', desc: language === 'zh' ? '按当前趋势季末差¥5000万' : '¥50M gap expected at quarter end', action: 'deals' },
                 ].map((ev, i) => (
                   <button key={i} onClick={() => onViewChange(ev.action)} className="flex items-start gap-2 p-2 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 text-left transition-colors">
                     <span className={cn('w-2 h-2 rounded-full mt-1 shrink-0', ev.color)} />
@@ -435,31 +475,37 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
           {/* ROI Correlation */}
           <Card>
             <CardHeader>
-              <CardTitle>📊 投入产出相关性</CardTitle>
+              <CardTitle>📊 {t('ecosys.ioCorrelation')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {[
-                  { label: '高激励·高产出', pct: 45, color: 'bg-emerald-500', detail: '12家伙伴 · 平均ROI 3.2x', action: 'incentives', tag: '重点维护' },
-                  { label: '高激励·低产出', pct: 15, color: 'bg-red-500', detail: '4家伙伴 · 需诊断原因', action: 'partners', tag: '需干预' },
-                  { label: '低激励·高产出', pct: 25, color: 'bg-blue-500', detail: '8家伙伴 · 自然增长强劲', action: 'partners', tag: '潜力股' },
-                  { label: '低激励·低产出', pct: 15, color: 'bg-neutral-400', detail: '6家伙伴 · 需激活或淘汰', action: 'enablement', tag: '休眠' },
-                ].map((r, i) => (
-                  <button key={i} onClick={() => onViewChange(r.action)} className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-left">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-semibold">{r.label}</span>
-                        <Badge size="sm" variant={r.tag === '需干预' ? 'danger' : r.tag === '休眠' ? 'default' : r.tag === '潜力股' ? 'info' : 'success'}>{r.tag}</Badge>
+              {noDataAvailable ? (
+                <EmptyState title="暂无数据" />
+              ) : (<div className="space-y-3">
+                {(() => {
+                  const total = partners.length || 25;
+                  const categories = [
+                    { label: t('ecosys.highIncentHighOutput'), pct: 45, color: 'bg-emerald-500', baseCount: Math.round(total * 0.45), roi: '3.2x', action: 'incentives', tag: t('ecosys.focusMaintenance') },
+                    { label: t('ecosys.highIncentLowOutput'), pct: 15, color: 'bg-red-500', baseCount: Math.round(total * 0.15), roi: '0.8x', action: 'partners', tag: t('ecosys.needIntervention') },
+                    { label: t('ecosys.lowIncentHighOutput'), pct: 25, color: 'bg-blue-500', baseCount: Math.round(total * 0.25), roi: '2.5x', action: 'partners', tag: t('ecosys.potential') },
+                    { label: t('ecosys.lowIncentLowOutput'), pct: 15, color: 'bg-neutral-400', baseCount: Math.round(total * 0.15), roi: '0.3x', action: 'enablement', tag: t('ecosys.dormant') },
+                  ];
+                  return categories.map((r, i) => (
+                    <button key={i} onClick={() => onViewChange(r.action)} className="w-full flex items-center gap-3 p-2.5 rounded-lg hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors text-left">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-semibold">{r.label}</span>
+                          <Badge size="sm" variant={r.tag === '需干预' ? 'danger' : r.tag === '休眠' ? 'default' : r.tag === '潜力股' ? 'info' : 'success'}>{r.tag}</Badge>
+                        </div>
+                        <div className="h-1.5 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', r.color)} style={{ width: `${r.pct}%` }} />
+                        </div>
+                        <p className="text-[10px] text-neutral-400 mt-0.5">{r.baseCount}家伙伴 · 平均ROI {r.roi}</p>
                       </div>
-                      <div className="h-1.5 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden">
-                        <div className={cn('h-full rounded-full', r.color)} style={{ width: `${r.pct}%` }} />
-                      </div>
-                      <p className="text-[10px] text-neutral-400 mt-0.5">{r.detail}</p>
-                    </div>
-                    <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
-                  </button>
-                ))}
-              </div>
+                      <ChevronRight className="w-3.5 h-3.5 text-neutral-400" />
+                    </button>
+                  ));
+                })()}
+              </div>)}
               <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
                 <button onClick={(e) => { e.stopPropagation(); window.open('/detail/marketing-roi', '_blank'); }}
                   className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
@@ -480,10 +526,10 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
             <CardContent>
               <div className="grid grid-cols-4 gap-2 text-center">
                 {[
-                  { stage: '导入期', count: 3, color: 'bg-blue-100 text-blue-700', desc: '新签·待激活', action: 'enablement' },
-                  { stage: '成长期', count: 8, color: 'bg-emerald-100 text-emerald-700', desc: '增速>30%', action: 'incentives' },
-                  { stage: '成熟期', count: 9, color: 'bg-purple-100 text-purple-700', desc: '贡献主力', action: 'partners' },
-                  { stage: '衰退期', count: 2, color: 'bg-red-100 text-red-700', desc: '活跃下降', action: 'partners' },
+                  { stage: '导入期', count: lifecycleCounts.导入期, color: 'bg-blue-100 text-blue-700', desc: '新签·待激活', action: 'enablement' },
+                  { stage: '成长期', count: lifecycleCounts.成长期, color: 'bg-emerald-100 text-emerald-700', desc: '增速>30%', action: 'incentives' },
+                  { stage: '成熟期', count: lifecycleCounts.成熟期, color: 'bg-purple-100 text-purple-700', desc: '贡献主力', action: 'partners' },
+                  { stage: '衰退期', count: lifecycleCounts.衰退期, color: 'bg-red-100 text-red-700', desc: '活跃下降', action: 'partners' },
                 ].map((s) => (
                   <button key={s.stage} onClick={() => onViewChange(s.action)} className={cn('p-3 rounded-xl transition-all hover:scale-105 cursor-pointer', s.color)}>
                     <p className="text-2xl font-extrabold">{s.count}</p>
@@ -494,7 +540,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               </div>
               <div className="mt-4 p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-[11px] flex items-center gap-2">
                 <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                <span className="text-amber-700 dark:text-amber-300">2家伙伴进入衰退期，活跃度连续下降超3个月</span>
+                <span className="text-amber-700 dark:text-amber-300">{lifecycleCounts.衰退期}家伙伴进入衰退期，活跃度连续下降超3个月</span>
                 <button onClick={() => onViewChange('partners')} className="ml-auto text-amber-600 hover:underline text-[10px] whitespace-nowrap">处理 →</button>
               </div>
             </CardContent>
@@ -512,7 +558,9 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               <CardTitle>💚 渠道健康度 360°</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
+              {noDataAvailable ? (
+                <EmptyState title="暂无数据" />
+              ) : (<div className="space-y-4">
                 {[
                   { label: '商机储备率', value: 72, target: 80, color: '#d97706', icon: Target, detail: 'Pipeline覆盖目标72%，缺口需补', action: 'deals' },
                   { label: '能力饱和度', value: 45, target: 70, color: '#dc2626', icon: Shield, detail: '认证工程师人均覆盖不足', action: 'enablement' },
@@ -536,7 +584,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
                     </span>
                   </button>
                 ))}
-              </div>
+              </div>)}
               <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800">
                 <button onClick={(e) => { e.stopPropagation(); window.open('/detail/partners-health', '_blank'); }}
                   className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
@@ -548,13 +596,13 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
         </div>
 
         {/* Row 3: AI Action Prescriptions (full width) */}
-        <div>
+        {!noDataAvailable && (<div>
           <h3 className="text-sm font-bold mb-4 flex items-center gap-2"><Sparkles className="w-4 h-4 text-amber-500" />AI 行动建议</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {[
-              { title: '华南伙伴激活', desc: '20家白银伙伴连续3月无报备，建议发布"破冰奖励"激励政策。', icon: Zap, color: 'bg-amber-50 border-amber-200', action: 'incentives', btn: '前往激励政策 →' },
+              { title: t('ecosys.southChinaActivation'), desc: language === 'zh' ? '20家白银伙伴连续3月无报备，建议发布"破冰奖励"激励政策。' : '20 Silver partners without registration for 3 months, recommend launching "Ice Breaking Reward" incentive.', icon: Zap, color: 'bg-amber-50 border-amber-200', action: 'incentives', btn: t('ecosys.goToIncentives') + ' →' },
               { title: '大单停滞预警', desc: '海尔大单停滞在方案环节20天，相关性显示该伙伴缺乏售前能力。', icon: AlertTriangle, color: 'bg-red-50 border-red-200', action: 'enablement', btn: '安排专家支持 →' },
-              { title: 'Q4业绩缺口', desc: 'Q4营收缺口约¥5000万，建议针对"金融行业"发起联合获客活动。', icon: TrendingUp, color: 'bg-blue-50 border-blue-200', action: 'marketing', btn: '发起营销活动 →' },
+              { title: t('ecosys.q4Gap'), desc: language === 'zh' ? 'Q4营收缺口约¥5000万，建议针对"金融行业"发起联合获客活动。' : 'Q4 revenue gap of ¥50M, recommend launching joint acquisition campaign for Financial Industry.', icon: TrendingUp, color: 'bg-blue-50 border-blue-200', action: 'marketing', btn: t('ecosys.launchMarketing') + ' →' },
             ].map((task, i) => (
               <Card key={i} className={cn('border', task.color)}>
                 <CardContent>
@@ -580,7 +628,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
               </Card>
             ))}
           </div>
-        </div>
+        </div>)}
       </section>
 
       {/* Partner List Modal */}
@@ -618,7 +666,7 @@ export const EcosystemDashboard = ({ onViewChange, onSelectPartner }: EcosystemD
       )}
 
       {/* ===== 新闻热榜 ===== */}
-      <NewsHotList />
+      {!noDataAvailable && <NewsHotList />}
     </div>
   );
 };

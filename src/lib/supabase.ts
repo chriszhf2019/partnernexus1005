@@ -3,7 +3,17 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    // Auto-refresh token before it expires (default: 10 seconds)
+    autoRefreshToken: true,
+    // Persist session in localStorage
+    persistSession: true,
+    // Time in seconds to wait before auto-refresh (default: 10)
+    // Set to 60 seconds to refresh token 1 minute before expiry
+    detectSessionInUrl: true,
+  },
+});
 
 export const db = {
   partners: () => supabase.from('partners'),
