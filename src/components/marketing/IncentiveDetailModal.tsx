@@ -98,20 +98,10 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
           })));
         }
       } catch (error) {
-        console.warn('Failed to fetch incentive data, using fallback:', error);
-        // Fallback mock data when database is unavailable
-        setPartners([
-          { id: 'p1', name: '北京华胜天成科技股份有限公司', submissions: 12, eligible: 8, totalValue: '¥4.5M', status: 'Active' },
-          { id: 'p2', name: '上海中软华信网络科技有限公司', submissions: 8, eligible: 5, totalValue: '¥2.8M', status: 'Active' },
-          { id: 'p3', name: '深圳神州数码云科数据技术有限公司', submissions: 15, eligible: 12, totalValue: '¥8.2M', status: 'High Performer' },
-          { id: 'p4', name: '广州佳都数据服务有限公司', submissions: 5, eligible: 2, totalValue: '¥1.2M', status: 'At Risk' },
-        ]);
-        setOpportunities([
-          { id: 'o1', title: '某省人民医院信创数据库替换项目', value: '¥1.2M', status: 'Eligible', reason: '符合医疗信创专项产品目录', date: '2024-03-15' },
-          { id: 'o2', title: '市中心医院核心业务系统升级', value: '¥800K', status: 'Eligible', reason: '满足金牌伙伴报备规则', date: '2024-03-18' },
-          { id: 'o3', title: '县中医院办公系统采购', value: '¥300K', status: 'Ineligible', reason: '项目金额低于起奖阈值 (¥500K)', date: '2024-03-20' },
-          { id: 'o4', title: '某三甲医院容灾备份方案', value: '¥2.1M', status: 'Ineligible', reason: '非指定竞品替换场景', date: '2024-03-22' },
-        ]);
+        console.warn('Failed to fetch incentive data:', error);
+        // 数据库不可用时显示空状态，不再使用硬编码 mock data
+        setPartners([]);
+        setOpportunities([]);
       } finally {
         setLoading(false);
       }

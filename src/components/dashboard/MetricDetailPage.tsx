@@ -13,6 +13,7 @@ import { useCockpitData } from '../../hooks/useData';
 import { supabase } from '../../lib/supabase';
 import { dealService } from '../../services/deal-service';
 import { Deal, isDealWon } from '../../types';
+import { enrichDealsWithMetrics, calculateDealWinProbability, getDefaultProbabilityConfig } from '../../lib/dealMetrics';
 
 const METRIC_CONFIG: Record<string, { 
   title: string; 
@@ -80,10 +81,16 @@ export const MetricDetailPage = () => {
     fetchData();
   }, []);
 
-  const pipelineValue = useMemo(() => deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0), [deals]);
-  const wonValue = useMemo(() => deals.filter(d => isDealWon(d)).reduce((s, d) => s + (d.value || 0), 0), [deals]);
-
   const config = METRIC_CONFIG[type || ''] || null;
+
+  // ── 实时计算: 增强商机数据, 替换硬编码概率 ──
+  const enrichedDeals = useMemo(() => enrichDealsWithMetrics(deals), [deals]);
+  const probConfig = useMemo(() => getDefaultProbabilityConfig(), []);
+  const pipelineValue = useMemo(() => enrichedDeals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage)).reduce((s, d) => s + (d.value || 0), 0), [enrichedDeals]);
+  const wonValue = useMemo(() => enrichedDeals.filter(d => isDealWon(d)).reduce((s, d) => s + (d.value || 0), 0), [enrichedDeals]);
+  const weightedPipelineValue = useMemo(() => enrichedDeals
+    .filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage))
+    .reduce((s, d) => s + (d.weightedValue || 0), 0), [enrichedDeals]);
 
   if (loading) return <PageLoader />;
   if (!config) {
@@ -186,26 +193,13 @@ export const MetricDetailPage = () => {
     }
 
     if (dealType === 'weighted') {
-      const STAGE_PROBABILITY: Record<string, number> = {
-        'Registered': 0.1,
-        'UnderReview': 0.2,
-        'Approved': 0.3,
-        'Solution': 0.5,
-        'Commercial': 0.7,
-        'ClosedWon': 1.0,
-        'ClosedLost': 0,
-      };
-      
-      const activeDeals = deals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage));
-      const weightedDeals = activeDeals.map(d => ({
-        ...d,
-        weightedValue: (d.value || 0) * (STAGE_PROBABILITY[d.stage] || 0.3),
-        probability: STAGE_PROBABILITY[d.stage] || 0.3,
-      }));
-      
-      const totalWeighted = weightedDeals.reduce((sum, d) => sum + d.weightedValue, 0);
-      const totalPipeline = activeDeals.reduce((sum, d) => sum + (d.value || 0), 0);
-      
+      // ── 使用配置化的阶段概率, 不再硬编码 0.1/0.2/0.3... ──
+      const activeDeals = enrichedDeals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage));
+      const totalWeighted = activeDeals.reduce((s, d) => s + (d.weightedValue || 0), 0);
+      const totalPipeline = activeDeals.reduce((s, d) => s + (d.value || 0), 0);
+      const weightedDeals = activeDeals;
+      const cfg = probConfig;
+
       return (
         <Card>
           <CardHeader>
@@ -247,7 +241,7 @@ export const MetricDetailPage = () => {
                     </div>
                     <div className="text-right">
                       <span className="text-amber-600 font-semibold">{formatCurrency(deal.weightedValue)}</span>
-                      <span className="text-xs text-neutral-400 ml-1">({Math.round(deal.probability * 100)}%)</span>
+                      <span className="text-xs text-neutral-400 ml-1">({Math.round((deal.winProbability || 0) * 100)}%)</span>
                     </div>
                   </div>
                 ))}
@@ -315,7 +309,12 @@ export const MetricDetailPage = () => {
     }
 
     if (dealType === 'cycle') {
-      const stagnantDeals = deals.filter(d => d.isStagnant);
+      // ── 使用 enrichedDeals 中实时计算的指标, 不再依赖硬编码 ──
+      const stagnantDeals = enrichedDeals.filter(d => d.isStagnant);
+      const activeDeals = enrichedDeals.filter(d => !['ClosedWon', 'ClosedLost'].includes(d.stage));
+      const avgCycleAll = activeDeals.length > 0
+        ? Math.round(activeDeals.reduce((s, d) => s + (d.daysInCurrentStage || 0), 0) / activeDeals.length)
+        : 0;
       return (
         <div className="space-y-4">
           <Card>
@@ -328,14 +327,14 @@ export const MetricDetailPage = () => {
                   </div>
                   <div className="flex-1">
                     <p className="text-xs text-neutral-400">平均周期</p>
-                    <p className="text-2xl font-bold text-blue-600">21 天</p>
+                    <p className="text-2xl font-bold text-blue-600">{avgCycleAll} 天</p>
                   </div>
                 </div>
               </div>
               <div className="space-y-2">
                 {['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial'].map(stage => {
                   const cfg = STAGE_CONFIG[stage];
-                  const stageDeals = deals.filter(d => d.stage === stage);
+                  const stageDeals = enrichedDeals.filter(d => d.stage === stage);
                   const avgDays = stageDeals.length > 0 
                     ? Math.round(stageDeals.reduce((s, d) => s + (d.daysInCurrentStage || 0), 0) / stageDeals.length)
                     : 0;

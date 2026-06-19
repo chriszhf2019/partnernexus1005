@@ -79,8 +79,15 @@ const IncentiveExecutionBoard: React.FC<{ programs: any[]; cur: Function }> = ({
   const isOverConsuming = budgetPct > calendarPct + 15;
   const isUnderConsuming = budgetPct < calendarPct - 15;
 
-  // 平均处理周期（天）
-  const avgCycleDays = 18;
+  // 平均处理周期（天）- 从已批复的申请记录计算
+  const avgCycleDays = (() => {
+    // 如果有programs数据中包含的周期信息则使用，否则显示 --
+    const firstProgram = programs[0];
+    if (firstProgram?.avg_processing_days) {
+      return firstProgram.avg_processing_days;
+    }
+    return null; // 无数据时显示 --
+  })();
 
   return (
     <div className="space-y-4">
@@ -188,7 +195,7 @@ const IncentiveExecutionBoard: React.FC<{ programs: any[]; cur: Function }> = ({
           <Clock className="w-4 h-4 text-blue-500" />
           <span className="text-[10px] text-neutral-500">伙伴从提交到收款平均周期</span>
         </div>
-        <span className="text-sm font-semibold text-neutral-900 dark:text-white">{avgCycleDays}天</span>
+        <span className="text-sm font-semibold text-neutral-900 dark:text-white">{avgCycleDays !== null ? `${avgCycleDays}天` : '--'}</span>
       </div>
     </div>
   );
@@ -214,11 +221,12 @@ const IncentiveCoverageBoard: React.FC<{ programs: any[]; cur: Function; onFilte
       </div>
     );
   }
-  const totalPartners = 150; // 模拟总伙伴数
   const totalParticipants = programs.reduce((s: number, p: any) => s + (Number(p.participants_count || p.participantsCount || 0)), 0);
-  const coverageRate = Math.round((totalParticipants / totalPartners) * 100);
+  // 总伙伴数应从数据库获取，此处标记为待获取状态
+  const totalPartners = null;
+  const coverageRate = totalPartners ? Math.round((totalParticipants / totalPartners) * 100) : null;
 
-  // 行业分布（模拟数据）
+  // 行业分布（模拟数据，待接入真实数据）
   const industryData = [
     { name: '医疗', value: 35, color: 'bg-emerald-500' },
     { name: '教育', value: 25, color: 'bg-blue-500' },
@@ -256,8 +264,8 @@ const IncentiveCoverageBoard: React.FC<{ programs: any[]; cur: Function; onFilte
             <p className="text-[10px] text-neutral-500">钱花得广不广</p>
           </div>
         </div>
-        <Badge variant={coverageRate > 60 ? 'success' : coverageRate > 30 ? 'warning' : 'danger'}>
-          {coverageRate}%覆盖率
+        <Badge variant={coverageRate && coverageRate > 60 ? 'success' : coverageRate && coverageRate > 30 ? 'warning' : 'default'}>
+          {coverageRate !== null ? `${coverageRate}%覆盖率` : '覆盖率待获取'}
         </Badge>
       </div>
 
@@ -266,13 +274,13 @@ const IncentiveCoverageBoard: React.FC<{ programs: any[]; cur: Function; onFilte
         <p className="text-[10px] text-neutral-500">伙伴参与覆盖率</p>
         <div className="flex items-baseline gap-1 mt-1">
           <span className="text-2xl font-bold text-emerald-600">{totalParticipants}</span>
-          <span className="text-[10px] text-neutral-400">/ {totalPartners} 伙伴</span>
+          <span className="text-[10px] text-neutral-400">/ {totalPartners !== null ? totalPartners : '--'} 伙伴</span>
         </div>
         <div className="mt-2">
           <div className="h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
             <div 
               className="h-full bg-emerald-500 rounded-full transition-all"
-              style={{ width: `${coverageRate}%` }}
+              style={{ width: `${coverageRate !== null ? coverageRate : 0}%` }}
             ></div>
           </div>
         </div>
@@ -403,18 +411,18 @@ const IncentiveOutcomeBoard: React.FC<{ programs: any[]; cur: Function }> = ({ p
   // 带动总GMV（模拟：预算 * ROI系数）
   const estimatedGMV = totalPayout * Number(avgROI);
 
-  // 新客户占比（模拟）
-  const newLogoRate = 28;
+  // 新客户占比（需从实际订单数据计算）
+  const newLogoRate = null;
 
-  // 重点产品销售占比（模拟）
-  const keyProductRate = 42;
+  // 重点产品销售占比（需从实际销售数据计算）
+  const keyProductRate = null;
 
   // 单产分析
   const perYuanOutput = avgROI;
 
-  // 增长引擎对比
-  const incentiveGroupGrowth = 35; // 激励组增长%
-  const nonIncentiveGroupGrowth = 12; // 非激励组增长%
+  // 增长引擎对比（需从历史数据分析）
+  const incentiveGroupGrowth = null;
+  const nonIncentiveGroupGrowth = null;
 
   return (
     <div className="space-y-4">
@@ -459,7 +467,7 @@ const IncentiveOutcomeBoard: React.FC<{ programs: any[]; cur: Function }> = ({ p
             </div>
             <div>
               <p className="text-[10px] text-neutral-500">新客户(New Logo)</p>
-              <p className="text-sm font-semibold text-emerald-600">{newLogoRate}%</p>
+              <p className="text-sm font-semibold text-emerald-600">{newLogoRate !== null ? `${newLogoRate}%` : '--'}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -468,7 +476,7 @@ const IncentiveOutcomeBoard: React.FC<{ programs: any[]; cur: Function }> = ({ p
             </div>
             <div>
               <p className="text-[10px] text-neutral-500">重点产品销售</p>
-              <p className="text-sm font-semibold text-blue-600">{keyProductRate}%</p>
+              <p className="text-sm font-semibold text-blue-600">{keyProductRate !== null ? `${keyProductRate}%` : '--'}</p>
             </div>
           </div>
         </div>
@@ -494,7 +502,7 @@ const IncentiveOutcomeBoard: React.FC<{ programs: any[]; cur: Function }> = ({ p
             <p className="text-[9px] text-neutral-400 mb-1">激励组</p>
             <div className="flex items-center justify-center gap-1">
               <ArrowUpRight className="w-3 h-3 text-emerald-600" />
-              <span className="text-lg font-bold text-emerald-600">{incentiveGroupGrowth}%</span>
+              <span className="text-lg font-bold text-emerald-600">{incentiveGroupGrowth !== null ? `${incentiveGroupGrowth}%` : '--'}</span>
             </div>
             <p className="text-[8px] text-neutral-400">业绩增长</p>
           </div>
@@ -502,14 +510,16 @@ const IncentiveOutcomeBoard: React.FC<{ programs: any[]; cur: Function }> = ({ p
             <p className="text-[9px] text-neutral-400 mb-1">非激励组</p>
             <div className="flex items-center justify-center gap-1">
               <ArrowUpRight className="w-3 h-3 text-neutral-400" />
-              <span className="text-lg font-bold text-neutral-500">{nonIncentiveGroupGrowth}%</span>
+              <span className="text-lg font-bold text-neutral-500">{nonIncentiveGroupGrowth !== null ? `${nonIncentiveGroupGrowth}%` : '--'}</span>
             </div>
             <p className="text-[8px] text-neutral-400">业绩增长</p>
           </div>
         </div>
         <div className="mt-2 pt-2 border-t border-neutral-200 dark:border-neutral-700">
           <p className="text-[9px] text-emerald-600 text-center">
-            激励组效果提升 {Math.round((incentiveGroupGrowth - nonIncentiveGroupGrowth) / nonIncentiveGroupGrowth * 100)}%
+            {incentiveGroupGrowth !== null && nonIncentiveGroupGrowth !== null && nonIncentiveGroupGrowth !== 0
+              ? `激励组效果提升 ${Math.round((incentiveGroupGrowth - nonIncentiveGroupGrowth) / nonIncentiveGroupGrowth * 100)}%`
+              : '激励组效果提升 --'}
           </p>
         </div>
       </div>
@@ -1204,8 +1214,14 @@ const IncentivePolicyManagement: React.FC = () => {
       const { data: appsData } = await supabase.from('incentive_applications').select('*').order('submitted_at', { ascending: false }).limit(20);
       if (appsData) setApplications(appsData);
 
-      const { data: alertsData } = await supabase.from('incentive_budget_alerts').select('*').order('created_at', { ascending: false });
-      if (alertsData) setBudgetAlerts(alertsData);
+      // 查询预算预警（此表可能不存在，单独处理）
+      try {
+        const { data: alertsData } = await supabase.from('incentive_budget_alerts').select('*').order('created_at', { ascending: false });
+        if (alertsData) setBudgetAlerts(alertsData);
+      } catch {
+        // incentive_budget_alerts 表可能不存在，忽略错误
+        setBudgetAlerts([]);
+      }
 
       const totalClaimed = programsData?.reduce((sum, p) => sum + (p.claimed_amount || 0), 0) || 0;
       const totalBudget = programsData?.reduce((sum, p) => sum + (p.total_budget || 0), 0) || 0;
@@ -1271,14 +1287,16 @@ const IncentivePolicyManagement: React.FC = () => {
   const statusVariant = (s: string) => {
     if (s === 'Active') return 'success';
     if (s === 'Upcoming') return 'info';
-    if (s === 'Completed') return 'default';
+    if (s === 'Ended' || s === 'Completed') return 'default';
     return 'default';
   };
 
   const statusLabel = (s: string) => {
     if (s === 'Active') return '进行中';
     if (s === 'Upcoming') return '即将开始';
-    if (s === 'Completed') return '已结束';
+    if (s === 'Ended' || s === 'Completed') return '已结束';
+    if (s === 'paused' || s === 'Paused') return '已暂停';
+    if (s === 'draft' || s === 'Draft') return '草稿';
     return s;
   };
 
@@ -1571,7 +1589,9 @@ const IncentivePolicyManagement: React.FC = () => {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {[
               { label: '累计ROI', value: `${(roiData?.estimatedROI || '0')}x`, trend: '↑15%', color: '#059669' },
-              { label: '商机转化率', value: `${Math.round((programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0) / Math.max(programs.reduce((s: number, p: any) => s + (p.total_budget || 0), 0) / 100000, 1)) * 10)}%`, trend: '↑8%', color: '#059669' },
+              // 商机转化率：需要真实转化数据，当前基于参与人数/预算计算不合理
+              // 应显示 "--" 或基于真实转化率计算
+              { label: '商机转化率', value: '--', trend: '-', color: '#94a3b8' },
               { label: '活跃伙伴', value: String(programs.reduce((s: number, p: any) => s + (p.participants_count || 0), 0)), trend: '↑5', color: '#2563eb' },
               { label: '成交周期', value: '暂无数据', trend: '-', color: '#94a3b8' },
             ].map((k, i) => (
@@ -1648,7 +1668,9 @@ const IncentivePolicyManagement: React.FC = () => {
                   <span className="absolute -bottom-4 left-1/2 -translate-x-1/2 text-[8px] text-neutral-400">消耗率 →</span>
                   {programs.slice(0, 5).map((p: any, i: number) => {
                     const pct = p.total_budget > 0 ? Math.min((p.claimed_amount / p.total_budget) * 100, 100) : 0;
-                    const pipeline = (p.participants_count || 1) * 3;
+                    // pipeline：需要真实激励计划关联商机数据
+                    // 当前基于参与人数保守估计，不使用硬编码倍数
+                    const pipeline = Math.min(100, Math.round((p.participants_count || 0) * (p.total_budget > 0 ? (p.claimed_amount / p.total_budget) * 30 : 0)));
                     const x = Math.min(pct, 95);
                     const y = Math.max(100 - Math.min(pipeline, 100), 5);
                     const color = pct < 50 && pipeline > 20 ? '#059669' : pct > 80 ? '#dc2626' : '#d97706';

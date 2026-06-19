@@ -27,6 +27,7 @@ import { Modal } from '../ui/Modal';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
 import { partnerService } from '../../services/partner-service';
+import { partnerScoring } from '../../services/partner-scoring-service';
 import { supabase } from '../../lib/supabase';
 import { cn } from '../../lib/utils';
 import { debug } from '../../lib/debug';
@@ -56,7 +57,7 @@ const safePercent = (val: number | undefined | null, fallback = '--'): string =>
 
 const safeStr = (val: number | undefined | null, fallback = '--'): string => {
   if (val === undefined || val === null || isNaN(val)) return fallback;
-  return String(val);
+  return String(Math.round(val));
 };
 
 export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerListProps) => {
@@ -187,44 +188,41 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
     }));
   }, [partners, totalPartners]);
 
-  // 本月新增/减少（基于真实数据计算）
-  const mockData = useMemo(() => {
-    if (partners.length === 0) {
-      return { monthNew: 0, monthLost: 0, yoyGrowth: 0, qoqGrowth: 0, incentiveExecution: 0, capabilityRate: 0, certDepth: 0 };
-    }
-    const newThisMonth = partners.filter(p => {
-      const start = new Date(p.startDate || p.startDate || '');
-      if (isNaN(start.getTime())) return false;
-      const now = new Date();
-      return start.getMonth() === now.getMonth() && start.getFullYear() === now.getFullYear();
-    }).length;
-    const lostThisMonth = partners.filter(p => p.status === 'Inactive').length;
-    const coop = partners.filter(p => p.status === 'Cooperating').length;
+  // ──────────────────────────────────────────────
+  // 聚合指标（使用 partner-scoring-service 统一计算）
+  // ──────────────────────────────────────────────
+  const monthlyData = useMemo(() => {
+    // 从集中式评分服务获取同比/环比/激励执行率（预估）
+    const growth = partnerScoring.calculateMonthlyGrowth(partners);
+    // 能力达标率：基于平均赢单率（真实数据）
+    const avgWinRate = partners.reduce((s, p) => s + (p.winRate || 0), 0) / Math.max(1, partners.length);
+    // 认证深度：基于高等级伙伴占比（真实数据）
+    const highTierCount = partners.filter(p => p.tier === 'Diamond' || p.tier === 'Platinum').length;
     return {
-      monthNew: Math.min(newThisMonth || Math.round(partners.length * 0.05), partners.length),
-      monthLost: Math.min(lostThisMonth || Math.round(partners.length * 0.02), partners.length),
-      yoyGrowth: coop > 0 ? Math.round((coop / Math.max(1, partners.length)) * 100) - 50 : 0,
-      qoqGrowth: coop > 0 ? Math.round((coop / Math.max(1, partners.length)) * 100) - 50 : 0,
-      incentiveExecution: Math.min(100, Math.max(40, Math.round((coop / Math.max(1, partners.length)) * 100))),
-      capabilityRate: Math.min(100, Math.max(60, Math.round(partners.reduce((s, p) => s + (p.winRate || 0), 0) / Math.max(1, partners.length)))),
-      certDepth: Math.min(100, Math.max(30, Math.round(partners.filter(p => p.tier === 'Diamond' || p.tier === 'Platinum').length / Math.max(1, partners.length) * 100))),
+      monthNew: growth.monthNew,
+      monthLost: growth.monthLost,
+      yoyGrowth: growth.yoyGrowth,
+      qoqGrowth: growth.qoqGrowth,
+      incentiveExecution: growth.incentiveExecution,
+      capabilityRate: Math.round(avgWinRate),
+      certDepth: Math.round((highTierCount / partners.length) * 100),
     };
   }, [partners]);
-  const { monthNew, monthLost } = mockData;
-  const yoyGrowth = safeNum(mockData.yoyGrowth, 0);
-  const qoqGrowth = safeNum(mockData.qoqGrowth, 0);
+  const { monthNew, monthLost } = monthlyData;
+  const yoyGrowth = monthlyData.yoyGrowth !== null ? monthlyData.yoyGrowth : null;
+  const qoqGrowth = monthlyData.qoqGrowth !== null ? monthlyData.qoqGrowth : null;
 
   // 活跃率计算
   const vitalityRate = safeNum(activeCount / Math.max(coopCount, 1) * 100);
   const marketParticipation = safeNum(partners.filter(p => p.status === 'Cooperating').length / totalPartners * 100);
-  const incentiveExecution = safeNum(mockData.incentiveExecution, 50);
+  const incentiveExecution = monthlyData.incentiveExecution !== null ? monthlyData.incentiveExecution : null;
   const businessInteraction = safeNum(wonCount / Math.max(coopCount, 1) * 100);
 
   // 能力达标率
-  const capabilityRate = safeNum(mockData.capabilityRate, 70);
+  const capabilityRate = monthlyData.capabilityRate !== null ? monthlyData.capabilityRate : null;
   const practiceResult = safeNum(wonCount);
   const expansionAbility = safeNum(partners.filter(p => safeNum(p.winRate) > 30).length);
-  const certDepth = safeNum(mockData.certDepth, 40);
+  const certDepth = monthlyData.certDepth !== null ? monthlyData.certDepth : null;
 
   // 等级平均赢单率（基于实际数据）
   const tierWinRates = useMemo(() => {
@@ -421,9 +419,13 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const Tooltip = ({ content, children }: { content: string; children: React.ReactNode }) => (
     <div className="group/tip relative inline-flex">
       {children}
-      <div className="absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full px-3 py-2 bg-neutral-900 dark:bg-white text-white dark:text-neutral-900 text-xs rounded-lg opacity-0 group-hover/tip:opacity-100 transition-opacity pointer-events-none z-20 max-w-[280px] text-center shadow-lg whitespace-pre-wrap">
+      <div className="absolute -top-4 left-1/2 -translate-x-1/2 -translate-y-full px-4 py-3 bg-gradient-to-br from-neutral-900 to-neutral-800 dark:from-white dark:to-neutral-50 text-white dark:text-neutral-900 text-xs rounded-xl opacity-0 group-hover/tip:opacity-100 transition-all duration-200 ease-out transform group-hover/tip:-translate-y-1 pointer-events-none z-50 max-w-[280px] text-center shadow-2xl shadow-black/30 dark:shadow-neutral-200/50 whitespace-pre-wrap border border-neutral-700/50 dark:border-neutral-200/50">
+        <div className="flex items-center gap-2 mb-1">
+          <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></div>
+          <span className="font-semibold text-[11px] tracking-wide uppercase opacity-80">提示</span>
+        </div>
         {content}
-        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-2 h-2 bg-neutral-900 dark:bg-white rotate-45"></div>
+        <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-3 h-3 bg-gradient-to-br from-neutral-900 to-neutral-800 dark:from-white dark:to-neutral-50 rotate-45 border-r border-b border-neutral-700/50 dark:border-neutral-200/50"></div>
       </div>
     </div>
   );
@@ -554,15 +556,15 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
             </div>
             <div className="flex items-center gap-2 mt-2 text-xs text-neutral-500">
               <span className="flex items-center gap-1">
-                同比 {getTrendIcon(yoyGrowth)}
-                <span className={yoyGrowth > 0 ? 'text-emerald-600' : yoyGrowth < 0 ? 'text-red-600' : 'text-blue-600'}>
-                  {yoyGrowth > 0 ? '+' : ''}{safeStr(yoyGrowth)}%
+                同比(预估) {yoyGrowth !== null ? getTrendIcon(yoyGrowth) : <span className="w-3 h-3 text-blue-500">—</span>}
+                <span className={yoyGrowth !== null && yoyGrowth > 0 ? 'text-emerald-600' : yoyGrowth !== null && yoyGrowth < 0 ? 'text-red-600' : 'text-neutral-400'}>
+                  {yoyGrowth !== null ? `${yoyGrowth > 0 ? '+' : ''}${safeStr(yoyGrowth)}%` : '--'}
                 </span>
               </span>
               <span className="flex items-center gap-1">
-                环比 {getTrendIcon(qoqGrowth)}
-                <span className={qoqGrowth > 0 ? 'text-emerald-600' : qoqGrowth < 0 ? 'text-red-600' : 'text-blue-600'}>
-                  {qoqGrowth > 0 ? '+' : ''}{safeStr(qoqGrowth)}%
+                环比(预估) {qoqGrowth !== null ? getTrendIcon(qoqGrowth) : <span className="w-3 h-3 text-blue-500">—</span>}
+                <span className={qoqGrowth !== null && qoqGrowth > 0 ? 'text-emerald-600' : qoqGrowth !== null && qoqGrowth < 0 ? 'text-red-600' : 'text-neutral-400'}>
+                  {qoqGrowth !== null ? `${qoqGrowth > 0 ? '+' : ''}${safeStr(qoqGrowth)}%` : '--'}
                 </span>
               </span>
             </div>
@@ -695,11 +697,11 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
                 <p className="text-lg font-bold text-blue-600">{safePercent(marketParticipation)}</p>
               </div>
             </Tooltip>
-            <Tooltip content="激励执行率：参与激励计划并完成目标的伙伴比例">
+            <Tooltip content="激励执行率(预估)：基于MDF使用率、认证工程师占比和市场活动参与度综合推算">
               <div className="p-3 bg-purple-50 dark:bg-purple-900/10 rounded-lg text-center">
                 <Award className="w-4 h-4 text-purple-600 mx-auto mb-1" />
-                <p className="text-xs text-neutral-500">激励执行</p>
-                <p className="text-lg font-bold text-purple-600">{safePercent(incentiveExecution)}</p>
+                <p className="text-xs text-neutral-500">激励执行(预估)</p>
+                <p className="text-lg font-bold text-purple-600">{incentiveExecution !== null ? `${incentiveExecution}%` : '--'}</p>
               </div>
             </Tooltip>
             <Tooltip content="业务互动率：有商机报备或成交记录的伙伴比例">
@@ -773,11 +775,11 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
               <p className="text-3xl font-extrabold text-purple-600">{safePercent(capabilityRate)}</p>
               <div className="flex flex-col text-xs">
                 <span className="text-emerald-600">{practiceResult} 家实战成果</span>
-                <span className="text-blue-600">{certDepth}% 认证深度</span>
+                <span className="text-blue-600">{certDepth !== null ? `${certDepth}%` : '--'} 认证深度</span>
               </div>
             </div>
             <div className="h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden mt-2">
-              <div className="h-full bg-purple-500 rounded-full" style={{ width: `${capabilityRate}%` }} />
+              <div className="h-full bg-purple-500 rounded-full" style={{ width: `${capabilityRate !== null ? capabilityRate : 0}%` }} />
             </div>
           </div>
 

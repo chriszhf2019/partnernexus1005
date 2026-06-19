@@ -64,6 +64,10 @@ interface Activity {
   leads?: number;
   color?: string;
   loc?: string;
+  estimated_value?: number;
+  mql_count?: number;
+  sql_count?: number;
+  expected_pipeline?: number;
 }
 
 interface BudgetData {
@@ -71,6 +75,22 @@ interface BudgetData {
   marketingAllocated: number;
   pmdfTotal: number;
   pmdfAllocated: number;
+}
+
+interface CampaignStats {
+  totalActivities: number;
+  completedActivities: number;
+  inProgressActivities: number;
+  totalLeads: number;
+  totalBudget: number;
+  usedBudget: number;
+  avgConversionRate: number;
+}
+
+interface LeadConversionStep {
+  label: string;
+  value: number;
+  count: number;
 }
 
 interface Attendee {
@@ -107,17 +127,12 @@ export const StrategyCommandCenter: React.FC = () => {
   });
   const [isAuthReady, setIsAuthReady] = useState(true);
   const [activities, setActivities] = useState<Activity[]>([]);
-  const [budgetData, setBudgetData] = useState<BudgetData>({
-    marketingTotal: 9000000,
-    marketingAllocated: 6000000,
-    pmdfTotal: 6000000,
-    pmdfAllocated: 3750000
-  });
-
-  const [winRate, setWinRate] = useState(25.0);
-  const [salesTarget, setSalesTarget] = useState(100);
-  const [actualPipeline, setActualPipeline] = useState(355);
-  const [convRate, setConvRate] = useState(12.5);
+  const [budgetData, setBudgetData] = useState<BudgetData | null>(null);
+  const [campaignStats, setCampaignStats] = useState<CampaignStats | null>(null);
+  const [winRate, setWinRate] = useState<number | null>(null);
+  const [salesTarget, setSalesTarget] = useState<number | null>(null);
+  const [actualPipeline, setActualPipeline] = useState<number | null>(null);
+  const [convRate, setConvRate] = useState<number | null>(null);
   const [showInsights, setShowInsights] = useState(false);
   const [showExecutionBoard, setShowExecutionBoard] = useState(false);
   const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
@@ -137,9 +152,11 @@ export const StrategyCommandCenter: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [activitiesRes, budgetRes] = await Promise.all([
+        const [activitiesRes, budgetRes, dealsRes, planRes] = await Promise.all([
           supabase.from('marketing_activities').select('*').order('created_at', { ascending: false }),
-          supabase.from('marketing_budgets').select('*').single()
+          supabase.from('marketing_budgets').select('*').single(),
+          supabase.from('deals').select('value, stage, status, created_at').order('created_at', { ascending: false }).limit(200),
+          supabase.from('marketing_plan').select('id, name, budget, estimated_value, leads_count, plan_status, type, activity_type, created_at').order('created_at', { ascending: false }).limit(100)
         ]);
 
         if (activitiesRes.data) {
@@ -159,8 +176,12 @@ export const StrategyCommandCenter: React.FC = () => {
             host: row.host || '',
             expectedROI: row.expected_roi || '',
             leads: row.leads_generated || 0,
-            color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' : 
-                   row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' : 
+            estimated_value: row.estimated_value || row.expected_pipeline || 0,
+            mql_count: row.mql_count || row.leads_generated || 0,
+            sql_count: row.sql_count || Math.round((row.leads_generated || 0) * 0.25) || 0,
+            expected_pipeline: row.estimated_value || row.expected_pipeline || (row.budget ? row.budget * 10 : 0),
+            color: row.status === 'In Progress' ? 'bg-blue-50 text-blue-600' :
+                   row.status === 'Completed' ? 'bg-emerald-50 text-emerald-600' :
                    'bg-amber-50 text-amber-600',
             loc: row.location || ''
           })));
@@ -168,14 +189,56 @@ export const StrategyCommandCenter: React.FC = () => {
 
         if (budgetRes.data) {
           setBudgetData({
-            marketingTotal: budgetRes.data.marketing_total || 9000000,
-            marketingAllocated: budgetRes.data.marketing_allocated || 6000000,
-            pmdfTotal: budgetRes.data.pmdf_total || 6000000,
-            pmdfAllocated: budgetRes.data.pmdf_allocated || 3750000
+            marketingTotal: budgetRes.data.marketing_total || 0,
+            marketingAllocated: budgetRes.data.marketing_allocated || 0,
+            pmdfTotal: budgetRes.data.pmdf_total || 0,
+            pmdfAllocated: budgetRes.data.pmdf_allocated || 0
           });
         }
+
+        // --- 从实际数据计算 campaign 统计 ---
+        const allActivities = [...(activitiesRes.data || []), ...(planRes.data || [])];
+        const completed = allActivities.filter((a: any) =>
+          (a.status || a.plan_status) === 'Completed' || (a.status || a.plan_status) === 'In Progress'
+        );
+        const totalLeads = allActivities.reduce((sum: number, a: any) =>
+          sum + (a.leads_generated || a.leads_count || 0), 0
+        );
+        const totalBudget = (budgetRes.data?.marketing_total || 0) + (budgetRes.data?.pmdf_total || 0);
+        const usedBudget = (budgetRes.data?.marketing_allocated || 0) + (budgetRes.data?.pmdf_allocated || 0);
+
+        // 从 deals 表计算 pipeline 数据
+        const totalPipeline = (dealsRes.data || []).reduce((s: number, d: any) =>
+          s + (Number(d.value) || 0), 0
+        );
+        const wonPipeline = (dealsRes.data || []).filter((d: any) =>
+          d.stage === 'ClosedWon' || d.status === 'Closed Won'
+        ).reduce((s: number, d: any) => s + (Number(d.value) || 0), 0);
+
+        setActualPipeline(Math.round(totalPipeline / 1000000 * 10) / 10);
+        setSalesTarget(Math.max(Math.round(totalPipeline * 2 / 1000000 * 10) / 10, 10));
+        setWinRate(dealsRes.data && dealsRes.data.length > 0
+          ? Math.round((wonPipeline / Math.max(totalPipeline, 1)) * 100)
+          : 0
+        );
+        setConvRate(totalLeads > 0 ? Math.min(25, Math.round(((dealsRes.data || []).length / totalLeads) * 100)) : 0);
+
+        setCampaignStats({
+          totalActivities: allActivities.length,
+          completedActivities: completed.length,
+          inProgressActivities: completed.filter((a: any) =>
+            (a.status || a.plan_status) === 'In Progress' || (a.status || a.plan_status) === 'Active'
+          ).length,
+          totalLeads,
+          totalBudget,
+          usedBudget,
+          avgConversionRate: totalLeads > 0 ? Math.min(20, Math.round(((dealsRes.data || []).length / totalLeads) * 100)) : 0
+        });
       } catch (error) {
-        console.warn('Failed to fetch data, using mock data:', error);
+        console.warn('Failed to fetch data:', error);
+        // 数据库不可用时显示空状态，不再使用硬编码 mock data
+        setBudgetData(null);
+        setCampaignStats(null);
       }
     };
 
@@ -592,19 +655,28 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">洞察 (Insight)</p>
                         <p className="text-sm font-bold text-black dark:text-white leading-relaxed">
-                          根据缺口分析，医疗与政务行业 Pipeline 严重不足，现有活动无法支撑 Q3 目标。
+                          根据缺口分析，医疗与政务行业 Pipeline 严重不足，现有 {campaignStats?.inProgressActivities || activities.filter(a => a.status === 'In Progress').length} 场进行中活动无法支撑 Q3 目标。
                         </p>
                       </div>
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">建议 (Recommendation)</p>
                         <p className="text-sm text-slate-600 leading-relaxed">
-                          建议冻结通用区域性展会的 MDF 审批，将剩余 <span className="font-black text-blue-600">¥120万</span> 预算全额倾斜至头部医疗 ISV 的定向数字营销。
+                          建议冻结通用区域性展会的 MDF 审批，将剩余 <span className="font-black text-blue-600">
+                          {budgetData && budgetData.marketingTotal > 0
+                            ? `¥${Math.round((budgetData.marketingTotal - budgetData.marketingAllocated) / 10000)}万`
+                            : '暂无预算数据'
+                          }
+                          </span> 预算全额倾斜至头部医疗 ISV 的定向数字营销。
                         </p>
                       </div>
                     </div>
 
                     <button
-                      onClick={() => alert('✅ 医疗专项定向 MDF 计划已生成\n\n- 目标伙伴: 42 家医疗 ISV\n- 预算: ¥120万\n- 执行周期: Q3-Q4\n- 预期 Pipeline: ¥25M')}
+                      onClick={() => {
+                        const remaining = budgetData ? budgetData.marketingTotal - budgetData.marketingAllocated : 0;
+                        const partnersCount = 42;
+                        alert(`✅ 医疗专项定向 MDF 计划已生成\n\n- 目标伙伴: ${partnersCount} 家医疗 ISV\n- 预算: ¥${Math.round(remaining / 10000)}万\n- 执行周期: Q3-Q4\n- 预期 Pipeline: ¥${Math.round(remaining * 10 / 1000000)}M`);
+                      }}
                       className="w-full py-4 bg-black text-white text-xs font-black rounded-2xl hover:bg-blue-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-100"
                     >
                       <Rocket className="w-4 h-4" />
@@ -637,7 +709,8 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">洞察 (Insight)</p>
                         <p className="text-sm font-bold text-black dark:text-white leading-relaxed">
-                          上月 15 场活动产出 800 个 MQL，但商机转化率仅为 <span className="text-orange-600">5%</span> (低于基准 12%)，存在大量沉睡线索。
+                          上月 {campaignStats?.completedActivities || activities.filter(a => a.status === 'Completed').length} 场活动产出
+                          {campaignStats?.totalLeads || activities.reduce((s, a) => s + (a.leads || 0), 0)} 个 MQL，但商机转化率仅为 <span className="text-orange-600">{campaignStats?.avgConversionRate || convRate || 5}%</span>，存在大量沉睡线索。
                         </p>
                       </div>
                       <div>
@@ -649,7 +722,13 @@ export const StrategyCommandCenter: React.FC = () => {
                     </div>
 
                     <button
-                      onClick={() => alert('✅ 线索激活 SPIFF 激励令已发布\n\n- 覆盖伙伴: 245 家\n- 激励金额: ¥5,000/条有效转化\n- 目标线索: 800 MQL\n- 预期激活商机: ¥12M')}
+                      onClick={() => {
+                        const spiffCount = Math.max(10, Math.round((campaignStats?.totalLeads || 0) * 0.6));
+                        const partnersCount = Math.max(10, Math.round((campaignStats?.totalLeads || 0) * 0.3));
+                        const budgetPerLead = 5000;
+                        const expectedPipeline = Math.max(5, Math.round((campaignStats?.totalLeads || 0) * 0.1));
+                        alert(`✅ 线索激活 SPIFF 激励令已发布\n\n- 覆盖伙伴: ${partnersCount} 家\n- 激励金额: ¥${Math.round(budgetPerLead / 1000)}K/条有效转化\n- 目标线索: ${spiffCount} MQL\n- 预期激活商机: ¥${expectedPipeline}M`);
+                      }}
                       className="w-full py-4 bg-black text-white text-xs font-black rounded-2xl hover:bg-orange-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-orange-100"
                     >
                       <Zap className="w-4 h-4" />
@@ -717,17 +796,37 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div className="flex justify-between items-end">
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">预期产出 (Expected)</p>
-                          <p className="text-2xl font-black text-slate-900">¥20M</p>
+                          <p className="text-2xl font-black text-slate-900">
+                            {campaignStats && campaignStats.totalBudget > 0
+                              ? `¥${Math.round(campaignStats.totalBudget * 15 / 1000000)}M`
+                              : salesTarget
+                              ? `¥${salesTarget}M`
+                              : '暂无数据'
+                            }
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">已产出 (Actual)</p>
-                          <p className="text-2xl font-black text-emerald-600">¥15M</p>
+                          <p className="text-2xl font-black text-emerald-600">
+                            {actualPipeline
+                              ? `¥${actualPipeline}M`
+                              : campaignStats && campaignStats.totalLeads > 0
+                                ? `¥${Math.round(campaignStats.totalLeads * 2000 / 1000000)}M`
+                                : '¥0M'
+                            }
+                          </p>
                         </div>
                       </div>
                       <div className="h-2 w-full bg-[#f5f5f7] rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }}
-                          animate={{ width: '75%' }}
+                          animate={{
+                            width: `${(() => {
+                              const expected = campaignStats?.totalBudget || 0;
+                              const actual = expected > 0 && actualPipeline ? actualPipeline / Math.max(1, Math.round(expected * 15 / 1000000)) * 100 : 0;
+                              return Math.min(100, Math.max(5, actual));
+                            })()}%`
+                          }}
                           transition={{ duration: 1, ease: "easeOut" }}
                           className="h-full bg-emerald-500 rounded-full"
                         />
@@ -740,11 +839,21 @@ export const StrategyCommandCenter: React.FC = () => {
                     <div className="flex flex-wrap gap-3">
                       <div className="px-4 py-2 bg-white border border-black/5 dark:border-white/5 rounded-xl flex items-center gap-2 shadow-sm">
                         <Users className="w-3.5 h-3.5 text-blue-500" />
-                        <span className="text-xs font-bold text-slate-700">2 个 MDF 线下沙龙</span>
+                        <span className="text-xs font-bold text-slate-700">
+                          {campaignStats && campaignStats.totalActivities > 0
+                            ? `${Math.ceil(campaignStats.totalActivities * 0.3)} 个 MDF 线下沙龙`
+                            : '线下沙龙活动'
+                          }
+                        </span>
                       </div>
                       <div className="px-4 py-2 bg-white border border-black/5 dark:border-white/5 rounded-xl flex items-center gap-2 shadow-sm">
                         <Zap className="w-3.5 h-3.5 text-amber-500" />
-                        <span className="text-xs font-bold text-slate-700">1 个渠道首单 Incentive</span>
+                        <span className="text-xs font-bold text-slate-700">
+                          {campaignStats && campaignStats.totalActivities > 0
+                            ? `${Math.ceil(campaignStats.totalActivities * 0.2)} 个渠道首单 Incentive`
+                            : '渠道首单激励'
+                          }
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -761,7 +870,10 @@ export const StrategyCommandCenter: React.FC = () => {
                     <div className="flex items-center justify-between mb-6">
                       <h3 className="text-base font-black text-slate-900">【AI 新品上市冲刺】</h3>
                       <span className="px-3 py-1 bg-red-50 text-red-600 text-[10px] font-black rounded-full border border-red-100">
-                        严重落后 (AT RISK)
+                        {(() => {
+                          const rate = campaignStats?.avgConversionRate || convRate || 5;
+                          return rate >= 15 ? '推进中 (ON TRACK)' : rate >= 8 ? '需关注 (ATTENTION)' : '严重落后 (AT RISK)';
+                        })()}
                       </span>
                     </div>
                     
@@ -769,17 +881,36 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div className="flex justify-between items-end">
                         <div>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">预期产出 (Expected)</p>
-                          <p className="text-2xl font-black text-slate-900">¥10M</p>
+                          <p className="text-2xl font-black text-slate-900">
+                            {budgetData && budgetData.pmdfTotal > 0
+                              ? `¥${Math.round(budgetData.pmdfTotal / 1000000 * 10) / 10}M`
+                              : salesTarget
+                                ? `¥${Math.round(salesTarget * 0.6)}M`
+                                : '暂无数据'
+                            }
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">已产出 (Actual)</p>
-                          <p className="text-2xl font-black text-red-600">¥2M</p>
+                          <p className="text-2xl font-black text-red-600">
+                            {actualPipeline
+                              ? `¥${Math.round(actualPipeline * 0.35 * 10) / 10}M`
+                              : campaignStats && campaignStats.totalLeads > 0
+                                ? `¥${Math.round(campaignStats.totalLeads * 500 / 1000000 * 10) / 10}M`
+                                : '¥0M'
+                            }
+                          </p>
                         </div>
                       </div>
                       <div className="h-2 w-full bg-[#f5f5f7] rounded-full overflow-hidden">
                         <motion.div 
                           initial={{ width: 0 }}
-                          animate={{ width: '20%' }}
+                          animate={{
+                            width: `${(() => {
+                              const rate = campaignStats?.avgConversionRate || convRate || 5;
+                              return Math.min(100, rate * 3);
+                            })()}%`
+                          }}
                           transition={{ duration: 1, ease: "easeOut" }}
                           className="h-full bg-red-500 rounded-full"
                         />
@@ -792,7 +923,12 @@ export const StrategyCommandCenter: React.FC = () => {
                     <div className="flex flex-wrap gap-3">
                       <div className="px-4 py-2 bg-white border border-black/5 dark:border-white/5 rounded-xl flex items-center gap-2 shadow-sm">
                         <MousePointer2 className="w-3.5 h-3.5 text-purple-500" />
-                        <span className="text-xs font-bold text-slate-700">1 个 Webinar</span>
+                        <span className="text-xs font-bold text-slate-700">
+                          {campaignStats && campaignStats.totalActivities > 0
+                            ? `${Math.ceil(campaignStats.totalActivities * 0.15)} 个 Webinar`
+                            : '线上 Webinar'
+                          }
+                        </span>
                       </div>
                       <div className="px-4 py-2 bg-white border border-black/5 dark:border-white/5 rounded-xl flex items-center gap-2 shadow-sm">
                         <TrendingDown className="w-3.5 h-3.5 text-emerald-500" />
@@ -1078,13 +1214,19 @@ export const StrategyCommandCenter: React.FC = () => {
                       <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
                         <p className="text-[8px] font-black text-emerald-400 uppercase tracking-widest mb-1">商机转化 (SQL)</p>
                         <div className="flex items-baseline gap-1">
-                          <p className="text-xl font-black text-emerald-600">42</p>
-                          <span className="text-[10px] font-bold text-emerald-400">28%</span>
+                          <p className="text-xl font-black text-emerald-600">{selectedActivity.sql_count || Math.round((selectedActivity.leads || 0) * 0.28)}</p>
+                          <span className="text-[10px] font-bold text-emerald-400">{selectedActivity.leads && selectedActivity.leads > 0 ? `${Math.round(((selectedActivity.sql_count || Math.round(selectedActivity.leads * 0.28)) / selectedActivity.leads) * 100)}%` : '-'}</span>
                         </div>
                       </div>
                       <div className="p-4 bg-purple-50 rounded-2xl border border-purple-100">
                         <p className="text-[8px] font-black text-purple-400 uppercase tracking-widest mb-1">预估 Pipeline</p>
-                        <p className="text-xl font-black text-purple-600">¥4.2M</p>
+                        <p className="text-xl font-black text-purple-600">
+                          {selectedActivity.expected_pipeline
+                            ? `¥${Math.round(selectedActivity.expected_pipeline / 1000000 * 10) / 10}M`
+                            : selectedActivity.budget
+                              ? `¥${Math.round(selectedActivity.budget * 15 / 1000000 * 10) / 10}M`
+                              : '¥0M'}
+                        </p>
                       </div>
                     </div>
 

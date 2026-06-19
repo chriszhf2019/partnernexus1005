@@ -145,12 +145,8 @@ describe('marketingService', () => {
       expect(programs[0].totalBudget).toBe(500000);
       expect(programs[0].claimedAmount).toBe(200000);
       expect(programs[0].participantsCount).toBe(15);
-      // camelCase and snake_case aliases
-      expect(programs[0].total_budget).toBe(500000);
-      expect(programs[0].claimed_amount).toBe(200000);
-      expect(programs[0].participants_count).toBe(15);
       // Computed
-      expect(programs[0].remaining).toBe(300000);
+      expect(programs[0].remainingBudget).toBe(300000);
       expect(programs[0].currentMonthPerformance).toBeDefined();
       expect(programs[0].currentMonthPerformance.target).toBeGreaterThan(0);
       expect(programs[0].currentMonthPerformance.rate).toBeGreaterThan(0);

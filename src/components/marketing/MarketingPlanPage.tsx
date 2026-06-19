@@ -14,6 +14,12 @@ import { formatCurrency, currencyName } from '../../lib/utils';
 import { useConfig } from '../../contexts/ConfigContext';
 import { useToast } from '../ui/Toast';
 import { LeadDrilldownDrawer } from './LeadDrilldownDrawer';
+import {
+  enrichCampaignPlans,
+  calculateQuarterlyStats,
+  getCampaignAlerts,
+  fmtBudget,
+} from '../../lib/campaignMetrics';
 
 // ── Constants ──────────────────────────────────────────
 const QUARTERS = ['Q1', 'Q2', 'Q3', 'Q4'] as const;
@@ -655,6 +661,11 @@ export const MarketingPlanPage = () => {
   useEffect(() => { loadData(currentYear); }, [currentYear, loadData]);
 
   // ── Computed Values ──────────────────────────────────
+  // 实时计算增强数据（所有动态指标在此计算）
+  const enrichedPlan = useMemo(() => enrichCampaignPlans(plan), [plan]);
+  const quarterlyStats = useMemo(() => calculateQuarterlyStats(enrichedPlan), [enrichedPlan]);
+  const campaignAlerts = useMemo(() => getCampaignAlerts(enrichedPlan), [enrichedPlan]);
+
   const actualSpendQ = useMemo(() => {
     const spend = [0, 0, 0, 0];
     activities.forEach((a: any) => {
@@ -695,30 +706,37 @@ export const MarketingPlanPage = () => {
   const isApproved = config.status === 'approved';
   const isEditable = isDraft;
 
-  // Plan-level stats
+  // Plan-level stats (基于实时计算)
   const totalPlans = plan.length;
-  const completedPlans = useMemo(() => plan.filter(p => normalizeExecStatus(p.execution_status) === 'executed').length, [plan]);
-  const inProgressPlans = useMemo(() => plan.filter(p => normalizeExecStatus(p.execution_status) === 'approved').length, [plan]);
-  const totalBudgetRequested = useMemo(() => plan.reduce((s, p) => s + Number(p.total_budget || 0), 0), [plan]);
-  const totalBudgetApproved = useMemo(() => plan.reduce((s, p) => s + Number(p.approved_amount || 0), 0), [plan]);
-  const totalExpectedAttendees = useMemo(() => plan.reduce((s, p) => s + Number(p.expected_attendees || 0), 0), [plan]);
-  const budgetUtilizationRate = annualBudget > 0 ? Math.round((totalActual / annualBudget) * 100) : 0;
+  const completedPlans = quarterlyStats.executedCount;
+  const inProgressPlans = quarterlyStats.pendingCount;
+  const totalBudgetRequested = quarterlyStats.totalBudget;
+  const totalBudgetApproved = quarterlyStats.approvedAmount;
+  const totalExpectedAttendees = quarterlyStats.totalTargetLeads;
+  const budgetUtilizationRate = quarterlyStats.executionRate;
 
-  // ── Stats items ──────────────────────────────────────
-  const forecastPipeline = useMemo(() => totalPlans * 850000, [totalPlans]);
-  const forecastROI = annualBudget > 0 ? (forecastPipeline / annualBudget).toFixed(1) : '0';
-  const varianceCount = useMemo(() => plan.filter(p => {
-    const spendVariance = p.total_budget > 0 && p.actual_spend ? Math.abs((p.actual_spend - p.total_budget)/p.total_budget) : 0;
-    const leadsVariance = p.expected_output && p.actual_leads ? Math.abs((p.actual_leads - parseInt(p.expected_output||'0'))/parseInt(p.expected_output||'1')) : 0;
-    return spendVariance > 0.2 || leadsVariance > 0.5;
-  }).length, [plan]);
+  // 预警偏差计数（使用实时计算的进度和预警状态）
+  const varianceCount = useMemo(() =>
+    enrichedPlan.filter(p => p.budgetWarning !== 'normal' || p.isOverdue || p.isUpcoming).length,
+  [enrichedPlan]);
+
+  // 实时计算的预估商机贡献和ROI
+  const forecastPipeline = useMemo(() =>
+    enrichedPlan.reduce((s, p) => s + (p.forecast_pipeline || 0), 0),
+  [enrichedPlan]);
+  const forecastROI = useMemo(() => {
+    if (quarterlyStats.actualSpend > 0) {
+      return (quarterlyStats.totalActualLeads / (quarterlyStats.actualSpend / 10000)).toFixed(1);
+    }
+    return annualBudget > 0 ? (forecastPipeline / annualBudget).toFixed(1) : '0';
+  }, [quarterlyStats, forecastPipeline, annualBudget]);
 
   const statsItems = useMemo(() => [
     { label: '预估商机贡献总额', value: fmtW(forecastPipeline), sub: `预估ROI 1:${forecastROI} · ${totalPlans}项活动`, icon: TrendingUp, color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/20' },
     { label: '年度总预算', value: fmtW(annualBudget), sub: `执行率 ${budgetUtilizationRate}%`, icon: DollarSign, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
     { label: '活动计划', value: totalPlans + ' 项', sub: `进行中${inProgressPlans} · 已完成${completedPlans}`, icon: PieChart, color: 'text-amber-600', bg: 'bg-amber-50 dark:bg-amber-900/20' },
     { label: '偏差预警', value: varianceCount > 0 ? `⚠️ ${varianceCount}项` : '✅ 正常', sub: varianceCount > 0 ? '预算或线索偏离超阈值' : '所有活动按计划执行', icon: AlertCircle, color: varianceCount > 0 ? 'text-red-500' : 'text-emerald-500', bg: varianceCount > 0 ? 'bg-red-50 dark:bg-red-900/20' : 'bg-emerald-50 dark:bg-emerald-900/20' },
-  ], [fmtW, annualBudget, budgetUtilizationRate, totalPlans, inProgressPlans, completedPlans, forecastPipeline, forecastROI, varianceCount]);
+  ], [fmtW, annualBudget, budgetUtilizationRate, totalPlans, inProgressPlans, completedPlans, forecastPipeline, forecastROI, varianceCount, enrichedPlan, quarterlyStats]);
 
   // ── Actions ──────────────────────────────────────────
   const logChange = useCallback(async (action: string) => {
@@ -897,7 +915,7 @@ export const MarketingPlanPage = () => {
     try {
       const results = await Promise.all(
         items.map(async (p) => {
-          const { error } = await supabase.from('marketing_plan').update({ plan_status: 'approved', approved_at: new Date().toISOString(), approved_by: '市场总监 Alex / 渠道总监 陈伟' }).eq('id', p.id);
+          const { error } = await supabase.from('marketing_plan').update({ plan_status: 'approved' }).eq('id', p.id);
           return { success: !error, id: p.id };
         })
       );
@@ -905,7 +923,7 @@ export const MarketingPlanPage = () => {
       if (successCount === items.length) {
         // Create baseline snapshot for approved items
         for (const p of items) {
-          await supabase.from('plan_baselines').insert({ year: currentYear, quarter, activity_id: p.id, field_name: 'plan_approved', planned_value: JSON.stringify({ budget: p.total_budget, approved: p.approved_amount, leads: p.expected_output, attendees: p.expected_attendees }), status: 'active' }).then(() => {});
+          await supabase.from('plan_baselines').insert({ year: currentYear, quarter, activity_id: p.id, field_name: 'plan_approved', planned_value: JSON.stringify({ budget: p.total_budget, approved: p.approved_amount, leads: p.target_leads, attendees: p.expected_attendees }), status: 'active' }).then(() => {});
         }
         toast('success', `${quarter} 季度全部批复通过 · 已创建基线快照`);
         setPlan(prev => prev.map(p => {
@@ -1467,7 +1485,7 @@ export const MarketingPlanPage = () => {
                           </>
                         )}
                         {es === 'approved' && (
-                          <Button variant="brand" size="sm" onClick={async () => { await supabase.from('marketing_plan').update({ execution_status: 'executed', executed_at: new Date().toISOString(), executed_by: '执行人' }).eq('id', d.id); loadData(currentYear); setDetailActivity(null); }} className="flex-1">标记为已完成</Button>
+                          <Button variant="brand" size="sm" onClick={async () => { await supabase.from('marketing_plan').update({ execution_status: 'executed' }).eq('id', d.id); loadData(currentYear); setDetailActivity(null); }} className="flex-1">标记为已完成</Button>
                         )}
                         {es === 'executed' && (
                           <Button variant="secondary" size="sm" className="flex-1" onClick={() => navigate('/marketing')}>查看执行数据</Button>

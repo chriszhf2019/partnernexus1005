@@ -58,7 +58,30 @@ export const PartnerFormPage = () => {
   };
 
   const handleSubmit = useCallback(async () => {
+    // ── 验证 ──────────────────────────────────────────────
     if (!form.name.trim()) { toast('error', '请输入合作伙伴中文名称'); return; }
+    if (form.website && !/^https?:\/\/.+\..+/.test(form.website)) {
+      toast('error', '企业网址格式不正确，请以 http:// 或 https:// 开头'); return;
+    }
+    if (form.unifiedSocialCreditCode && !/^[0-9A-Z]{18}$/.test(form.unifiedSocialCreditCode.toUpperCase())) {
+      toast('error', '统一社会信用代码必须为18位字母数字组合'); return;
+    }
+    const validContacts = contacts.filter((c) => c.lastName || c.firstName);
+    for (const c of validContacts) {
+      if (c.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) {
+        toast('error', '联系人邮箱格式不正确'); return;
+      }
+      if (c.mobile && !/^[0-9\-+\s]{6,20}$/.test(c.mobile)) {
+        toast('error', '联系人手机格式不正确'); return;
+      }
+      if (c.phone && !/^[0-9\-+\s]{6,20}$/.test(c.phone)) {
+        toast('error', '联系人电话格式不正确'); return;
+      }
+    }
+
+    const vendorList = Object.entries(form.vendors).filter(([v]) => v);
+    const industryList = [...(form.industries as string[]), form.industryCustom].filter(Boolean) as string[];
+
     setSaving(true);
     try {
       await partnerService.create({
@@ -71,23 +94,27 @@ export const PartnerFormPage = () => {
         type: form.type,
         manager: '',
         location: form.location,
-        region: form.regionCustom || form.regions?.[0] || '',
+        region: form.regionCustom || (form.regions as string[])?.[0] || '',
         years: 0,
         prevTier: 'Registered',
-        tags: Object.keys(form.vendors).filter(Boolean),
+        tags: vendorList.map(([v]) => v),
         winRate: 0,
-        contacts: contacts.filter((c) => c.lastName || c.firstName),
+        contacts: validContacts,
         unifiedSocialCreditCode: form.unifiedSocialCreditCode,
-        industry: [...form.industries, form.industryCustom].filter(Boolean).join('、'),
+        industry: industryList.join('、'),
+        industries: industryList,
         cooperationScope: form.cooperationScope,
         isCorePartner: false,
         province: form.province,
         city: form.city,
         district: form.district,
         registeredAddress: form.location,
-        customerPortfolio: targetCustomers.filter(c => c.name).map(c => ({
-          id: crypto.randomUUID(), name: c.name, industry: c.industry || '',
-          relationship: '潜在客户', status: '跟进中', notes: c.potential || '',
+        vendorQualifications: form.vendors,
+        opportunities: opportunities.filter((o) => o.name || o.customer),
+        customerPortfolio: targetCustomers.filter((c) => c.name).map((c) => ({
+          id: crypto.randomUUID(), name: c.name,
+          industry: c.industry || '', relationship: '潜在客户',
+          status: '跟进中', notes: c.potential || '',
         })),
       });
       toast('success', '提交成功，等待批复');
@@ -95,7 +122,7 @@ export const PartnerFormPage = () => {
     } catch (err: any) {
       toast('error', `提交失败: ${err.message || '请重试'}`);
     } finally { setSaving(false); }
-  }, [form, contacts, navigate, toast]);
+  }, [form, contacts, opportunities, targetCustomers, navigate, toast]);
 
   const industryOptions = (config?.industries || ['金融', '医疗', '政务', '制造', '教育']).map((v) => ({ value: v, label: v }));
   const vendors = config?.partnerVendors || ['华为', '浪潮', '联想', 'Oracle', 'AWS', '阿里云'];

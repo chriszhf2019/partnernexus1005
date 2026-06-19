@@ -39,8 +39,10 @@ const STAGE_CONFIG: Record<DealLifecycleStage, { probability: number; benchmarkD
   'Registered':    { probability: 10, benchmarkDays: 3,  label: '已报备' },
   'UnderReview':   { probability: 20, benchmarkDays: 5,  label: '审批中' },
   'Approved':      { probability: 35, benchmarkDays: 7,  label: '已批复' },
+  'Migrated':      { probability: 40, benchmarkDays: 5,  label: '迁单' },
   'Solution':      { probability: 50, benchmarkDays: 14, label: '方案跟进' },
   'Commercial':    { probability: 80, benchmarkDays: 21, label: '商务洽谈' },
+  'Negotiation':   { probability: 90, benchmarkDays: 15, label: '合同谈判' },
   'ClosedWon':     { probability: 100, benchmarkDays: 0, label: '赢单' },
   'ClosedLost':    { probability: 0,  benchmarkDays: 0,  label: '丢单' },
 };

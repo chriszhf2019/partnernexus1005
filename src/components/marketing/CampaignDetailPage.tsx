@@ -74,6 +74,7 @@ const PHASE_CONFIG: Record<CampaignPhase, { label: string; color: string; icon: 
   executing: { label: '执行', color: 'text-green-600 bg-green-100', icon: '🚀' },
   follow_up: { label: '跟进', color: 'text-purple-600 bg-purple-100', icon: '📈' },
   evaluating: { label: '评估', color: 'text-indigo-600 bg-indigo-100', icon: '📊' },
+  closed: { label: '已结束', color: 'text-gray-600 bg-gray-100', icon: '✅' },
 };
 
 // 状态配置

@@ -6,8 +6,10 @@ import {
   TrendingUp, TrendingDown, History, Plus, Trash2, Sparkles,
 } from 'lucide-react';
 import { cn, formatCurrency } from '../../lib/utils';
-import { Deal, DealLifecycleStage, DealLifecycleEvent } from '../../types';
+import { Deal, DealLifecycleStage, DealLifecycleEvent, DealLifecycleStageV2, DealMaturityHealth, DealMaturityEvent } from '../../types';
 import { dealService } from '../../services/deal-service';
+import { dealLifecycleService, dealMaturityService } from '../../services/lifecycle-service';
+import { DealLifecycleTracker, DealMaturityTracker } from '../LifecycleTracker';
 import { supabase } from '../../lib/supabase';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -45,18 +47,23 @@ export const DealDetailPage = () => {
   const [changeLog, setChangeLog] = useState<any[]>([]);
   const [partners, setPartners] = useState<any[]>([]);
   const [duplicates, setDuplicates] = useState<Deal[]>([]);
+  const [maturityHealth, setMaturityHealth] = useState<DealMaturityHealth | null>(null);
+  const [maturityEvents, setMaturityEvents] = useState<DealMaturityEvent[]>([]);
+  const [maturityLoading, setMaturityLoading] = useState(false);
 
   useEffect(() => {
     if (!id) { setLoading(false); setError('未找到商机ID'); return; }
+    setMaturityLoading(true);
     Promise.all([
       dealService.getById(id),
       supabase.from('deal_lifecycle_events').select('*').eq('deal_id', id).order('event_date', { ascending: false }),
       supabase.from('partners').select('id,name,tier').order('name'),
-    ]).then(([d, { data: events }, { data: partnerList }]) => {
+      dealMaturityService.calculateHealth(id),
+      dealMaturityService.getEvents(id),
+    ]).then(([d, { data: events }, { data: partnerList }, mHealth, mEvents ]) => {
       if (d) {
         setDeal(d);
-        setEditForm({ title: d.title, customerName: d.customerName, value: d.value, partnerId: d.partnerId, partnerName: d.partnerName, region: d.region, productType: d.productType, salesName: d.salesName, status: d.status, stage: d.stage, description: d.description || '', salesTeam: (d as any).salesTeam || '销售自建' });
-        // Check duplicates
+        setEditForm({ title: d.title, customerName: d.customerName, value: d.value, partnerId: d.partnerId, partnerName: d.partnerName, actualPartnerId: d.actualPartnerId, actualPartnerName: d.actualPartnerName, region: d.region, productType: d.productType, salesName: d.salesName, status: d.status, stage: d.stage, description: d.description || '', salesTeam: (d as any).salesTeam || '销售自建' });
         dealService.list().then(r => {
           const dups = r.items.filter(x => x.id !== d.id && x.customerName === d.customerName);
           setDuplicates(dups);
@@ -64,8 +71,11 @@ export const DealDetailPage = () => {
       } else { setError('未找到该商机'); }
       if (events) setChangeLog(events);
       if (partnerList) setPartners(partnerList);
+      if (mHealth) setMaturityHealth(mHealth);
+      if (mEvents) setMaturityEvents(mEvents);
+      setMaturityLoading(false);
       setLoading(false);
-    }).catch(() => { setError('获取商机信息失败'); setLoading(false); });
+    }).catch(() => { setError('获取商机信息失败'); setMaturityLoading(false); setLoading(false); });
   }, [id]);
 
   const daysStale = useMemo(() => {
@@ -89,6 +99,7 @@ export const DealDetailPage = () => {
       if (editForm.customerName !== deal.customerName) changes.push(`客户: ${deal.customerName} → ${editForm.customerName}`);
       if (Number(editForm.value) !== deal.value) changes.push(`金额: ¥${deal.value} → ¥${editForm.value}`);
       if (editForm.stage !== deal.stage) changes.push(`阶段: ${deal.stage} → ${editForm.stage}`);
+      if (editForm.actualPartnerId !== deal.actualPartnerId) changes.push(`实际合作伙伴: ${deal.actualPartnerName || '未设置'} → ${editForm.actualPartnerName || '未设置'}`);
 
       await dealService.update(deal.id, {
         title: editForm.title,
@@ -96,6 +107,8 @@ export const DealDetailPage = () => {
         value: Number(editForm.value),
         partnerId: editForm.partnerId,
         partnerName: editForm.partnerName,
+        actualPartnerId: editForm.actualPartnerId,
+        actualPartnerName: editForm.actualPartnerName,
         region: editForm.region,
         productType: editForm.productType,
         salesName: editForm.salesName,
@@ -205,6 +218,32 @@ export const DealDetailPage = () => {
         </div>
       )}
 
+      {/* 操作阶段生命周期追踪卡片 */}
+      <DealLifecycleTracker
+        dealId={deal.id}
+        currentStage={deal.stage as DealLifecycleStageV2}
+        value={typeof deal.value === 'string' ? parseFloat(deal.value) : deal.value}
+        daysInCurrentStage={daysStale}
+        onAdvance={async (newStage) => {
+          await dealLifecycleService.advanceStage(deal.id, newStage as DealLifecycleStageV2);
+          window.location.reload();
+        }}
+      />
+
+      {/* 商机4阶段关系深度生命周期追踪卡片 */}
+      {maturityLoading ? (
+        <div className="bg-white dark:bg-neutral-900 rounded-2xl border border-neutral-200 dark:border-neutral-800 p-8 text-center text-neutral-500 text-sm">
+          正在评估商机关系深度生命周期...
+        </div>
+      ) : (
+        <DealMaturityTracker
+          dealTitle={deal.title}
+          maturityHealth={maturityHealth}
+          events={maturityEvents}
+          onStageClick={(stage) => console.log('[DealDetailPage] stage clicked:', stage)}
+        />
+      )}
+
       {/* Info Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
@@ -237,6 +276,37 @@ export const DealDetailPage = () => {
             </div>
           </Card>
         ))}
+        
+        {/* 合作伙伴信息 */}
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-neutral-100 dark:bg-neutral-800 flex items-center justify-center shrink-0">
+              <User className="w-5 h-5 text-neutral-500" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-neutral-500">注册合作伙伴</p>
+              <p className="text-sm font-semibold">{deal.partnerName || '-'}</p>
+            </div>
+          </div>
+        </Card>
+        
+        {/* 实际合作伙伴 */}
+        <Card className="p-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center shrink-0">
+              <Sparkles className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-neutral-500">实际合作伙伴</p>
+              <p className={`text-sm font-semibold ${deal.actualPartnerName ? 'text-emerald-600' : 'text-neutral-400'}`}>
+                {deal.actualPartnerName || '未设置'}
+                {deal.actualPartnerName && deal.actualPartnerId !== deal.partnerId && (
+                  <span className="text-xs text-amber-500 ml-1">(变更)</span>
+                )}
+              </p>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* Partner & Description (editable) */}
@@ -245,8 +315,13 @@ export const DealDetailPage = () => {
           <CardHeader><CardTitle>编辑详细信息</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs font-medium mb-1 block">合作伙伴</label>
+              <label className="text-xs font-medium mb-1 block">注册合作伙伴</label>
               <SearchableSelect value={editForm.partnerId} onChange={(id, label) => setEditForm({...editForm, partnerId: id, partnerName: label})} options={partners.map((p:any) => ({id:p.id, label:p.name, sub:p.tier}))} placeholder="搜索合作伙伴..." className="w-full" />
+            </div>
+            <div>
+              <label className="text-xs font-medium mb-1 block">实际合作伙伴 {deal.stage === 'ClosedWon' && <span className="text-red-500">*</span>}</label>
+              <SearchableSelect value={editForm.actualPartnerId || ''} onChange={(id, label) => setEditForm({...editForm, actualPartnerId: id, actualPartnerName: label})} options={partners.map((p:any) => ({id:p.id, label:p.name, sub:p.tier}))} placeholder="搜索实际合作伙伴..." className="w-full" />
+              <p className="text-xs text-neutral-400 mt-1">结单时可指定实际合作伙伴</p>
             </div>
             <Select label="商机阶段" value={editForm.stage} options={Object.entries(STAGE_CONFIG).map(([k,v]) => ({value:k, label:v.label}))} onChange={e => setEditForm({...editForm, stage: e.target.value})} />
             <Select label="状态" value={editForm.status} options={[{value:'Pending',label:'待审批'},{value:'Approved',label:'已批复'},{value:'Closed Won',label:'赢单'},{value:'Closed Lost',label:'丢单'}]} onChange={e => setEditForm({...editForm, status: e.target.value})} />
@@ -313,7 +388,8 @@ export const DealDetailPage = () => {
             <div className="flex justify-between"><span className="text-neutral-500">最后更新</span><span className={daysStale > 7 ? 'text-amber-600 font-medium' : ''}>{deal.lastActivityDate || deal.createdDate || '-'} ({daysStale}天前)</span></div>
             <div className="flex justify-between"><span className="text-neutral-500">当前阶段</span><Badge variant="info" size="sm">{stageCfg.label}</Badge></div>
             <div className="flex justify-between"><span className="text-neutral-500">变更次数</span><span>{changeLog.length} 次</span></div>
-            <div className="flex justify-between"><span className="text-neutral-500">合作伙伴</span><span>{deal.partnerName || '-'}</span></div>
+            <div className="flex justify-between"><span className="text-neutral-500">注册合作伙伴</span><span>{deal.partnerName || '-'}</span></div>
+            <div className="flex justify-between"><span className="text-neutral-500">实际合作伙伴</span><span className={deal.actualPartnerName ? 'text-emerald-600 font-medium' : 'text-neutral-400'}>{deal.actualPartnerName || '未设置'}</span></div>
             <div className="flex justify-between"><span className="text-neutral-500">疑似重复</span><span className={duplicates.length > 0 ? 'text-red-500 font-medium' : ''}>{duplicates.length > 0 ? `${duplicates.length}个` : '无'}</span></div>
           </CardContent>
         </Card>

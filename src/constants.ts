@@ -82,6 +82,7 @@ export const DEAL_STATS: DealRegistrationStats = {
     'Migrated': 8,
     'Solution': 28,
     'Commercial': 21,
+    'Negotiation': 12,
     'ClosedWon': 28,
     'ClosedLost': 12
   },

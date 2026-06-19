@@ -12,8 +12,8 @@ import { usePartners, useDeals, useActivities, type ActivityItem } from './hooks
 import { partnerService } from './services/partner-service';
 import { dealService } from './services/deal-service';
 import { buildPartnerDetails } from './lib/partnerDataBuilder';
-import { supabase } from './lib/supabase';
 import { Shield, HelpCircle, Clock } from 'lucide-react';
+import { seedTestData } from './data/seedTestData';
 
 const LiveClock = () => {
   const [time, setTime] = useState(new Date());
@@ -48,6 +48,7 @@ const MarketingIncentivePage = retryableLazy(() => import('./components/marketin
 const DealRegistrationPage = retryableLazy(() => import('./components/deals/DealRegistrationPage').then(m => ({ default: m.DealRegistrationPage })));
 const DealRegistrationForm = retryableLazy(() => import('./components/deals/DealRegistrationForm').then(m => ({ default: m.DealRegistrationForm })));
 const DealDetailPage = retryableLazy(() => import('./components/deals/DealDetailPage').then(m => ({ default: m.DealDetailPage })));
+const DealHealthInspectionPage = retryableLazy(() => import('./components/deals/DealHealthInspectionPage').then(m => ({ default: m.DealHealthInspectionPage })));
 const SettingsPage = retryableLazy(() => import('./components/settings/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const IncentivesPage = retryableLazy(() => import('./components/marketing/IncentivesPage').then(m => ({ default: m.IncentivesPage })));
 const IncentiveClosingDashboard = retryableLazy(() => import('./components/marketing/IncentiveClosingDashboard').then(m => ({ default: m.IncentiveClosingDashboard })));
@@ -67,6 +68,7 @@ const ChannelCampaignPage = retryableLazy(() => import('./components/marketing/C
 const MarketingActivityDetail = retryableLazy(() => import('./components/marketing/MarketingActivityDetail').then(m => ({ default: m.MarketingActivityDetail })));
 const IncentivePlanDetailPage = retryableLazy(() => import('./components/marketing/IncentivePlanDetailPage').then(m => ({ default: m.IncentivePlanDetailPage })));
 const CourseDetailPage = retryableLazy(() => import('./components/marketing/CourseDetailPage').then(m => ({ default: m.CourseDetailPage })));
+const AdminScoringConfig = retryableLazy(() => import('./components/admin/AdminScoringConfig').then(m => ({ default: m.AdminScoringConfig })));
 
 function EcosystemRoute() {
   const navigate = useNavigate();
@@ -146,13 +148,12 @@ function PartnerProfileRoute() {
     if (fromRef) { setPartner({...fromRef}); setLoading(false); }
     else { partnerService.getById(id).then((p) => { if (p) setPartner(p); setLoading(false); }).catch(() => setLoading(false)); }
 
-    // Fetch related deals and PMDF plans
-    supabase.from('deals').select('*').eq('partner_id', id).order('created_date', { ascending: false }).then(({ data }: any) => { if (data) setRelatedDeals(data); });
-    supabase.from('marketing_plan').select('*').eq('partner_id', id).eq('activity_type', 'PMDF').then(({ data }: any) => { if (data) setRelatedPlans(data); });
-    // Load contacts from partner_contacts table
-    supabase.from('partner_contacts').select('*').eq('partner_id', id).then(({ data: contacts }: any) => {
-      if (contacts?.length > 0) {
-        setPartner((prev: any) => prev ? { ...prev, contacts: contacts.map((c: any) => ({ salutation: c.salutation, firstName: c.first_name, lastName: c.last_name, title: c.title, department: c.department, phone: c.phone, mobile: c.mobile, email: c.email, isPrimary: c.is_primary })) } : prev);
+    // Fetch related data via partnerService (unified data access layer)
+    partnerService.getPartnerRelatedData(id).then(({ contacts, deals, marketingPlans }) => {
+      setRelatedDeals(deals);
+      setRelatedPlans(marketingPlans);
+      if (contacts.length > 0) {
+        setPartner((prev: any) => prev ? { ...prev, contacts } : prev);
       }
     });
   }, [id, refreshKey]);
@@ -217,6 +218,11 @@ function PartnerProfileRoute() {
       </Suspense>
     </ErrorBoundary>
   );
+}
+
+function DealHealthInspectionRoute() {
+  const { deals } = useDeals();
+  return <DealHealthInspectionPage deals={deals} />;
 }
 
 function DealsRoute() {
@@ -336,6 +342,18 @@ function SettingsRoute() {
 function AppLayout() {
   const { t } = useLanguage();
 
+  useEffect(() => {
+    const initializeData = async () => {
+      try {
+        await seedTestData();
+        console.log('Test data initialization complete');
+      } catch (error) {
+        console.warn('Test data seeding skipped (database may not be available)');
+      }
+    };
+    initializeData();
+  }, []);
+
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <Sidebar />
@@ -354,6 +372,7 @@ function AppLayout() {
             <Route path="/partners/:id" element={<PartnerProfileRoute />} />
               <Route path="/partners/:id/staff" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><PartnerStaffPage /></Suspense></ErrorBoundary>} />
               <Route path="/deals" element={<DealsRoute />} />
+              <Route path="/deals/health-inspection" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealHealthInspectionRoute /></Suspense></ErrorBoundary>} />
               <Route path="/deals/new" element={<NewDealRoute />} />
               <Route path="/deals/:id" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealDetailPage /></Suspense></ErrorBoundary>} />
               <Route path="/deals/:id/edit" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><DealRegistrationForm /></Suspense></ErrorBoundary>} />
@@ -376,6 +395,7 @@ function AppLayout() {
               <Route path="/enablement" element={<EnablementRoute />} />
               <Route path="/analytics" element={<AnalyticsRoute />} />
               <Route path="/settings" element={<SettingsRoute />} />
+              <Route path="/admin/scoring" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><AdminScoringConfig /></Suspense></ErrorBoundary>} />
               <Route path="/migrate" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><RunMigration /></Suspense></ErrorBoundary>} />
               <Route path="/channels" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><ChannelDashboard /></Suspense></ErrorBoundary>} />
               <Route path="/invitation/:code" element={<ErrorBoundary><Suspense fallback={<PageLoader />}><InvitationPage /></Suspense></ErrorBoundary>} />

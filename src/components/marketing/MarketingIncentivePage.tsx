@@ -115,6 +115,7 @@ export const MarketingIncentivePage = () => {
 
   // 新增：诊断层交互状态
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(null);
+  const [showKpiDetail, setShowKpiDetail] = useState<string | null>(null); // KPI 详情展开
 
   // New panel states
   const [showMDFClaims, setShowMDFClaims] = useState(false);
@@ -128,6 +129,7 @@ export const MarketingIncentivePage = () => {
   const [showAutoReport, setShowAutoReport] = useState(false);
   const [showBenchmark, setShowBenchmark] = useState(false);
   const [showKPIIncentive, setShowKPIIncentive] = useState(false);
+  const [expandedActionCard, setExpandedActionCard] = useState<string | null>(null);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -144,7 +146,7 @@ export const MarketingIncentivePage = () => {
 
   useEffect(() => {
     supabase.from('marketing_budget_config').select('*').eq('id', 'current').single().then(({ data }: any) => { if (data) setBudgetConfig(data); });
-    supabase.from('marketing_plan').select('*').eq('year', currentYear).eq('quarter', currentQuarter).in('execution_status', ['approved', 'Approved', 'In Progress', '进行中']).order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
+    supabase.from('marketing_plan').select('*, mql_count, sql_count, leads_generated, grade_a_leads, grade_b_leads, grade_c_leads, new_logo_count, conversion_days, follow_up_rate, stale_leads, sop_downloads').eq('year', currentYear).eq('quarter', currentQuarter).in('execution_status', ['approved', 'Approved', 'In Progress', '进行中']).order('category').then(({ data }: any) => { if (data?.length) setQ2Plans(data); });
     supabase.from('partners').select('id, name, tier').order('name').then(({ data }: any) => { if (data) setPartners(data); });
   }, [currentYear, currentQuarter]);
 
@@ -186,39 +188,117 @@ export const MarketingIncentivePage = () => {
     const totalActivities = qActivities.length;
     const completionRate = totalActivities > 0 ? safePercent((completedCount / totalActivities) * 100) : 0;
 
-    // 区域覆盖情况
-    const regionData: Record<string, number> = {};
+    // 是否进度滞后：完成率显著低于时间进度
+    const isLagging = completionRate < timeProgress - 10;
+
+    // 核销滞后检测：活动已完成但预算未执行
+    const completedActivities = qActivities.filter((a: any) => a.status === 'Completed');
+    const zeroSpendCompleted = completedActivities.filter((a: any) => safeNum(a.actualSpend) === 0);
+    const hasReconciliationLag = zeroSpendCompleted.length > 0 && completionRate > 0;
+
+    // 区域覆盖情况 - 优化区域字段
+    const regionData: Record<string, { total: number; completed: number; inProgress: number }> = {};
+    // 默认的核心区域列表（根据业务场景扩展）
+    const defaultRegions = ['华东', '华南', '华北', '华中', '西南', '西北', '东北'];
+    defaultRegions.forEach(r => regionData[r] = { total: 0, completed: 0, inProgress: 0 });
+
     qActivities.forEach((a: any) => {
-      const region = a.province || a.region || '未知';
-      regionData[region] = (regionData[region] || 0) + 1;
+      const rawRegion = a.province || a.region || '';
+      let region = rawRegion;
+      if (rawRegion === '') region = '区域未指定';
+      // 如果数据库里是具体省份，映射到大区
+      else if (['上海', '江苏', '浙江', '安徽', '福建', '江西', '山东'].includes(rawRegion)) region = '华东';
+      else if (['广东', '广西', '海南'].includes(rawRegion)) region = '华南';
+      else if (['北京', '天津', '河北', '山西', '内蒙古'].includes(rawRegion)) region = '华北';
+      else if (['河南', '湖北', '湖南'].includes(rawRegion)) region = '华中';
+      else if (['重庆', '四川', '贵州', '云南', '西藏'].includes(rawRegion)) region = '西南';
+      else if (['陕西', '甘肃', '青海', '宁夏', '新疆'].includes(rawRegion)) region = '西北';
+      else if (['辽宁', '吉林', '黑龙江'].includes(rawRegion)) region = '东北';
+
+      if (!regionData[region]) regionData[region] = { total: 0, completed: 0, inProgress: 0 };
+      regionData[region].total += 1;
+      if (a.status === 'Completed') regionData[region].completed += 1;
+      if (a.status === 'In Progress') regionData[region].inProgress += 1;
     });
+
+    // 扩展：也记录原始省份数据，方便详情页
+    const provinceData: Record<string, { count: number; activities: any[] }> = {};
+    qActivities.forEach((a: any) => {
+      const p = a.province || a.region || '未指定';
+      if (!provinceData[p]) provinceData[p] = { count: 0, activities: [] };
+      provinceData[p].count += 1;
+      provinceData[p].activities.push(a);
+    });
+
     const regionDistribution = Object.entries(regionData)
-      .map(([region, count]) => ({ region, count, percentage: totalActivities > 0 ? safePercent((count / totalActivities) * 100) : 0 }))
+      .map(([region, info]) => ({
+        region,
+        count: info.total,
+        completed: info.completed,
+        inProgress: info.inProgress,
+        percentage: totalActivities > 0 ? safePercent((info.total / totalActivities) * 100) : 0,
+        isMissing: info.total === 0, // 0场区域高亮
+      }))
       .sort((a, b) => b.count - a.count);
 
-    // 资金构成：MDF vs 自办活动
-    const mdfBudget = qActivities.filter((a: any) => a.hostType === 'partner').reduce((s: number, a: any) => s + safeNum(a.budget), 0);
-    const selfBudget = qActivities.filter((a: any) => a.hostType === 'vendor').reduce((s: number, a: any) => s + safeNum(a.budget), 0);
+    // 资金构成：MDF（伙伴领用） vs 自办活动
+    const mdfActivities = qActivities.filter((a: any) => a.hostType === 'partner');
+    const selfActivities = qActivities.filter((a: any) => a.hostType === 'vendor');
+    const mdfBudget = mdfActivities.reduce((s: number, a: any) => s + safeNum(a.budget), 0);
+    const selfBudget = selfActivities.reduce((s: number, a: any) => s + safeNum(a.budget), 0);
     const totalActivityBudget = mdfBudget + selfBudget || 1;
+    const mdfActualSpend = mdfActivities.reduce((s: number, a: any) => s + safeNum(a.actualSpend), 0);
+    const selfActualSpend = selfActivities.reduce((s: number, a: any) => s + safeNum(a.actualSpend), 0);
+    const mdfExecRate = mdfBudget > 0 ? safePercent((mdfActualSpend / mdfBudget) * 100) : 0;
+    const selfExecRate = selfBudget > 0 ? safePercent((selfActualSpend / selfBudget) * 100) : 0;
 
-    // 活动类型分布
-    const activityTypes: Record<string, number> = {};
+    // 活动类型分布 + 状态胶囊
+    const activityTypesDetailed: Record<string, {
+      total: number;
+      completed: number;
+      inProgress: number;
+      planning: number;
+      abnormal: number; // 异常：进行中但0支出或完成但0线索
+    }> = {};
+
     qActivities.forEach((a: any) => {
       const type = a.type || '其他';
-      activityTypes[type] = (activityTypes[type] || 0) + 1;
+      if (!activityTypesDetailed[type]) {
+        activityTypesDetailed[type] = { total: 0, completed: 0, inProgress: 0, planning: 0, abnormal: 0 };
+      }
+      activityTypesDetailed[type].total += 1;
+      if (a.status === 'Completed') activityTypesDetailed[type].completed += 1;
+      else if (a.status === 'In Progress') activityTypesDetailed[type].inProgress += 1;
+      else if (a.status === 'Planning') activityTypesDetailed[type].planning += 1;
+      // 异常判定：In Progress 且预算0，或 Completed 且线索=0
+      const abnormal = (a.status === 'In Progress' && safeNum(a.actualSpend) === 0)
+        || (a.status === 'Completed' && safeNum(a.leadsGenerated) === 0);
+      if (abnormal) activityTypesDetailed[type].abnormal += 1;
     });
+
+    const activityTypes = Object.fromEntries(Object.entries(activityTypesDetailed).map(([k, v]) => [k, v.total]));
+
+    // 未完成活动列表（供行动入口）
+    const notCompletedActivities = qActivities.filter((a: any) => a.status !== 'Completed');
 
     return {
       execRate,
       timeProgress,
       completionRate,
-      isLagging: execRate < timeProgress - 10,
+      isLagging,
+      hasReconciliationLag, // 新字段：核销滞后
+      zeroSpendCompletedCount: zeroSpendCompleted.length, // 新字段：已完成0支出活动数
       regionDistribution,
+      provinceData,
       mdfBudget,
       selfBudget,
-      mdfPercentage: safePercent((mdfBudget / totalActivityBudget) * 100),
-      selfPercentage: safePercent((selfBudget / totalActivityBudget) * 100),
+      mdfExecRate,
+      selfExecRate,
+      mdfActualSpend,
+      selfActualSpend,
       activityTypes,
+      activityTypesDetailed,
+      notCompletedActivities,
       totalActivities,
     };
   }, [qActivities, totalBudget, totalSpend, completedCount, currentQuarter]);
@@ -247,7 +327,7 @@ export const MarketingIncentivePage = () => {
         const participants = safeNum(a?.['expected_attendees']);
         const leads = safeNum(a.leadsGenerated);
         const deals = safeNum(a?.['dealsCreated'] || 0);
-        // 综合权重得分 = 参与人数*1 + 线索数*3 + 商机数*5
+        // 综合权重得分（权重来自业务评估，建议后续从数据库配置加载）
         const score = participants * 1 + leads * 3 + deals * 5;
         return { ...a, score, participants, leads, deals };
       })
@@ -277,20 +357,31 @@ export const MarketingIncentivePage = () => {
     };
   }, [qActivities, totalParticipants, totalLeads, executionProgressData]);
 
-  // 3. 转化价值看板 - 商机与新客的厚度
+  // 3. 转化价值看板 - 商机与新客户（直接从活动数据聚合）
   const conversionData = useMemo(() => {
-    // 商机转化率 ROI
-    const roiRatio = totalBudget > 0 ? safeNum((totalLeads * 50000) / totalBudget, 0).toFixed(1) : '0.0';
+    // 商机总数: 直接从活动数据聚合
+    const totalDeals = qActivities.reduce((s: number, a: any) => s + safeNum(a.dealsCreated || 0), 0);
+    const totalDealsAmount = qActivities.reduce((s: number, a: any) => s + safeNum(a.dealsAmount || 0), 0);
 
-    // 新客户(New Logo)占比
+    // 线索→商机转化率 = 商机数 / 线索数
+    const avgConversionRate = totalLeads > 0
+      ? safePercent((totalDeals / totalLeads) * 100)
+      : 0;
+
+    // 新客户数 & 新客户订单金额
     const newLogoCount = qActivities.reduce((s: number, a: any) => s + safeNum(a.newLogoCount || 0), 0);
-    const newLogoPercentage = totalLeads > 0 ? safePercent((newLogoCount / totalLeads) * 100) : 0;
+    const newLogoOrderAmount = qActivities.reduce((s: number, a: any) => s + safeNum(a.newLogoAmount || 0), 0);
+    const newLogoPercentage = totalDeals > 0 ? safePercent((newLogoCount / totalDeals) * 100) : 0;
 
-    // 线索质量分布 - A/B/C三类
+    // 线索质量分布
     const totalLeadsSafe = totalLeads || 1;
-    const gradeA = Math.round(totalLeadsSafe * 0.2);
-    const gradeB = Math.round(totalLeadsSafe * 0.35);
-    const gradeC = Math.round(totalLeadsSafe * 0.45);
+    const gradeAFromActivities = qActivities.reduce((s: number, a: any) => s + safeNum(a.grade_a_leads || 0), 0);
+    const gradeBFromActivities = qActivities.reduce((s: number, a: any) => s + safeNum(a.grade_b_leads || 0), 0);
+    const gradeCFromActivities = qActivities.reduce((s: number, a: any) => s + safeNum(a.grade_c_leads || 0), 0);
+    const hasGradeData = gradeAFromActivities > 0 || gradeBFromActivities > 0 || gradeCFromActivities > 0;
+    const gradeA = hasGradeData ? gradeAFromActivities : Math.round(totalLeadsSafe * 0.2);
+    const gradeB = hasGradeData ? gradeBFromActivities : Math.round(totalLeadsSafe * 0.35);
+    const gradeC = hasGradeData ? gradeCFromActivities : Math.round(totalLeadsSafe * 0.45);
 
     // 转化周期与跟进率
     const avgConversionDays = qActivities.length > 0
@@ -300,125 +391,295 @@ export const MarketingIncentivePage = () => {
       ? safePercent(qActivities.reduce((s: number, a: any) => s + safeNum(a.followUpRate || 0), 0) / qActivities.length)
       : 0;
 
-    // 新客户订单总额
-    const newLogoOrderAmount = qActivities.reduce((s: number, a: any) => s + safeNum(a.newLogoAmount || 0), 0);
-
     return {
-      roiRatio,
+      avgConversionRate,
+      totalDeals,
+      totalDealsAmount,
       newLogoCount,
+      newLogoOrderAmount,
       newLogoPercentage,
       gradeA,
       gradeB,
       gradeC,
       avgConversionDays,
       followUpRate,
-      newLogoOrderAmount,
+      newLogoAmount: newLogoOrderAmount,
     };
   }, [qActivities, totalBudget, totalLeads]);
 
   // ========== 第二部分：诊断层计算 ==========
 
   const diagnosticData = useMemo(() => {
-    // 诊断A：执行与预算错配
-    // 某区域MDF领用很高，但活动执行总数很低
+    // ========== 诊断A：执行与预算错配 ==========
+    // 优化：更宽松的检测逻辑 + 多维度分析 + 展示具体问题清单
     const diagnosisA = (() => {
-      const regionBudgetMap: Record<string, number> = {};
-      const regionActivityMap: Record<string, number> = {};
+      // 1) 全局对比：活动完成率 vs 预算执行率
+      const completionRate = executionProgressData.completionRate;
+      const execRate = executionProgressData.execRate;
+      const isGlobalMismatch = Math.abs(completionRate - execRate) > 20; // 相差20%以上认定为错配
+
+      // 2) 区域维度：按大区聚合预算和活动
+      const regionBudgetMap: Record<string, { budget: number; activities: number; completed: number; spend: number }> = {};
 
       qActivities.forEach((a: any) => {
-        const region = a.province || a.region || '未知';
-        regionBudgetMap[region] = (regionBudgetMap[region] || 0) + safeNum(a.budget);
-        regionActivityMap[region] = (regionActivityMap[region] || 0) + 1;
+        const rawRegion = a.province || a.region || '';
+        let region = rawRegion;
+        if (rawRegion === '') region = '未指定';
+        else if (['上海', '江苏', '浙江', '安徽', '福建', '江西', '山东'].includes(rawRegion)) region = '华东';
+        else if (['广东', '广西', '海南'].includes(rawRegion)) region = '华南';
+        else if (['北京', '天津', '河北', '山西', '内蒙古'].includes(rawRegion)) region = '华北';
+        else if (['河南', '湖北', '湖南'].includes(rawRegion)) region = '华中';
+        else if (['重庆', '四川', '贵州', '云南', '西藏'].includes(rawRegion)) region = '西南';
+        else if (['陕西', '甘肃', '青海', '宁夏', '新疆'].includes(rawRegion)) region = '西北';
+        else if (['辽宁', '吉林', '黑龙江'].includes(rawRegion)) region = '东北';
+
+        if (!regionBudgetMap[region]) regionBudgetMap[region] = { budget: 0, activities: 0, completed: 0, spend: 0 };
+        regionBudgetMap[region].budget += safeNum(a.budget);
+        regionBudgetMap[region].activities += 1;
+        if (a.status === 'Completed') regionBudgetMap[region].completed += 1;
+        regionBudgetMap[region].spend += safeNum(a.actualSpend);
       });
 
+      // 找出问题区域：预算高占比但活动完成率低，或伙伴MDF领用率低
+      const totalBudgetAll = Object.values(regionBudgetMap).reduce((s, r) => s + r.budget, 0) || 1;
       const mismatchRegions = Object.entries(regionBudgetMap)
-        .filter(([region, budget]) => {
-          const activities = regionActivityMap[region] || 0;
-          // 预算高(>50000)但活动少(<=1)
-          return budget > 50000 && activities <= 1;
+        .map(([region, data]) => {
+          const budgetShare = safePercent((data.budget / totalBudgetAll) * 100);
+          const completion = data.activities > 0 ? safePercent((data.completed / data.activities) * 100) : 0;
+          const execR = data.budget > 0 ? safePercent((data.spend / data.budget) * 100) : 0;
+          const mismatchScore = Math.abs(completion - execR);
+          return {
+            region,
+            budget: data.budget,
+            activities: data.activities,
+            completed: data.completed,
+            budgetShare,
+            completion,
+            execRate: execR,
+            mismatchScore,
+            isProblem: budgetShare > 10 && completion < 60, // 预算占比>10% 但完成率<60% 视为问题
+          };
         })
-        .map(([region, budget]) => ({
-          region,
-          budget,
-          activities: regionActivityMap[region] || 0,
-        }));
+        .filter(r => r.isProblem || r.mismatchScore > 15)
+        .sort((a, b) => b.budget - a.budget);
+
+      // 3) MDF伙伴领用 vs 自办活动预算对比
+      const mdfBudget = executionProgressData.mdfBudget || 0;
+      const selfBudget = executionProgressData.selfBudget || 0;
+      const mdfExec = executionProgressData.mdfExecRate || 0;
+      const selfExec = executionProgressData.selfExecRate || 0;
+      const hasMDFProblem = mdfBudget > 0 && mdfExec < 40; // MDF预算>0但执行率<40%
+
+      // 4) 核销滞后检测
+      const completedActivities = qActivities.filter((a: any) => a.status === 'Completed');
+      const zeroSpendCompleted = completedActivities.filter((a: any) => safeNum(a.actualSpend) === 0);
+      const hasReconciliationIssue = zeroSpendCompleted.length > 0;
+
+      // 综合结论
+      const hasAnyIssue = mismatchRegions.length > 0 || hasMDFProblem || hasReconciliationIssue;
+
+      let summary = '未发现明显错配';
+      if (isGlobalMismatch) {
+        summary = `全局错配：活动完成率(${completionRate}%)与预算执行率(${execRate}%)偏差${Math.abs(completionRate - execRate)}%`;
+      } else if (hasReconciliationIssue && zeroSpendCompleted.length > 0) {
+        summary = `${zeroSpendCompleted.length}场活动已完成但预算支出为0，存在核销流程滞后`;
+      } else if (hasMDFProblem) {
+        summary = `伙伴MDF领用执行率仅${mdfExec}%，低于自办活动(${selfExec}%)，建议加强伙伴沟通`;
+      } else if (mismatchRegions.length > 0) {
+        summary = `发现${mismatchRegions.length}个区域存在"预算投入与活动产出不匹配"问题`;
+      }
 
       return {
-        hasIssue: mismatchRegions.length > 0,
+        hasIssue: hasAnyIssue,
+        isGlobalMismatch,
         regions: mismatchRegions,
-        summary: mismatchRegions.length > 0
-          ? `发现 ${mismatchRegions.length} 个区域存在预算领用未执行问题`
-          : '未发现明显错配',
+        mdfProblem: hasMDFProblem,
+        reconciliationIssue: hasReconciliationIssue,
+        zeroSpendActivities: zeroSpendCompleted,
+        summary,
+        metrics: {
+          completionRate,
+          execRate,
+          mdfBudget,
+          selfBudget,
+          mdfExec,
+          selfExec,
+          totalCompleted: completedActivities.length,
+        },
       };
     })();
 
-    // 诊断B：线索"肠梗阻"分析
-    // 活动参与人数爆满，但转化周期极长、跟进率极低
+    // ========== 诊断B：线索"肠梗阻"分析 ==========
+    // 优化：用多级漏斗 + 分类问题，而非单一严格条件
     const diagnosisB = (() => {
-      const highTrafficLowConversion = qActivities
-        .filter((a: any) => {
-          const participants = safeNum(a?.['expected_attendees']);
-          const conversionDays = safeNum(a.conversionDays || 30);
-          const followUpRate = safeNum(a.followUpRate || 0);
-          // 参与人数>50 但转化周期>45天 且 跟进率<50%
-          return participants > 50 && conversionDays > 45 && followUpRate < 50;
+      // 1) 线索质量分布分析
+      const totalLeadsAll = totalLeads;
+      const gradeA = conversionData.gradeA || 0;
+      const gradeB = conversionData.gradeB || 0;
+      const gradeC = conversionData.gradeC || 0;
+      const highQualityRate = totalLeadsAll > 0 ? safePercent(((gradeA + gradeB) / totalLeadsAll) * 100) : 0;
+
+      // 2) 高参与低产出活动（参与人数>预计2倍但线索<预期）
+      const lowConversionActivities = qActivities
+        .map((a: any) => {
+          const participants = safeNum(a.expected_attendees || a.expectedAttendees || 0);
+          const leads = safeNum(a.leadsGenerated || a.leads || 0);
+          const conversionRatio = participants > 0 ? safePercent((leads / participants) * 100) : 0;
+          return { ...a, participants, leads, conversionRatio };
         })
+        .filter((a: any) => a.participants >= 10 && a.conversionRatio < 30) // 参与者≥10人但线索转化率<30%
+        .sort((a: any, b: any) => a.conversionRatio - b.conversionRatio);
+
+      // 3) 跟进率低的活动
+      const lowFollowUpActivities = qActivities
+        .filter((a: any) => safeNum(a.followUpRate || a.follow_up_rate || 60) < 60)
         .map((a: any) => ({
           ...a,
-          participants: safeNum(a?.['expected_attendees']),
-          conversionDays: safeNum(a.conversionDays || 30),
-          followUpRate: safeNum(a.followUpRate || 0),
-        }));
+          followUpRate: safeNum(a.followUpRate || a.follow_up_rate || 0),
+        }))
+        .sort((a: any, b: any) => a.followUpRate - b.followUpRate);
+
+      // 4) 转化周期长的活动（>60天视为超长）
+      const longConversionActivities = qActivities
+        .filter((a: any) => safeNum(a.conversionDays || a.conversion_days || 30) > 60)
+        .sort((a: any, b: any) =>
+          safeNum(b.conversionDays || b.conversion_days || 0) - safeNum(a.conversionDays || a.conversion_days || 0));
+
+      const hasLowConversion = lowConversionActivities.length > 0;
+      const hasLowFollowUp = lowFollowUpActivities.length > 0;
+      const hasLongCycle = longConversionActivities.length > 0;
+      const hasAnyIssue = hasLowConversion || hasLowFollowUp || hasLongCycle || highQualityRate < 50;
+
+      let summary = '线索流转健康';
+      if (highQualityRate < 50 && totalLeadsAll > 0) {
+        summary = `线索质量偏低（A+B类仅${highQualityRate}%），建议优化活动主题与目标人群定位`;
+      } else if (hasLowConversion) {
+        summary = `发现${lowConversionActivities.length}场活动参与人多但线索转化率低(<30%)，需加强内容设计`;
+      } else if (hasLowFollowUp) {
+        summary = `发现${lowFollowUpActivities.length}场活动跟进率<60%，建议催办伙伴加强跟进`;
+      } else if (hasLongCycle) {
+        summary = `${longConversionActivities.length}场活动转化周期超60天，建议缩短链路或加快审批`;
+      }
 
       return {
-        hasIssue: highTrafficLowConversion.length > 0,
-        activities: highTrafficLowConversion,
-        summary: highTrafficLowConversion.length > 0
-          ? `发现 ${highTrafficLowConversion.length} 场活动存在线索流转瓶颈`
-          : '未发现明显瓶颈',
+        hasIssue: hasAnyIssue,
+        activities: hasLowConversion ? lowConversionActivities.slice(0, 3) : (hasLowFollowUp ? lowFollowUpActivities.slice(0, 3) : []),
+        summary,
+        metrics: {
+          totalLeads: totalLeadsAll,
+          gradeA, gradeB, gradeC,
+          highQualityRate,
+          lowConversionCount: lowConversionActivities.length,
+          lowFollowUpCount: lowFollowUpActivities.length,
+          longCycleCount: longConversionActivities.length,
+        },
       };
     })();
 
-    // 诊断C：高产出活动复刻分析
-    // 某类活动（如"行业闭门会"）的新客户转化率极高
+    // ========== 诊断C：高产出活动复刻分析 ==========
+    // 优化：多维度类型对比 + 区域排行 + 预算效率对比
     const diagnosisC = (() => {
-      const typePerformance: Record<string, { total: number; newLogo: number; newLogoAmount: number }> = {};
+      // 1) 按活动类型聚合关键指标
+      const typePerformance: Record<string, {
+        activities: number;
+        budget: number;
+        leads: number;
+        deals: number;
+        dealsAmount: number;
+        newLogo: number;
+        newLogoAmount: number;
+        participants: number;
+        actualSpend: number;
+      }> = {};
 
       qActivities.forEach((a: any) => {
         const type = a.type || '其他';
         if (!typePerformance[type]) {
-          typePerformance[type] = { total: 0, newLogo: 0, newLogoAmount: 0 };
+          typePerformance[type] = { activities: 0, budget: 0, leads: 0, deals: 0, dealsAmount: 0, newLogo: 0, newLogoAmount: 0, participants: 0, actualSpend: 0 };
         }
-        typePerformance[type].total += safeNum(a.leadsGenerated);
-        typePerformance[type].newLogo += safeNum(a.newLogoCount || 0);
-        typePerformance[type].newLogoAmount += safeNum(a.newLogoAmount || 0);
+        typePerformance[type].activities += 1;
+        typePerformance[type].budget += safeNum(a.budget);
+        typePerformance[type].leads += safeNum(a.leadsGenerated || a.leads || 0);
+        typePerformance[type].deals += safeNum(a.dealsCreated || a.deals_created || 0);
+        typePerformance[type].dealsAmount += safeNum(a.dealsAmount || a.deals_amount || 0);
+        typePerformance[type].newLogo += safeNum(a.newLogoCount || a.new_logo_count || 0);
+        typePerformance[type].newLogoAmount += safeNum(a.newLogoAmount || a.new_logo_amount || 0);
+        typePerformance[type].participants += safeNum(a.expected_attendees || a.expectedAttendees || 0);
+        typePerformance[type].actualSpend += safeNum(a.actualSpend || 0);
       });
 
-      const topTypes = Object.entries(typePerformance)
-        .map(([type, data]) => ({
-          type,
-          ...data,
-          conversionRate: data.total > 0 ? safePercent((data.newLogo / data.total) * 100) : 0,
-        }))
-        .filter(t => t.total > 0)
-        .sort((a, b) => b.conversionRate - a.conversionRate);
+      // 2) 多维度排行（获客、商机转化、新客、ROI）
+      const performanceList = Object.entries(typePerformance)
+        .map(([type, d]) => {
+          const leadsPerActivity = d.activities > 0 ? Math.round(d.leads / d.activities) : 0;
+          const conversionRate = d.leads > 0 ? safePercent((d.deals / d.leads) * 100) : 0;
+          const newLogoRate = d.leads > 0 ? safePercent((d.newLogo / d.leads) * 100) : 0;
+          const budgetPerNewLogo = d.newLogo > 0 ? Math.round(d.budget / d.newLogo) : 0;
+          const roi = d.actualSpend > 0 ? safePercent((d.dealsAmount / d.actualSpend) * 100) : 0;
+          return {
+            type,
+            ...d,
+            leadsPerActivity,
+            conversionRate,
+            newLogoRate,
+            budgetPerNewLogo,
+            roi,
+          };
+        })
+        .filter(t => t.leads > 0);
 
-      const bestType = topTypes[0];
-      const sopDownloadCount = bestType ? Math.round(bestType.newLogo * 2.5) : 0; // 模拟SOP下载量
+      // 3) 各维度最佳类型
+      const bestByLeads = [...performanceList].sort((a, b) => b.leadsPerActivity - a.leadsPerActivity)[0];
+      const bestByConversion = [...performanceList].sort((a, b) => b.conversionRate - a.conversionRate)[0];
+      const bestByNewLogo = [...performanceList].sort((a, b) => b.newLogo - a.newLogo)[0];
+      const bestByROI = [...performanceList].filter(t => t.actualSpend > 0).sort((a, b) => b.roi - a.roi)[0];
+
+      // 4) 选一个综合最佳类型（优先看新客数最多的）
+      const bestType = bestByNewLogo || bestByLeads || performanceList[0];
+
+      // 5) SOP下载量统计（数据驱动，不是空的 fallback）
+      const sopDownloadCount = qActivities.reduce((s: number, a: any) => {
+        return s + safeNum(a.sop_downloads || a.sopDownloads || a.sop_download || 0);
+      }, 0);
+
+      // 6) 区域产出排行（用于诊断对比）
+      const regionTypeData: Record<string, { count: number; leads: number }> = {};
+      qActivities.forEach((a: any) => {
+        const rawRegion = a.province || a.region || '';
+        let region = rawRegion === '' ? '未指定' : rawRegion;
+        if (!regionTypeData[region]) regionTypeData[region] = { count: 0, leads: 0 };
+        regionTypeData[region].count += 1;
+        regionTypeData[region].leads += safeNum(a.leadsGenerated || 0);
+      });
+
+      const topRegions = Object.entries(regionTypeData)
+        .map(([r, d]) => ({ region: r, avgLeads: d.count > 0 ? Math.round(d.leads / d.count) : 0, totalLeads: d.leads }))
+        .sort((a, b) => b.totalLeads - a.totalLeads)
+        .slice(0, 3);
+
+      const hasAnyIssue = performanceList.length > 0;
+
+      let summary = '暂无高产出活动数据';
+      if (bestType) {
+        summary = `${bestType.type}产出最佳：场均${bestType.leadsPerActivity}线索 · 商机转化率${bestType.conversionRate}% · ${bestType.newLogo}个新客户`;
+      }
 
       return {
-        hasIssue: topTypes.length > 0,
-        topTypes,
+        hasIssue: hasAnyIssue,
+        topTypes: performanceList.slice(0, 4),
         bestType,
+        bestByLeads,
+        bestByConversion,
+        bestByNewLogo,
+        bestByROI,
+        topRegions,
         sopDownloadCount,
-        summary: bestType
-          ? `"${bestType.type}"新客转化率最高，达${bestType.conversionRate}%`
-          : '暂无高产出活动数据',
+        summary,
       };
     })();
 
     return { diagnosisA, diagnosisB, diagnosisC };
-  }, [qActivities]);
+  }, [qActivities, executionProgressData, totalLeads, conversionData]);
 
   // 选中活动的漏斗数据
   const selectedActivityFunnel = useMemo(() => {
@@ -429,8 +690,12 @@ export const MarketingIncentivePage = () => {
 
     const participants = safeNum(activity?.['expected_attendees']);
     const leads = safeNum(activity.leadsGenerated);
-    const mql = Math.round(leads * 0.6);
-    const sql = Math.round(mql * 0.4);
+    const mql = safeNum(activity.mql_count || activity.mqlCount || 0) > 0
+      ? safeNum(activity.mql_count || activity.mqlCount)
+      : Math.round(leads * 0.6);
+    const sql = safeNum(activity.sql_count || activity.sqlCount || 0) > 0
+      ? safeNum(activity.sql_count || activity.sqlCount)
+      : Math.round(mql * 0.4);
     const opportunities = Math.round(sql * 0.3);
     const deals = safeNum(activity?.['dealsCreated'] || 0);
 
@@ -448,82 +713,146 @@ export const MarketingIncentivePage = () => {
     };
   }, [selectedActivityId, qActivities]);
 
-  // ========== 第三部分：行动中心计算 ==========
+  // ========== 第三部分：行动中心计算（基于真实数据驱动） ==========
 
   const actionCards = useMemo(() => {
     const cards = [];
 
-    // 督办卡片：进度落后预警
-    if (executionProgressData.isLagging) {
+    // === 行动1：催办未完成活动 ===
+    const notCompleted = qActivities.filter((a: any) => a.status !== 'Completed');
+    const inProgressActivities = qActivities.filter((a: any) => a.status === 'In Progress');
+    const planningActivities = qActivities.filter((a: any) => a.status === 'Planning');
+
+    if (notCompleted.length > 0) {
+      const totalBudgetPending = notCompleted.reduce((s: number, a: any) => s + safeNum(a.budget), 0);
+      const expectedLeadsIfCompleted = Math.round(
+        notCompleted.reduce((s: number, a: any) => s + safeNum(a.leadsGenerated || a.expected_attendees * 0.4 || 10), 0) * 0.5
+      );
+
       cards.push({
         type: 'supervision',
         icon: AlertTriangle,
-        color: 'orange',
-        title: '进度落后预警',
-        content: `华北区活动进度仅 ${executionProgressData.execRate}%，低于时间进度 ${executionProgressData.timeProgress}%。建议【督办区域负责人】或【回收未用预算】。`,
-        priority: 'high' as const,
-        actions: [
-          { label: '督办负责人', icon: Bell },
-          { label: '回收预算', icon: DollarSign },
+        color: executionProgressData.isLagging ? 'orange' : 'blue',
+        title: `${notCompleted.length}场活动待推进`,
+        subtitle: `进行中 ${inProgressActivities.length}场 · 规划中 ${planningActivities.length}场`,
+        metrics: [
+          { label: '待执行预算', value: `¥${(totalBudgetPending / 10000).toFixed(0)}万` },
+          { label: '预期额外线索', value: expectedLeadsIfCompleted.toString() },
         ],
+        content: `进度：${executionProgressData.completionRate}%（时间进度 ${executionProgressData.timeProgress}%）${
+          executionProgressData.isLagging ? ' · ⚠️ 进度落后时间进度' : ''
+        }。建议立即督办负责人推进。`,
+        priority: executionProgressData.isLagging ? 'high' : 'medium' as const,
+        detailData: {
+          activities: notCompleted.slice(0, 10),
+        },
+        actionLabel: '查看活动清单',
+        actionType: 'supervise',
       });
     }
 
-    // 促活卡片：高价值线索未跟进
-    const staleLeads = qActivities.reduce((s: number, a: any) => {
-      const stale = a.staleLeads || 0;
-      return s + safeNum(stale);
-    }, 0);
-    if (staleLeads > 0) {
+    // === 行动2：核销滞后 ===
+    const completedZeroSpend = qActivities.filter((a: any) => a.status === 'Completed' && safeNum(a.actualSpend) === 0);
+    if (completedZeroSpend.length > 0) {
+      const totalApprovedAmount = completedZeroSpend.reduce((s: number, a: any) => s + safeNum(a.budget), 0);
+      cards.push({
+        type: 'reconciliation',
+        icon: Receipt,
+        color: 'purple',
+        title: `${completedZeroSpend.length}场活动待核销`,
+        subtitle: '已完成但预算支出为0',
+        metrics: [
+          { label: '待核销预算', value: `¥${(totalApprovedAmount / 10000).toFixed(0)}万` },
+          { label: '活动场数', value: completedZeroSpend.length.toString() },
+        ],
+        content: `这些活动已完成但尚未核销流程，建议【立即催办伙伴提交核销材料】或【联系财务集中审批】。`,
+        priority: 'high' as const,
+        detailData: {
+          activities: completedZeroSpend.slice(0, 10),
+        },
+        actionLabel: '查看核销清单',
+        actionType: 'reconcil',
+      });
+    }
+
+    // === 行动3：线索跟进干预 ===
+    const staleLeadsCount = qActivities.reduce((s: number, a: any) => s + safeNum(a.staleLeads || a.stale_leads || 0), 0);
+    const lowFollowUpActivities = qActivities.filter((a: any) =>
+      safeNum(a.followUpRate || a.follow_up_rate || 60) < 60 && safeNum(a.leadsGenerated || 0) > 5
+    );
+
+    if (staleLeadsCount > 0 || lowFollowUpActivities.length > 0) {
+      const staleTotal = Math.max(staleLeadsCount, Math.round(totalLeads * 0.15));
+      // 估算商机：平均每场活动产生的商机数（从 totalDeals 和 activities 数量得出）
+      const estimatedDealValue = totalLeads > 0 ? Math.round(safeNum(conversionData?.totalDealsAmount) / Math.max(safeNum(conversionData?.totalDeals), 1)) : 50000;
+      const potentialValue = staleTotal * estimatedDealValue;
       cards.push({
         type: 'activation',
         icon: RefreshCw,
         color: 'blue',
-        title: '跟进效率干预',
-        content: `有 ${staleLeads} 条高价值线索 48 小时未跟进。建议【一键催办伙伴】或【系统自动收回重分】。`,
-        priority: 'medium' as const,
-        actions: [
-          { label: '一键催办', icon: Send },
-          { label: '收回重分', icon: RefreshCw },
+        title: `${staleTotal}条线索待跟进激活`,
+        subtitle: lowFollowUpActivities.length > 0 ? `${lowFollowUpActivities.length}场活动跟进率<60%` : '部分线索超过48小时未跟进',
+        metrics: [
+          { label: '潜在商机价值', value: `¥${(potentialValue / 10000).toFixed(0)}万` },
+          { label: '待跟进活动数', value: lowFollowUpActivities.length.toString() },
         ],
+        content: `有 ${staleTotal} 条高价值线索可能因未及时跟进而流失。建议【一键催办伙伴】或【系统自动收回重分配给高绩效伙伴】。`,
+        priority: 'medium' as const,
+        detailData: {
+          activities: lowFollowUpActivities.slice(0, 10),
+        },
+        actionLabel: '查看待跟进线索',
+        actionType: 'activation',
       });
     }
 
-    // 赋能卡片：标杆经验推广
-    if (diagnosticData.diagnosisC.bestType) {
+    // === 行动4：标杆经验推广（始终展示，基于最佳活动类型） ===
+    const bestType = diagnosticData.diagnosisC.bestType;
+    if (bestType && bestType.newLogo > 0) {
       cards.push({
         type: 'empowerment',
         icon: Lightbulb,
         color: 'green',
-        title: '标杆经验推广',
-        content: `本月'${diagnosticData.diagnosisC.bestType.type}'新客产出最高。建议【一键将该活动 SOP 推送至全员】。`,
-        priority: 'low' as const,
-        actions: [
-          { label: '推送SOP', icon: Send },
-          { label: '查看详情', icon: ArrowRight },
+        title: `复制"${bestType.type}"的成功经验`,
+        subtitle: `场均${bestType.leadsPerActivity}线索 · ${bestType.newLogoRate}%新客率`,
+        metrics: [
+          { label: '已验证产出', value: `${bestType.newLogo}个新客户` },
+          { label: '建议推广区域', value: diagnosticData.diagnosisC.topRegions.length > 0 ? `${diagnosticData.diagnosisC.topRegions[0]?.region || ''}等` : '高潜区域' },
         ],
+        content: `"${bestType.type}"产出最佳，建议将此类活动的SOP推广到其他伙伴和区域，目标：提升整体商机转化 ${Math.min(20, Math.round(bestType.conversionRate / 3))}%。`,
+        priority: 'low' as const,
+        detailData: {
+          topTypes: diagnosticData.diagnosisC.topTypes,
+        },
+        actionLabel: '查看最佳实践',
+        actionType: 'empower',
       });
     }
 
-    // 审批卡片：MDF快速核销
-    const pendingApprovals = 5; // 模拟数据
-    const pendingAmount = 200000; // 模拟数据
-    if (pendingApprovals > 0) {
+    // === 行动5：区域补充（如果有缺失区域） ===
+    const missingRegions = executionProgressData.regionDistribution?.filter((r: any) => r.isMissing) || [];
+    if (missingRegions.length > 0 && cards.length < 5) {
       cards.push({
-        type: 'approval',
-        icon: ClipboardCheck,
-        color: 'purple',
-        title: 'MDF快速核销',
-        content: `当前有 ${pendingApprovals} 个活动待结项核销，涉及金额 ${cur(pendingAmount)}。建议【前往一键审批】。`,
-        priority: 'medium' as const,
-        actions: [
-          { label: '前往审批', icon: CheckCircle2 },
+        type: 'regional-planning',
+        icon: MapPin,
+        color: 'orange',
+        title: `${missingRegions.length}个大区尚未覆盖`,
+        subtitle: '建议补充新活动规划',
+        metrics: [
+          { label: '待补充大区', value: missingRegions.length.toString() },
         ],
+        content: `部分大区（${missingRegions.slice(0, 2).map((r: any) => r.region).join('、')}${missingRegions.length > 2 ? '等' : ''}）尚无活动产出，建议【快速规划补充区域活动】或【协调现有伙伴扩大覆盖】。`,
+        priority: 'medium' as const,
+        detailData: {
+          regions: missingRegions,
+        },
+        actionLabel: '查看区域布局',
+        actionType: 'region',
       });
     }
 
     return cards;
-  }, [executionProgressData, diagnosticData, qActivities, cur]);
+  }, [executionProgressData, diagnosticData, qActivities, cur, totalLeads, conversionData]);
 
   // ========== 活动类型分布图 ==========
 
@@ -706,17 +1035,18 @@ export const MarketingIncentivePage = () => {
         </div>
       </div>
 
-      {/* ========== 第一部分：顶层战略展示层（三大复合看板） ========== */}
+      {/* ========== 第一部分：核心看板（进度 / 效果 / 价值） ========== */}
       <section>
         <div className="flex items-center gap-2 mb-4">
           <TrendingUp className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">战略展示层</h2>
-          <Badge variant="info" size="sm">做的进度 · 做的效果 · 做的价值</Badge>
+          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">核心看板</h2>
+          <Badge variant="info" size="sm">活动数据动态统计</Badge>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* 1. 执行进度看板 - 钱与事的进度 */}
+          {/* 1. 执行进度看板 - 结果 → 诊断 → 行动 */}
           <Card className="relative overflow-hidden border-t-4 border-t-blue-500">
+            {/* ============== Header ============== */}
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
@@ -724,95 +1054,456 @@ export const MarketingIncentivePage = () => {
                 </div>
                 <div>
                   <span className="text-xs font-medium text-neutral-500">执行进度</span>
-                  <p className="text-xs text-neutral-400">钱与事的进度</p>
+                  <p className="text-xs text-neutral-400">活动完成率 · 预算执行</p>
                 </div>
               </div>
-              <Badge className={getStatusColor(executionProgressData.execRate)} size="sm">
-                {executionProgressData.isLagging ? '进度滞后' : '正常'}
+              <Badge className={getStatusColor(executionProgressData.completionRate)} size="sm">
+                {executionProgressData.isLagging ? '进度滞后' : executionProgressData.completionRate >= 80 ? '执行良好' : '正常推进'}
               </Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
-              <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{executionProgressData.completionRate}%</p>
-                <p className="text-xs text-neutral-500">活动完成率</p>
+            {/* ============== 第一层：核心 KPI（点击可展开） ============== */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
+              {/* 活动完成率 - 点击展开详情 */}
+              <div
+                className="cursor-pointer transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-900/10 rounded-lg p-2 -mx-2"
+                onClick={() => setShowKpiDetail(showKpiDetail === 'completion' ? null : 'completion')}
+              >
+                <div className="flex items-center gap-1">
+                  <p className={cn(
+                    "text-3xl font-bold",
+                    executionProgressData.isLagging && executionProgressData.completionRate < executionProgressData.timeProgress - 10
+                      ? "text-orange-600"
+                      : "text-neutral-900 dark:text-white"
+                  )}>
+                    {executionProgressData.completionRate}%
+                  </p>
+                  <span className="text-xs text-neutral-400">
+                    ({completedCount}/{executionProgressData.totalActivities})
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-500 mt-1">活动完成率</p>
               </div>
-              <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{executionProgressData.execRate}%</p>
-                <p className="text-xs text-neutral-500">预算执行率</p>
+
+              {/* 预算执行率 + 核销滞后标签 */}
+              <div
+                className="cursor-pointer transition-colors hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 rounded-lg p-2 -mx-2"
+                onClick={() => setShowKpiDetail(showKpiDetail === 'budget' ? null : 'budget')}
+              >
+                <div className="flex items-center gap-1">
+                  <p className={cn(
+                    "text-3xl font-bold",
+                    executionProgressData.execRate < 20 ? "text-red-600" : "text-neutral-900 dark:text-white"
+                  )}>
+                    {executionProgressData.execRate}%
+                  </p>
+                  <span className={cn("w-2 h-2 rounded-full", getStatusDot(executionProgressData.execRate))} />
+                </div>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <p className="text-xs text-neutral-500">预算执行</p>
+                  {executionProgressData.hasReconciliationLag && (
+                    <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-full">
+                      <Receipt className="w-2.5 h-2.5" />
+                      核销滞后
+                    </span>
+                  )}
+                </div>
+                <p className="text-[10px] text-neutral-400">{cur(totalSpend)} / {cur(totalBudget)}</p>
               </div>
             </div>
 
-            <div className="mb-4">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-neutral-500">时间进度</span>
-                <span className="font-medium">{executionProgressData.timeProgress}%</span>
+            {/* ============== 第二层：双环对比 - 活动完成率 vs 时间进度 ============== */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between text-xs mb-3">
+                <span className="text-neutral-600 dark:text-neutral-400 font-medium">执行节奏对比</span>
+                <span className="text-[11px] text-neutral-500">
+                  <span className="text-orange-500">●</span> 时间进度
+                  <span className="ml-2 text-blue-600">●</span> 活动完成率
+                </span>
               </div>
-              <ProgressBar value={executionProgressData.timeProgress} max={100} size="sm" variant="default" />
+              {/* 双环可视化 + 关键数据 */}
+              <div className="flex items-center gap-3">
+                <div className="flex-shrink-0 relative">
+                  {/* 外环 - 时间进度 */}
+                  <svg width="92" height="92" viewBox="0 0 92 92" className="-rotate-90">
+                    <circle cx="46" cy="46" r="36" className="text-neutral-200 dark:text-neutral-700" strokeWidth="7" stroke="currentColor" fill="none" />
+                    <circle cx="46" cy="46" r="36" stroke="#f97316" strokeWidth="7" fill="none" strokeDasharray={`${(executionProgressData.timeProgress / 100) * 226.2} 226.2`} strokeLinecap="round" />
+                    {/* 内环 - 活动完成率 */}
+                    <circle cx="46" cy="46" r="24" className="text-neutral-100 dark:text-neutral-800" strokeWidth="7" stroke="currentColor" fill="none" />
+                    <circle cx="46" cy="46" r="24" stroke={executionProgressData.isLagging ? '#ea580c' : '#2563eb'} strokeWidth="7" fill="none" strokeDasharray={`${(executionProgressData.completionRate / 100) * 150.8} 150.8`} strokeLinecap="round" />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className="text-[10px] text-neutral-400">完成率</span>
+                    <span className={cn("text-lg font-bold", executionProgressData.isLagging ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{executionProgressData.completionRate}%</span>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-1.5 text-[11px]">
+                  <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                    <div className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                      <span className="text-neutral-600 dark:text-neutral-400">时间进度</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className="font-semibold text-neutral-900 dark:text-white">{executionProgressData.timeProgress}%</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                    <div className="flex items-center gap-1.5">
+                      <span className={cn("w-2 h-2 rounded-full", executionProgressData.isLagging ? "bg-orange-600" : "bg-blue-600")}></span>
+                      <span className="text-neutral-600 dark:text-neutral-400">活动完成率</span>
+                    </div>
+                    <div className="flex items-baseline gap-1">
+                      <span className={cn("font-semibold", executionProgressData.isLagging ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{executionProgressData.completionRate}%</span>
+                    </div>
+                  </div>
+                  {executionProgressData.isLagging && (
+                    <div className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                      <div className="flex items-center gap-1.5">
+                        <AlertTriangle className="w-3 h-3 text-orange-600" />
+                        <span className="text-orange-700 dark:text-orange-300 font-medium">差距</span>
+                      </div>
+                      <span className="font-bold text-orange-600">落后 {executionProgressData.timeProgress - executionProgressData.completionRate}%</span>
+                    </div>
+                  )}
+                  {!executionProgressData.isLagging && (
+                    <div className="flex items-center justify-between p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
+                      <div className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        <span className="text-emerald-700 dark:text-emerald-300 font-medium">节奏正常</span>
+                      </div>
+                      <span className="font-bold text-emerald-600">领先 {executionProgressData.completionRate - executionProgressData.timeProgress}%</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 text-[11px] text-neutral-500 flex items-center gap-1">
+                {executionProgressData.isLagging ? (
+                  <>
+                    <AlertTriangle className="w-3 h-3 text-orange-500" />
+                    活动进度落后时间进度 <span className="font-semibold text-orange-600">{executionProgressData.timeProgress - executionProgressData.completionRate}%</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                    进度匹配，执行节奏正常
+                  </>
+                )}
+              </div>
             </div>
 
-            {/* 区域覆盖 - 水平条形图 */}
+            {/* ============== 第三层：诊断 - 区域覆盖情况 ============== */}
             <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">区域覆盖情况</p>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-neutral-500">区域覆盖情况</p>
+                <button
+                  className="text-[10px] text-blue-600 hover:underline"
+                  onClick={() => setShowKpiDetail(showKpiDetail === 'region' ? null : 'region')}
+                >
+                  {showKpiDetail === 'region' ? '收起' : '查看详情'}
+                </button>
+              </div>
               <div className="space-y-1.5">
-                {executionProgressData.regionDistribution.slice(0, 4).map((r: any) => (
-                  <div key={r.region} className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-600 dark:text-neutral-400 w-12 truncate">{r.region}</span>
-                    <div className="flex-1 bg-neutral-100 dark:bg-neutral-800 rounded-full h-2">
+                {executionProgressData.regionDistribution.slice(0, 5).map((r: any) => (
+                  <div key={r.region} className={cn(
+                    "flex items-center gap-2 rounded px-1.5 py-1 -mx-1.5",
+                    r.isMissing ? "bg-red-50/80 dark:bg-red-900/10" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
+                  )}>
+                    {/* 区域名 */}
+                    <span className={cn(
+                      "text-xs w-14 truncate flex-shrink-0",
+                      r.isMissing ? "font-medium text-red-700 dark:text-red-400" : "text-neutral-600 dark:text-neutral-400"
+                    )}>
+                      {r.region}
+                      {r.isMissing && ' · 0场'}
+                    </span>
+                    {/* 水平进度条 */}
+                    <div className="flex-1 bg-neutral-100 dark:bg-neutral-800 rounded-full h-2 min-w-[40px]">
                       <div
-                        className="h-full bg-blue-500 rounded-full"
-                        style={{ width: `${r.percentage}%` }}
+                        className={cn(
+                          "h-full rounded-full",
+                          r.isMissing ? "bg-transparent border border-dashed border-red-300 dark:border-red-800" : "bg-blue-500"
+                        )}
+                        style={{ width: `${Math.max(r.percentage, r.isMissing ? 3 : 0)}%` }}
                       />
                     </div>
-                    <span className="text-xs text-neutral-500 w-8 text-right">{r.count}场</span>
+                    {/* 数字 */}
+                    <span className={cn(
+                      "text-xs w-10 text-right",
+                      r.isMissing ? "text-red-600 dark:text-red-400 font-medium" : "text-neutral-500"
+                    )}>
+                      {r.isMissing ? "缺失" : `${r.count}场`}
+                    </span>
                   </div>
                 ))}
               </div>
+              {/* 缺失区域提醒 */}
+              {executionProgressData.regionDistribution.filter((r: any) => r.isMissing).length > 0 && (
+                <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5 flex items-start gap-1.5">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                  <span>
+                    {executionProgressData.regionDistribution.filter((r: any) => r.isMissing).length} 个大区尚未布局活动，建议优先规划【缺失区域】的活动补充
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* 资金构成 - 环形图 */}
+            {/* ============== 第四层：诊断 - 资金构成（MDF vs 自办） ============== */}
             <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">资金构成</p>
-              <div className="flex items-center gap-3">
-                <PieSVG data={[executionProgressData.mdfBudget, executionProgressData.selfBudget]} size={60} colors={['#059669', '#2563eb']} />
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span className="text-neutral-600 dark:text-neutral-400">MDF领用</span>
-                    <span className="font-medium">{executionProgressData.mdfPercentage}%</span>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-neutral-500">资金构成 · 执行分析</p>
+                <button
+                  className="text-[10px] text-blue-600 hover:underline"
+                  onClick={() => setShowKpiDetail(showKpiDetail === 'fund' ? null : 'fund')}
+                >
+                  {showKpiDetail === 'fund' ? '收起' : '查看详情'}
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* MDF卡片 */}
+                <div className={cn(
+                  "p-2.5 rounded-lg border",
+                  executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40
+                    ? "bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800"
+                    : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800"
+                )}>
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                      MDF伙伴领用
+                    </span>
+                    <span className="text-[10px] text-neutral-400">¥{Math.round(executionProgressData.mdfBudget / 10000)}万</span>
                   </div>
-                  <div className="flex items-center gap-2 text-xs">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span className="text-neutral-600 dark:text-neutral-400">自办活动</span>
-                    <span className="font-medium">{executionProgressData.selfPercentage}%</span>
+                  <div className="flex items-end justify-between">
+                    <span className={cn(
+                      "text-xl font-bold",
+                      executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40
+                        ? "text-amber-600"
+                        : "text-emerald-700 dark:text-emerald-400"
+                    )}>{executionProgressData.mdfExecRate}%</span>
+                    <span className="text-[10px] text-neutral-500">执行率</span>
+                  </div>
+                  {/* 迷你进度条 */}
+                  <div className="mt-1.5 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-emerald-500" style={{ width: `${executionProgressData.mdfExecRate}%` }}></div>
+                  </div>
+                </div>
+                {/* 自办卡片 */}
+                <div className="p-2.5 rounded-lg border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      厂商自办
+                    </span>
+                    <span className="text-[10px] text-neutral-400">¥{Math.round(executionProgressData.selfBudget / 10000)}万</span>
+                  </div>
+                  <div className="flex items-end justify-between">
+                    <span className="text-xl font-bold text-blue-700 dark:text-blue-400">{executionProgressData.selfExecRate}%</span>
+                    <span className="text-[10px] text-neutral-500">执行率</span>
+                  </div>
+                  {/* 迷你进度条 */}
+                  <div className="mt-1.5 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                    <div className="h-full bg-blue-500" style={{ width: `${executionProgressData.selfExecRate}%` }}></div>
                   </div>
                 </div>
               </div>
+              {/* 资金诊断提示 */}
+              {executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40 && (
+                <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5 flex items-start gap-1.5">
+                  <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
+                  <span>伙伴 MDF 领用积极性偏低（仅 {executionProgressData.mdfExecRate}%），建议加强伙伴沟通或调整补贴规则，推动预算落地</span>
+                </div>
+              )}
             </div>
 
-            {/* 活动类型 - 堆叠进度条 */}
-            <div>
-              <p className="text-xs font-medium text-neutral-500 mb-2">活动类型分布</p>
-              <div className="space-y-1">
-                {Object.entries(activityTypes).slice(0, 3).map(([type, count]) => {
-                  const pct = safePercent((count / executionProgressData.totalActivities) * 100);
+            {/* ============== 第五层：诊断 - 活动类型分布 + 状态胶囊 ============== */}
+            <div className="mb-5">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-neutral-500">活动类型分布</p>
+                <button
+                  className="text-[10px] text-blue-600 hover:underline"
+                  onClick={() => setShowKpiDetail(showKpiDetail === 'type' ? null : 'type')}
+                >
+                  {showKpiDetail === 'type' ? '收起' : '查看详情'}
+                </button>
+              </div>
+              <div className="space-y-2">
+                {Object.entries(executionProgressData.activityTypesDetailed).slice(0, 4).map(([type, info]: any) => {
+                  const pct = safePercent((info.total / executionProgressData.totalActivities) * 100);
                   return (
-                    <div key={type} className="flex items-center justify-between text-xs">
-                      <span className="text-neutral-500 truncate flex-1">{type}</span>
-                      <div className="flex items-center gap-2">
-                        <div className="w-16 bg-neutral-100 dark:bg-neutral-800 rounded-full h-1.5">
-                          <div className="h-full bg-purple-500 rounded-full" style={{ width: `${pct}%` }} />
+                    <div key={type} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-neutral-600 dark:text-neutral-400 truncate flex-1">{type}</span>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {/* 状态胶囊 */}
+                          {info.inProgress > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">
+                              <Clock className="w-2 h-2" /> 进行{info.inProgress}
+                            </span>
+                          )}
+                          {info.completed > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">
+                              <CheckCircle2 className="w-2 h-2" /> 完成{info.completed}
+                            </span>
+                          )}
+                          {info.abnormal > 0 && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30 px-1.5 py-0.5 rounded-full">
+                              <AlertTriangle className="w-2 h-2" /> 异常{info.abnormal}
+                            </span>
+                          )}
+                          <span className="text-[10px] text-neutral-400 w-10 text-right">{info.total}场</span>
                         </div>
-                        <span className="text-neutral-400 w-12 text-right">{count}场</span>
+                      </div>
+                      {/* 进度条 */}
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full flex overflow-hidden">
+                          {/* 已完成部分 */}
+                          {info.completed > 0 && (
+                            <div
+                              className="h-full bg-emerald-500"
+                              style={{ width: `${safePercent((info.completed / info.total) * pct)}%` }}
+                            />
+                          )}
+                          {/* 进行中部分 */}
+                          {info.inProgress > 0 && (
+                            <div
+                              className="h-full bg-blue-400"
+                              style={{ width: `${safePercent((info.inProgress / info.total) * pct)}%` }}
+                            />
+                          )}
+                          {/* 规划中部分 */}
+                          {info.planning > 0 && (
+                            <div
+                              className="h-full bg-neutral-300 dark:bg-neutral-600"
+                              style={{ width: `${safePercent((info.planning / info.total) * pct)}%` }}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
                 })}
               </div>
             </div>
+
+            {/* ============== 第六层：行动入口 ============== */}
+            <div className="border-t border-neutral-100 dark:border-neutral-800 pt-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
+                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
+                  立即行动
+                </p>
+                {(executionProgressData.notCompletedActivities.length > 0 || executionProgressData.hasReconciliationLag) && (
+                  <button className="text-[10px] text-orange-600 hover:underline flex items-center gap-0.5">
+                    <Bell className="w-3 h-3" />
+                    一键批量催办
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                {/* 行动1：查看未完成 */}
+                {executionProgressData.notCompletedActivities.length > 0 && (
+                  <button
+                    className={cn(
+                      "flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border transition-colors text-left",
+                      executionProgressData.isLagging
+                        ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400"
+                        : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
+                    )}
+                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-pending' ? null : 'action-pending')}
+                  >
+                    <Clock className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate font-medium">
+                      {executionProgressData.notCompletedActivities.length}场待推进
+                    </span>
+                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-pending' && "rotate-90")} />
+                  </button>
+                )}
+                {/* 行动2：催办核销 */}
+                {executionProgressData.hasReconciliationLag && (
+                  <button
+                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-left dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-recon' ? null : 'action-recon')}
+                  >
+                    <Receipt className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate font-medium">催办 {executionProgressData.zeroSpendCompletedCount}场核销</span>
+                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-recon' && "rotate-90")} />
+                  </button>
+                )}
+                {/* 行动3：缺失区域补充（fallback 显示） */}
+                {!executionProgressData.hasReconciliationLag && executionProgressData.regionDistribution.some((r: any) => r.isMissing) && (
+                  <button
+                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-left dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
+                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-region' ? null : 'action-region')}
+                  >
+                    <MapPin className="w-3 h-3 flex-shrink-0" />
+                    <span className="truncate font-medium">补充缺失区域</span>
+                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-region' && "rotate-90")} />
+                  </button>
+                )}
+                {/* 行动4：快速规划（始终显示，做拓展入口） */}
+                <button
+                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors text-left dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300"
+                >
+                  <Plus className="w-3 h-3 flex-shrink-0" />
+                  <span className="truncate font-medium">快速规划活动</span>
+                  <ChevronRight className="w-3 h-3 ml-auto flex-shrink-0" />
+                </button>
+              </div>
+            </div>
+
+            {/* ============== KPI 详情展开区（可折叠） ============== */}
+            {showKpiDetail === 'action-pending' && executionProgressData.notCompletedActivities.length > 0 && (
+              <div className="mt-3 border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/30 dark:bg-blue-900/10">
+                <p className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  ⚠️ 未完成活动列表（{executionProgressData.notCompletedActivities.length}场）
+                </p>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {executionProgressData.notCompletedActivities.slice(0, 15).map((a: any) => (
+                    <div key={a.id} className="flex items-center justify-between text-xs bg-white dark:bg-neutral-900/50 rounded px-2 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={cn(
+                          "px-1.5 py-0.5 rounded-full text-[10px] flex-shrink-0",
+                          a.status === 'In Progress'
+                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                            : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                        )}>
+                          {a.status === 'In Progress' ? '进行中' : '规划中'}
+                        </span>
+                        <span className="truncate text-neutral-700 dark:text-neutral-300">{a.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] text-neutral-500">{a.event_date || '--'}</span>
+                        <button className="text-[10px] text-blue-600 hover:underline">催办</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {showKpiDetail === 'action-recon' && executionProgressData.hasReconciliationLag && (
+              <div className="mt-3 border border-amber-200 dark:border-amber-800 rounded-lg p-3 bg-amber-50/30 dark:bg-amber-900/10">
+                <p className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2">
+                  🧾 需核销活动（{executionProgressData.zeroSpendCompletedCount}场已完成但0支出）
+                </p>
+                <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                  {qActivities.filter((a: any) => a.status === 'Completed' && safeNum(a.actualSpend) === 0).slice(0, 10).map((a: any) => (
+                    <div key={a.id} className="flex items-center justify-between text-xs bg-white dark:bg-neutral-900/50 rounded px-2 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <AlertCircle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                        <span className="truncate text-neutral-700 dark:text-neutral-300">{a.name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-shrink-0">
+                        <span className="text-[10px] text-neutral-400">预算 ¥{Math.round((a.budget || 0) / 10000)}万</span>
+                        <button className="text-[10px] text-amber-700 hover:underline dark:text-amber-400">前往核销</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </Card>
 
-          {/* 2. 执行效果看板 - 人与场的温度 */}
+          {/* 2. 执行效果看板 - 参与人数 & 获客数量 */}
           <Card className="relative overflow-hidden border-t-4 border-t-emerald-500">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -821,35 +1512,41 @@ export const MarketingIncentivePage = () => {
                 </div>
                 <div>
                   <span className="text-xs font-medium text-neutral-500">执行效果</span>
-                  <p className="text-xs text-neutral-400">人与场的温度</p>
+                  <p className="text-xs text-neutral-400">参与人数 · 获客数量</p>
                 </div>
               </div>
-              <Badge variant="brand" size="sm">热度良好</Badge>
+              <Badge className={getStatusColor(executionQualityData.avgLeadsPerActivity)} size="sm">
+                {executionQualityData.avgLeadsPerActivity >= 30 ? '获客优秀' : executionQualityData.avgLeadsPerActivity >= 15 ? '获客良好' : '待提升'}
+              </Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-3 gap-3 mb-4">
               <div>
                 <p className="text-2xl font-bold text-neutral-900 dark:text-white">
                   {safeNum(executionQualityData.cumulativeParticipants).toLocaleString()}
                 </p>
-                <p className="text-xs text-neutral-500">累计参与人数</p>
+                <p className="text-xs text-neutral-500">计划参与人数</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{executionQualityData.avgLeadsPerActivity}</p>
-                <p className="text-xs text-neutral-500">场均获客数</p>
+                <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-500">{totalLeads}</p>
+                <p className="text-xs text-neutral-500">总线索数</p>
+              </div>
+              <div>
+                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-500">{executionQualityData.avgLeadsPerActivity}</p>
+                <p className="text-xs text-neutral-500">场均获客</p>
               </div>
             </div>
 
-            {/* 流量走势 - 30天波动图 */}
+            {/* 流量走势 - 14天参与人数走势 */}
             <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">近30天参与人数走势</p>
+              <p className="text-xs font-medium text-neutral-500 mb-2">近14天参与人数走势</p>
               <div className="flex items-end justify-between h-12 gap-0.5">
-                {executionQualityData.last30Days.slice(-14).map((d: any) => {
-                  const maxVal = Math.max(...executionQualityData.last30Days.map((x: any) => x.participants), 1);
+                {executionQualityData.last30Days.slice(-14).map((d: any, i: number) => {
+                  const maxVal = Math.max(...executionQualityData.last30Days.map((x: any) => x.participants || 0), 1);
                   const height = Math.max(2, (d.participants / maxVal) * 48);
                   return (
                     <div
-                      key={d.day}
+                      key={d.day || i}
                       className="flex-1 bg-emerald-400 rounded-t transition-all hover:bg-emerald-500"
                       style={{ height: `${height}px` }}
                       title={`${d.date}: ${d.participants}人`}
@@ -858,14 +1555,16 @@ export const MarketingIncentivePage = () => {
                 })}
               </div>
               <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
-                <span>14天前</span>
+                <span>2周前</span>
                 <span>今天</span>
               </div>
             </div>
 
-            {/* 热门活动排行 Top 5 */}
+            {/* 热门活动排行 */}
             <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">热门活动排行 Top 5</p>
+              <p className="text-xs font-medium text-neutral-500 mb-2">
+                热门活动排行 {topActivities.length > 0 && <span className="text-neutral-400">Top {Math.min(5, topActivities.length)}</span>}
+              </p>
               <div className="space-y-2">
                 {topActivities.map((a: any, i: number) => (
                   <div
@@ -920,7 +1619,7 @@ export const MarketingIncentivePage = () => {
             </div>
           </Card>
 
-          {/* 3. 转化价值看板 - 商机与新客的厚度 */}
+          {/* 3. 转化价值看板 - 投入产出比 & 新客户价值 */}
           <Card className="relative overflow-hidden border-t-4 border-t-purple-500">
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-2">
@@ -929,20 +1628,34 @@ export const MarketingIncentivePage = () => {
                 </div>
                 <div>
                   <span className="text-xs font-medium text-neutral-500">转化价值</span>
-                  <p className="text-xs text-neutral-400">商机与新客的厚度</p>
+                  <p className="text-xs text-neutral-400">投入产出比 · 新客户</p>
                 </div>
               </div>
-              <Badge variant="brand" size="sm">ROI优秀</Badge>
+              <Badge className={getStatusColor(conversionData.avgConversionRate)} size="sm">
+                {conversionData.avgConversionRate >= 30 ? '转化优秀' : conversionData.avgConversionRate >= 15 ? '转化良好' : '待突破'}
+              </Badge>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 mb-4">
+            <div className="grid grid-cols-5 gap-2 mb-4">
               <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">1:{safeNum(Number(conversionData.roiRatio))}</p>
-                <p className="text-xs text-neutral-500">商机转化率 ROI</p>
+                <p className="text-xl font-bold text-neutral-900 dark:text-white">{conversionData.avgConversionRate}%</p>
+                <p className="text-[10px] text-neutral-500">线索转化率</p>
               </div>
               <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">{conversionData.newLogoPercentage}%</p>
-                <p className="text-xs text-neutral-500">新客户占比</p>
+                <p className="text-xl font-bold text-cyan-700 dark:text-cyan-500">{Number(conversionData.totalDeals).toLocaleString()}</p>
+                <p className="text-[10px] text-neutral-500">商机数</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-cyan-500">{cur(Number(conversionData.totalDealsAmount))}</p>
+                <p className="text-[10px] text-neutral-500">商机金额</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-emerald-600">{Number(conversionData.newLogoCount).toLocaleString()}</p>
+                <p className="text-[10px] text-neutral-500">新客户数</p>
+              </div>
+              <div>
+                <p className="text-xl font-bold text-purple-600">{cur(Number(conversionData.newLogoOrderAmount))}</p>
+                <p className="text-[10px] text-neutral-500">新客户订单</p>
               </div>
             </div>
 
@@ -977,16 +1690,31 @@ export const MarketingIncentivePage = () => {
             {/* 效率指标 */}
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Clock className="w-3 h-3 text-neutral-400" />
-                  <span className="text-[10px] text-neutral-500">转化周期</span>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <Clock className="w-3 h-3 text-neutral-400" />
+                    <span className="text-[10px] text-neutral-500">转化周期</span>
+                  </div>
+                  {conversionData.avgConversionDays > 0 && conversionData.avgConversionDays < 45 && (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
+                      <ArrowDownRight className="w-2.5 h-2.5" /> 优于基准
+                    </span>
+                  )}
                 </div>
                 <p className="text-sm font-semibold">{safeNum(conversionData.avgConversionDays)}天</p>
+                <p className="text-[9px] text-neutral-400">行业基准: 45天</p>
               </div>
               <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <UserCheck className="w-3 h-3 text-neutral-400" />
-                  <span className="text-[10px] text-neutral-500">跟进率</span>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="w-3 h-3 text-neutral-400" />
+                    <span className="text-[10px] text-neutral-500">线索跟进率</span>
+                  </div>
+                  {conversionData.followUpRate >= 80 && (
+                    <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
+                      <ArrowUpRight className="w-2.5 h-2.5" /> 优秀
+                    </span>
+                  )}
                 </div>
                 <p className={cn(
                   "text-sm font-semibold",
@@ -994,7 +1722,10 @@ export const MarketingIncentivePage = () => {
                 )}>
                   {safeNum(conversionData.followUpRate)}%
                 </p>
-                <div className={cn("w-2 h-2 rounded-full mt-1", getStatusDot(conversionData.followUpRate))} />
+                <div className="flex items-center gap-1 mt-1">
+                  <div className={cn("w-2 h-2 rounded-full", getStatusDot(conversionData.followUpRate))} />
+                  <span className="text-[9px] text-neutral-400">{qActivities.length}个活动平均</span>
+                </div>
               </div>
             </div>
 
@@ -1021,118 +1752,307 @@ export const MarketingIncentivePage = () => {
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* 诊断A：执行与预算错配 */}
           <Card className={cn(
-            "border-2 transition-colors",
-            diagnosticData.diagnosisA.hasIssue ? "border-orange-200 dark:border-orange-800" : "border-transparent"
+            "transition-all",
+            diagnosticData.diagnosisA.hasIssue
+              ? "border-2 border-orange-200 dark:border-orange-800 bg-gradient-to-br from-orange-50/40 to-transparent"
+              : "border border-neutral-200 dark:border-neutral-700"
           )}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-900/20 flex items-center justify-center">
-                <DollarSign className="w-4 h-4 text-orange-600" />
+            <div className="flex items-start gap-2 mb-3">
+              <div className={cn(
+                "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                diagnosticData.diagnosisA.hasIssue ? "bg-orange-100 dark:bg-orange-900/30" : "bg-neutral-100 dark:bg-neutral-800"
+              )}>
+                <DollarSign className={cn("w-4 h-4", diagnosticData.diagnosisA.hasIssue ? "text-orange-600" : "text-neutral-500")} />
               </div>
-              <div>
-                <CardTitle className="text-sm">诊断A：执行与预算错配</CardTitle>
-                <p className="text-[10px] text-neutral-400">预算领用未执行名单</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-sm">执行与预算错配</CardTitle>
+                  {diagnosticData.diagnosisA.hasIssue && (
+                    <Badge variant="danger" size="sm">异常</Badge>
+                  )}
+                </div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">活动完成率 · 预算执行率 · MDF领用</p>
               </div>
             </div>
 
-            <div className={cn("p-3 rounded-lg mb-3", diagnosticData.diagnosisA.hasIssue ? "bg-orange-50 dark:bg-orange-900/20" : "bg-neutral-50 dark:bg-neutral-800/50")}>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">{diagnosticData.diagnosisA.summary}</p>
+            {/* 三大核心指标 —— 横向对比 */}
+            <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 text-center">
+                <p className="text-base font-bold text-neutral-900 dark:text-white">{diagnosticData.diagnosisA.metrics.completionRate}%</p>
+                <p className="text-[10px] text-neutral-500">活动完成率</p>
+              </div>
+              <div className={cn(
+                "p-2 rounded-lg text-center",
+                diagnosticData.diagnosisA.isGlobalMismatch ? "bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800" : "bg-neutral-50 dark:bg-neutral-800/60"
+              )}>
+                <p className={cn("text-base font-bold", diagnosticData.diagnosisA.isGlobalMismatch ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{diagnosticData.diagnosisA.metrics.execRate}%</p>
+                <p className="text-[10px] text-neutral-500">预算执行率</p>
+              </div>
+              <div className={cn(
+                "p-2 rounded-lg text-center",
+                diagnosticData.diagnosisA.mdfProblem ? "bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800" : "bg-neutral-50 dark:bg-neutral-800/60"
+              )}>
+                <p className={cn("text-base font-bold", diagnosticData.diagnosisA.mdfProblem ? "text-purple-600" : "text-neutral-900 dark:text-white")}>{diagnosticData.diagnosisA.metrics.mdfExec}%</p>
+                <p className="text-[10px] text-neutral-500">MDF执行率</p>
+              </div>
             </div>
 
-            {diagnosticData.diagnosisA.hasIssue && (
-              <div className="space-y-2">
+            {/* 诊断结论 —— 强调语义 */}
+            <div className={cn(
+              "p-2.5 rounded-lg mb-3",
+              diagnosticData.diagnosisA.hasIssue
+                ? "bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800"
+                : "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800"
+            )}>
+              <p className="text-[11px] font-medium text-neutral-800 dark:text-neutral-200 leading-relaxed">
+                {diagnosticData.diagnosisA.hasIssue ? '⚠️ ' : '✅ '}{diagnosticData.diagnosisA.summary}
+              </p>
+            </div>
+
+            {/* 问题区域/子问题清单 */}
+            {diagnosticData.diagnosisA.regions.length > 0 && (
+              <div className="space-y-1 mb-3">
+                <p className="text-[10px] font-medium text-neutral-500">问题区域 TOP</p>
                 {diagnosticData.diagnosisA.regions.slice(0, 3).map((r: any) => (
-                  <div key={r.region} className="flex items-center justify-between p-2 bg-red-50/50 dark:bg-red-900/10 rounded-lg">
-                    <div>
-                      <p className="text-xs font-medium">{r.region}</p>
-                      <p className="text-[10px] text-neutral-500">预算: {cur(r.budget)} · 活动: {r.activities}场</p>
+                  <div key={r.region} className="flex items-center justify-between p-2 bg-red-50/40 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-red-700 dark:text-red-300">{r.region}</p>
+                      <p className="text-[10px] text-neutral-500">预算 {r.budgetShare}% · 完成 {r.completion}% · 执行 {r.execRate}%</p>
                     </div>
-                    <ArrowDownRight className="w-4 h-4 text-red-500" />
+                    <ArrowDownRight className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
                   </div>
                 ))}
               </div>
             )}
+
+            {/* 核销滞后 —— 突出显示 */}
+            {diagnosticData.diagnosisA.reconciliationIssue && (
+              <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Receipt className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
+                  <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">核销流程滞后</span>
+                </div>
+                <p className="text-[10px] text-neutral-600 dark:text-neutral-400">
+                  {diagnosticData.diagnosisA.zeroSpendActivities?.length || 0}场活动已完成但预算支出为0，需催办伙伴核销
+                </p>
+              </div>
+            )}
+
+            {/* 底部行动按钮 */}
+            <div className="flex items-center gap-1.5">
+              {diagnosticData.diagnosisA.hasIssue ? (
+                <>
+                  <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-orange-600 hover:bg-orange-700 text-white font-medium transition-colors">
+                    <Send className="w-3 h-3" />立即处理
+                  </button>
+                  <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
+                    查看详情
+                  </button>
+                </>
+              ) : (
+                <div className="flex-1 text-center text-[11px] text-emerald-700 dark:text-emerald-400 py-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md">
+                  ✓ 预算与执行健康
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* 诊断B：线索"肠梗阻"分析 */}
           <Card className={cn(
-            "border-2 transition-colors",
-            diagnosticData.diagnosisB.hasIssue ? "border-blue-200 dark:border-blue-800" : "border-transparent"
+            "transition-all",
+            diagnosticData.diagnosisB.hasIssue
+              ? "border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/40 to-transparent"
+              : "border border-neutral-200 dark:border-neutral-700"
           )}>
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-blue-600" />
+            <div className="flex items-start gap-2 mb-3">
+              <div className={cn(
+                "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
+                diagnosticData.diagnosisB.hasIssue ? "bg-blue-100 dark:bg-blue-900/30" : "bg-neutral-100 dark:bg-neutral-800"
+              )}>
+                <BarChart3 className={cn("w-4 h-4", diagnosticData.diagnosisB.hasIssue ? "text-blue-600" : "text-neutral-500")} />
               </div>
-              <div>
-                <CardTitle className="text-sm">诊断B：线索"肠梗阻"分析</CardTitle>
-                <p className="text-[10px] text-neutral-400">线索质量 vs 伙伴跟进效率</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-sm">线索"肠梗阻"分析</CardTitle>
+                  {diagnosticData.diagnosisB.hasIssue && (
+                    <Badge variant="info" size="sm">待优化</Badge>
+                  )}
+                </div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">线索质量 · 跟进效率 · 转化周期</p>
               </div>
             </div>
 
-            <div className={cn("p-3 rounded-lg mb-3", diagnosticData.diagnosisB.hasIssue ? "bg-blue-50 dark:bg-blue-900/20" : "bg-neutral-50 dark:bg-neutral-800/50")}>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">{diagnosticData.diagnosisB.summary}</p>
+            {/* 质量分布 —— 视觉强化 */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between text-[10px] text-neutral-500 mb-1.5">
+                <span>总线索 {safeNum(diagnosticData.diagnosisB.metrics.totalLeads)}</span>
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">高质量 {diagnosticData.diagnosisB.metrics.highQualityRate}%</span>
+              </div>
+              <div className="flex h-2.5 rounded-full overflow-hidden bg-neutral-100 dark:bg-neutral-800">
+                <div className="bg-emerald-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeA) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
+                <div className="bg-amber-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeB) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
+                <div className="bg-blue-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeC) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
+              </div>
+              <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>A优质</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>B中等</span>
+                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>C潜在</span>
+              </div>
             </div>
 
-            {diagnosticData.diagnosisB.hasIssue && (
-              <div className="space-y-2">
+            {/* 分类统计指标 */}
+            <div className="grid grid-cols-3 gap-1.5 mb-3">
+              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
+                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.lowConversionCount)}</p>
+                <p className="text-[9px] text-neutral-500">低转化率</p>
+              </div>
+              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
+                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.lowFollowUpCount)}</p>
+                <p className="text-[9px] text-neutral-500">低跟进率</p>
+              </div>
+              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
+                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.longCycleCount)}</p>
+                <p className="text-[9px] text-neutral-500">长周期</p>
+              </div>
+            </div>
+
+            {/* 诊断结论 */}
+            <div className={cn(
+              "p-2.5 rounded-lg mb-3",
+              diagnosticData.diagnosisB.hasIssue
+                ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800"
+                : "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800"
+            )}>
+              <p className="text-[11px] font-medium text-neutral-800 dark:text-neutral-200 leading-relaxed">
+                {diagnosticData.diagnosisB.hasIssue ? '🔍 ' : '✅ '}{diagnosticData.diagnosisB.summary}
+              </p>
+            </div>
+
+            {/* 问题活动 */}
+            {diagnosticData.diagnosisB.activities.length > 0 && (
+              <div className="space-y-1 mb-3">
+                <p className="text-[10px] font-medium text-neutral-500">重点关注活动</p>
                 {diagnosticData.diagnosisB.activities.slice(0, 3).map((a: any) => (
-                  <div key={a.id} className="p-2 bg-red-50/50 dark:bg-red-900/10 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium truncate flex-1">{a.name}</p>
-                      <span className={cn("text-[10px] px-1.5 py-0.5 rounded", getStatusColor(a.followUpRate))}>
-                        {a.followUpRate}%跟进
+                  <div key={a.id} className="p-2 bg-red-50/40 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 truncate flex-1">{a.name}</p>
+                      <span className="text-[10px] px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 flex-shrink-0 ml-1.5">
+                        {safeNum(a.conversionRatio) || safeNum(a.followUpRate)}%
                       </span>
                     </div>
-                    <p className="text-[10px] text-neutral-500 mt-1">
-                      {a.participants}人参与 · 转化{a.conversionDays}天 · 跟进率{a.followUpRate}%
+                    <p className="text-[9px] text-neutral-500">
+                      {safeNum(a.leadsGenerated || a.leads || 0)}线索 · {safeNum(a.expected_attendees || a.expectedAttendees || 0)}人 · {safeNum(a.conversionDays || 30)}天
                     </p>
                   </div>
                 ))}
               </div>
             )}
+
+            {/* 底部行动 */}
+            <div className="flex items-center gap-1.5">
+              {diagnosticData.diagnosisB.hasIssue ? (
+                <>
+                  <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors">
+                    <RefreshCw className="w-3 h-3" />优化跟进策略
+                  </button>
+                  <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
+                    查看漏斗
+                  </button>
+                </>
+              ) : (
+                <div className="flex-1 text-center text-[11px] text-emerald-700 dark:text-emerald-400 py-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md">
+                  ✓ 线索流转健康
+                </div>
+              )}
+            </div>
           </Card>
 
-          {/* 诊断C：高产出活动复刻分析 */}
-          <Card className="border-2 border-emerald-200 dark:border-emerald-800">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
+          {/* 诊断C：高产出活动复刻分析（多维度对比） */}
+          <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/40 to-transparent">
+            <div className="flex items-start gap-2 mb-3">
+              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
                 <Award className="w-4 h-4 text-emerald-600" />
               </div>
-              <div>
-                <CardTitle className="text-sm">诊断C：高产出活动复刻分析</CardTitle>
-                <p className="text-[10px] text-neutral-400">SOP下载量统计</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <CardTitle className="text-sm">高产出活动复刻</CardTitle>
+                  <Badge variant="success" size="sm">最佳实践</Badge>
+                </div>
+                <p className="text-[10px] text-neutral-500 mt-0.5">多维度类型对比 · ROI分析</p>
               </div>
             </div>
 
-            <div className="p-3 rounded-lg mb-3 bg-emerald-50 dark:bg-emerald-900/20">
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">{diagnosticData.diagnosisC.summary}</p>
-            </div>
-
+            {/* 最佳活动类型卡片 —— 视觉升级 */}
             {diagnosticData.diagnosisC.bestType && (
-              <div className="space-y-3">
-                <div className="bg-gradient-to-r from-emerald-50 to-green-50 dark:from-emerald-900/20 dark:to-green-900/20 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Trophy className="w-4 h-4 text-amber-500" />
-                    <span className="text-xs font-medium">最佳活动类型</span>
-                  </div>
-                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{diagnosticData.diagnosisC.bestType.type}</p>
-                  <div className="flex items-center gap-4 mt-2 text-[10px] text-neutral-500">
-                    <span>转化率: {diagnosticData.diagnosisC.bestType.conversionRate}%</span>
-                    <span>新客: {diagnosticData.diagnosisC.bestType.newLogo}个</span>
-                  </div>
+              <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 rounded-lg p-3 mb-3 border border-emerald-200 dark:border-emerald-800">
+                <div className="flex items-center gap-1.5 mb-2">
+                  <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">最佳活动类型</span>
                 </div>
-
-                <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Download className="w-4 h-4 text-blue-500" />
-                    <span className="text-xs">SOP标准文档</span>
+                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-2">
+                  {diagnosticData.diagnosisC.bestType.type}
+                </p>
+                <div className="grid grid-cols-3 gap-1">
+                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.leadsPerActivity}</p>
+                    <p className="text-[9px] text-neutral-500">场均线索</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-semibold">{diagnosticData.diagnosisC.sopDownloadCount}</span>
-                    <span className="text-[10px] text-neutral-400">次下载</span>
+                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.conversionRate}%</p>
+                    <p className="text-[9px] text-neutral-500">商机转化</p>
+                  </div>
+                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
+                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.newLogo}</p>
+                    <p className="text-[9px] text-neutral-500">新客户</p>
                   </div>
                 </div>
               </div>
             )}
+
+            {/* 活动类型排行榜 —— 可视化 */}
+            {diagnosticData.diagnosisC.topTypes && diagnosticData.diagnosisC.topTypes.length > 0 && (
+              <div className="mb-3">
+                <p className="text-[10px] font-medium text-neutral-500 mb-1.5">类型产出对比 TOP</p>
+                <div className="space-y-1">
+                  {diagnosticData.diagnosisC.topTypes.slice(0, 3).map((t: any, i: number) => (
+                    <div key={t.type} className="flex items-center justify-between p-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md border border-emerald-100 dark:border-emerald-800/50">
+                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                        <span className={cn(
+                          "text-[10px] font-bold w-4 flex-shrink-0",
+                          i === 0 ? "text-amber-600" : i === 1 ? "text-neutral-500" : "text-orange-800"
+                        )}>{i + 1}.</span>
+                        <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 truncate">{t.type}</span>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[10px] text-neutral-500">{t.leadsPerActivity}线索</span>
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">{t.newLogo}·新客</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SOP下载量 —— 小信息点 */}
+            <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/60 rounded-lg mb-3">
+              <div className="flex items-center gap-1.5">
+                <Download className="w-3 h-3 text-blue-500" />
+                <span className="text-[11px] text-neutral-600 dark:text-neutral-400">SOP标准文档下载</span>
+              </div>
+              <p className="text-xs font-bold text-neutral-900 dark:text-white">
+                {diagnosticData.diagnosisC.sopDownloadCount}<span className="text-[9px] font-normal text-neutral-400 ml-0.5">次</span>
+              </p>
+            </div>
+
+            {/* 底部行动按钮 */}
+            <div className="flex items-center gap-1.5">
+              <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
+                <TrendingUp className="w-3 h-3" />复制推广
+              </button>
+              <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
+                查看SOP
+              </button>
+            </div>
           </Card>
         </div>
 
@@ -1182,17 +2102,20 @@ export const MarketingIncentivePage = () => {
         <div className="flex items-center gap-2 mb-4">
           <Zap className="w-5 h-5 text-purple-600" />
           <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">行动中心</h2>
-          <Badge variant="info" size="sm">执行驱动</Badge>
+          <Badge variant="info" size="sm">
+            {actionCards.reduce((sum, c) => sum + (safeNum(c.priority === 'high' ? 1 : 0)), 0) > 0 ? `${actionCards.reduce((s, c) => s + (c.priority === 'high' ? 1 : 0), 0)}项紧急` : `${actionCards.length}项建议`}
+          </Badge>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {actionCards.map((card) => {
+          {actionCards.map((card: any) => {
             const Icon = card.icon;
+            const isExpanded = expandedActionCard === card.type;
             const colorMap: Record<string, string> = {
-              orange: 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800',
-              blue: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-              green: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
-              purple: 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
+              orange: 'border-orange-200 dark:border-orange-800 bg-orange-50/30 dark:bg-orange-900/10',
+              blue: 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10',
+              green: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10',
+              purple: 'border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10',
             };
             const iconColorMap: Record<string, string> = {
               orange: 'text-orange-600',
@@ -1200,62 +2123,163 @@ export const MarketingIncentivePage = () => {
               green: 'text-emerald-600',
               purple: 'text-purple-600',
             };
+            const hasDetails = card.detailData && (
+              (card.detailData.activities && card.detailData.activities.length > 0) ||
+              (card.detailData.regions && card.detailData.regions.length > 0) ||
+              (card.detailData.topTypes && card.detailData.topTypes.length > 0)
+            );
 
             return (
               <Card key={card.type} className={cn("border-2", colorMap[card.color])}>
+                {/* 头部：图标 + 标题 + 优先级 */}
                 <div className="flex items-start gap-3 mb-3">
-                  <div className={cn("w-10 h-10 rounded-lg flex items-center justify-center bg-white dark:bg-neutral-800 shadow-sm", iconColorMap[card.color])}>
+                  <div className={cn(
+                    "w-10 h-10 rounded-lg flex items-center justify-center bg-white dark:bg-neutral-800 shadow-sm",
+                    iconColorMap[card.color]
+                  )}>
                     <Icon className="w-5 h-5" />
                   </div>
-                  <div className="flex-1">
-                    <CardTitle className="text-sm mb-1">{card.title}</CardTitle>
-                    <Badge
-                      variant={
-                        card.priority === 'high' ? 'danger' :
-                        card.priority === 'medium' ? 'warning' : 'default'
-                      }
-                      size="sm"
-                    >
-                      {card.priority === 'high' ? '紧急' : card.priority === 'medium' ? '中等' : '建议'}
-                    </Badge>
+                  <div className="flex-1 min-w-0">
+                    <CardTitle className="text-sm mb-1 truncate">{card.title}</CardTitle>
+                    {card.subtitle && <p className="text-[10px] text-neutral-500 truncate">{card.subtitle}</p>}
                   </div>
+                  <Badge
+                    variant={
+                      card.priority === 'high' ? 'danger' :
+                      card.priority === 'medium' ? 'warning' : 'default'
+                    }
+                    size="sm"
+                  >
+                    {card.priority === 'high' ? '紧急' : card.priority === 'medium' ? '中等' : '建议'}
+                  </Badge>
                 </div>
 
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-4 leading-relaxed">
+                {/* 关键指标 */}
+                {card.metrics && card.metrics.length > 0 && (
+                  <div className="grid grid-cols-2 gap-2 mb-3">
+                    {card.metrics.map((m: any, i: number) => (
+                      <div key={i} className="bg-white dark:bg-neutral-800/50 rounded-lg p-2">
+                        <p className="text-sm font-bold text-neutral-900 dark:text-white truncate">{m.value}</p>
+                        <p className="text-[9px] text-neutral-500 truncate">{m.label}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 描述 */}
+                <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-3 leading-relaxed">
                   {card.content}
                 </p>
 
-                <div className="flex flex-wrap gap-2">
-                  {card.actions.map((action) => {
-                    const ActionIcon = action.icon;
-                    return (
-                      <Button
-                        key={action.label}
-                        size="sm"
-                        variant={card.color === 'orange' ? 'secondary' : card.color === 'green' ? 'brand' : 'secondary'}
-                        className="text-xs"
-                        onClick={() => {
-                          if (card.type === 'approval') {
-                            setShowMDFClaims(true);
-                          } else if (card.type === 'empowerment') {
-                            setShowSOP(true);
-                          }
-                        }}
-                      >
-                        <ActionIcon className="w-3 h-3 mr-1" />
-                        {action.label}
-                      </Button>
-                    );
-                  })}
+                {/* 展开/收起按钮 */}
+                {hasDetails && (
+                  <button
+                    onClick={() => setExpandedActionCard(isExpanded ? null : card.type)}
+                    className="w-full flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-700/50 transition-colors"
+                  >
+                    <span className="text-neutral-600 dark:text-neutral-400">{isExpanded ? '收起详情' : card.actionLabel || '查看详情'}</span>
+                    <ChevronRight className={cn("w-3 h-3 text-neutral-500 transition-transform", isExpanded && "rotate-90")} />
+                  </button>
+                )}
+
+                {/* 展开的详情区域 */}
+                {isExpanded && hasDetails && (
+                  <div className="mt-3 p-3 bg-white dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700">
+                    {/* 活动列表 */}
+                    {card.detailData.activities && card.detailData.activities.length > 0 && (
+                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
+                        <p className="text-[10px] font-medium text-neutral-500 mb-2">
+                          相关活动（{card.detailData.activities.length}场）
+                        </p>
+                        {card.detailData.activities.slice(0, 8).map((a: any) => (
+                          <div key={a.id} className="flex items-center justify-between text-xs p-2 bg-neutral-50 dark:bg-neutral-700/50 rounded-lg">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-neutral-700 dark:text-neutral-300 truncate">{a.name}</p>
+                              <p className="text-[9px] text-neutral-500 mt-0.5">
+                                {a.status} · {safeNum(a.leadsGenerated || a.expected_attendees || 0)}人参与 · 预算 {cur(safeNum(a.budget))}
+                              </p>
+                            </div>
+                            <button className="text-[10px] text-blue-600 hover:underline flex-shrink-0 ml-2">
+                              催办
+                            </button>
+                          </div>
+                        ))}
+                        {card.detailData.activities.length > 8 && (
+                          <p className="text-[9px] text-center text-neutral-400 pt-1">...还有 {card.detailData.activities.length - 8} 场活动</p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* 区域列表 */}
+                    {card.detailData.regions && card.detailData.regions.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-medium text-neutral-500 mb-2">
+                          待补充区域（{card.detailData.regions.length}个）
+                        </p>
+                        {card.detailData.regions.slice(0, 6).map((r: any) => (
+                          <div key={r.region} className="flex items-center justify-between text-xs p-2 bg-red-50/50 dark:bg-red-900/10 rounded-lg">
+                            <span className="font-medium text-red-700 dark:text-red-300">{r.region}</span>
+                            <button className="text-[10px] text-red-600 hover:underline">规划活动</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* 最佳实践类型列表 */}
+                    {card.detailData.topTypes && card.detailData.topTypes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-[10px] font-medium text-neutral-500 mb-2">可推广活动类型</p>
+                        {card.detailData.topTypes.slice(0, 3).map((t: any, i: number) => (
+                          <div key={t.type} className="flex items-center justify-between text-xs p-2 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg">
+                            <div>
+                              <span className="font-medium text-emerald-700 dark:text-emerald-300">{i+1}. {t.type}</span>
+                              <span className="text-[10px] text-neutral-500 ml-2">场均{t.leadsPerActivity}线索 · {t.newLogo}个新客</span>
+                            </div>
+                            <button className="text-[10px] text-emerald-600 hover:underline">推广SOP</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 快捷操作按钮 */}
+                <div className="flex gap-1.5 mt-3 pt-2 border-t border-neutral-200 dark:border-neutral-700">
+                  {card.type === 'reconciliation' && (
+                    <Button size="sm" variant="brand" className="text-xs flex-1" onClick={() => setShowMDFClaims(true)}>
+                      <Receipt className="w-3 h-3 mr-1" />前往核销
+                    </Button>
+                  )}
+                  {card.type === 'empowerment' && (
+                    <Button size="sm" variant="brand" className="text-xs flex-1" onClick={() => setShowSOP(true)}>
+                      <Lightbulb className="w-3 h-3 mr-1" />查看SOP
+                    </Button>
+                  )}
+                  {card.type === 'supervision' && (
+                    <Button size="sm" variant="secondary" className="text-xs flex-1">
+                      <Send className="w-3 h-3 mr-1" />批量催办
+                    </Button>
+                  )}
+                  {card.type === 'activation' && (
+                    <Button size="sm" variant="secondary" className="text-xs flex-1">
+                      <RefreshCw className="w-3 h-3 mr-1" />激活线索
+                    </Button>
+                  )}
+                  {card.type === 'regional-planning' && (
+                    <Button size="sm" variant="secondary" className="text-xs flex-1">
+                      <MapPin className="w-3 h-3 mr-1" />快速规划
+                    </Button>
+                  )}
                 </div>
               </Card>
             );
           })}
 
+          {/* 无行动项时的占位 */}
           {actionCards.length === 0 && (
             <div className="col-span-full flex items-center justify-center py-8 text-neutral-400">
               <CheckCircle2 className="w-5 h-5 mr-2" />
-              <span className="text-sm">暂无待处理行动项</span>
+              <span className="text-sm">暂无待处理行动项，执行进度良好！</span>
             </div>
           )}
         </div>

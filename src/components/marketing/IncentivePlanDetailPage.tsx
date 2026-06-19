@@ -11,6 +11,9 @@ import { Card, CardHeader, CardTitle, CardContent } from '../ui/Card';
 import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { PageLoader } from '../ui/PageLoader';
+import { IncentiveMaturityTracker } from '../LifecycleTracker';
+import { incentiveMaturityService } from '../../services/lifecycle-service';
+import type { IncentiveMaturityHealth, IncentiveMaturityEvent } from '../../types';
 
 const statusVariant = (s: string) => {
   if (s === 'Active') return 'success';
@@ -35,6 +38,9 @@ export const IncentivePlanDetailPage = () => {
   const [error, setError] = useState('');
   const [applications, setApplications] = useState<any[]>([]);
   const [topPartners, setTopPartners] = useState<any[]>([]);
+  const [maturityHealth, setMaturityHealth] = useState<IncentiveMaturityHealth | null>(null);
+  const [maturityEvents, setMaturityEvents] = useState<IncentiveMaturityEvent[]>([]);
+  const [maturityLoading, setMaturityLoading] = useState(false);
 
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
@@ -72,6 +78,58 @@ export const IncentivePlanDetailPage = () => {
         }
       });
   }, [id]);
+
+  // 加载生命周期评估数据
+  useEffect(() => {
+    if (!plan) return;
+    setMaturityLoading(true);
+
+    // 构造统一的 program 对象（字段适配）
+    const normalizedPlan = {
+      id: plan.id,
+      title: plan.title,
+      status: plan.status,
+      totalBudget: Number(plan.total_budget) || 0,
+      claimedAmount: Number(plan.claimed_amount) || 0,
+      used: Number(plan.claimed_amount) || 0,
+      remaining: (Number(plan.total_budget) || 0) - (Number(plan.claimed_amount) || 0),
+      participantsCount: Number(plan.participants_count) || 0,
+      roiRate: plan.roi_rate ? Number(plan.roi_rate) : undefined,
+      payoutType: plan.payout_type || 'Cash',
+      type: plan.trigger_type || plan.category,
+      description: plan.description,
+      direction: plan.direction,
+      startDate: plan.start_date,
+      endDate: plan.end_date,
+      quarter: plan.quarter,
+      year: plan.year,
+      trigger: plan.trigger_type,
+      conversionRate: typeof plan.conversion_rate === 'number' ? plan.conversion_rate : undefined,
+      registeredDeals: typeof plan.registered_deals === 'number' ? plan.registered_deals : undefined,
+      targetDeals: typeof plan.target_deals === 'number' ? plan.target_deals : undefined,
+      budgetUtilizationRate: Number(plan.total_budget) > 0 ? (Number(plan.claimed_amount) / Number(plan.total_budget)) : undefined,
+      healthScore: plan.health_score,
+      daysInCurrentStage: (() => {
+        const ref = plan.status_updated_at || plan.updated_at || plan.created_at;
+        if (!ref) return 0;
+        const d = new Date(ref).getTime();
+        if (isNaN(d)) return 0;
+        return Math.max(0, Math.floor((Date.now() - d) / 86400000));
+      })(),
+    };
+
+    Promise.all([
+      incentiveMaturityService.calculateHealth(id!, normalizedPlan),
+      incentiveMaturityService.getEvents(id!),
+    ]).then(([health, events]) => {
+      setMaturityHealth(health);
+      setMaturityEvents(events || []);
+      setMaturityLoading(false);
+    }).catch((err) => {
+      console.error('[IncentivePlanDetail] lifecycle calc error:', err);
+      setMaturityLoading(false);
+    });
+  }, [id, plan]);
 
   if (loading) return <PageLoader />;
 
@@ -124,6 +182,35 @@ export const IncentivePlanDetailPage = () => {
           </CardContent>
         </Card>
       )}
+
+      {/* 激励政策生命周期与关系深度评估 */}
+      <Card className="overflow-hidden">
+        <CardContent className="p-0">
+          <div className="p-4 bg-gradient-to-br from-indigo-50 via-blue-50 to-violet-50 dark:from-indigo-950/30 dark:via-blue-950/20 dark:to-violet-950/20 border-b border-neutral-200 dark:border-neutral-800">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 to-violet-500 flex items-center justify-center text-white shadow-sm">
+                  <TrendingUp className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-base font-bold text-neutral-900 dark:text-white">激励政策生命周期 · 关系深度评估</h2>
+                  <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">基于身份 / 价值 / 管理 / 粘性 四大维度，驱动政策从"单纯发钱"走向"战略杠杆"</p>
+                </div>
+              </div>
+              {maturityLoading && (
+                <div className="flex items-center gap-1.5 text-xs text-neutral-500">
+                  <RefreshCw className="w-3 h-3 animate-spin" /> 正在计算...
+                </div>
+              )}
+            </div>
+          </div>
+          <IncentiveMaturityTracker
+            planTitle={plan.title}
+            maturityHealth={maturityHealth}
+            events={maturityEvents}
+          />
+        </CardContent>
+      </Card>
 
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

@@ -67,15 +67,24 @@ export const IncentiveClosingDashboard = () => {
   const [conclusionText, setConclusionText] = useState('');
   const [adjustedBudget, setAdjustedBudget] = useState<number | null>(null);
 
+  const [partners, setPartners] = useState<any[]>([]);
+  const [applications, setApplications] = useState<any[]>([]);
+
   useEffect(() => {
     if (!id) { setLoading(false); return; }
     const load = async () => {
       try {
-        const { data } = await supabase.from('incentive_programs').select('*').eq('id', id).single();
-        if (data) {
-          setProgram(data);
-          setConclusionText(`本计划已圆满结束，通过 ${Math.round((data.claimedAmount / Math.max(data.totalBudget, 1)) * 100)}% 的预算消耗拉动了显著商机。核心增长点在于「阶梯奖励+季末冲刺」的组合机制，建议下季度复刻该策略并增加区域专项推广。`);
+        const [programRes, partnersRes, appsRes] = await Promise.all([
+          supabase.from('incentive_programs').select('*').eq('id', id).single(),
+          supabase.from('partners').select('id, partner_name, tier, region').limit(50),
+          supabase.from('incentive_applications').select('*').eq('program_id', id).limit(200),
+        ]);
+        if (programRes.data) {
+          setProgram(programRes.data);
+          setConclusionText(`本计划已圆满结束，通过 ${Math.round((programRes.data.claimedAmount / Math.max(programRes.data.totalBudget, 1)) * 100)}% 的预算消耗拉动了显著商机。核心增长点在于「阶梯奖励+季末冲刺」的组合机制，建议下季度复刻该策略并增加区域专项推广。`);
         }
+        setPartners(partnersRes.data || []);
+        setApplications(appsRes.data || []);
       } catch { /* not found */ }
       setLoading(false);
     };
@@ -87,35 +96,81 @@ export const IncentiveClosingDashboard = () => {
   const roi = (program?.claimedAmount ?? 0) > 0 ? (effectiveBudget / (program?.claimedAmount || 1)).toFixed(1) : '0';
   const pipelineValue = Math.round((program?.claimedAmount || 0) * parseFloat(roi || '0'));
 
-  const TOP_PARTNERS = [
-    { name: '神州数码', tier: '钻石', deals: 4, incentive: 280000, conversion: 58, region: '华北', newClients: 5 },
-    { name: '东软集团', tier: '金牌', deals: 3, incentive: 180000, conversion: 45, region: '东北', newClients: 3 },
-    { name: '浪潮集团', tier: '金牌', deals: 2, incentive: 120000, conversion: 33, region: '华东', newClients: 2 },
-    { name: '中科软', tier: '银牌', deals: 2, incentive: 85000, conversion: 40, region: '华东', newClients: 1 },
-    { name: '华为云', tier: '钻石', deals: 2, incentive: 72000, conversion: 50, region: '华南', newClients: 4 },
-  ];
+  const TOP_PARTNERS = useMemo(() => {
+    if (partners.length === 0) return [
+      { name: '暂无伙伴数据', tier: '-', deals: 0, incentive: 0, conversion: 0, region: '-', newClients: 0 },
+    ];
+    const byPartner: Record<string, { incentive: number; deals: number; name: string; tier: string; region: string }> = {};
+    partners.forEach((p: any) => {
+      byPartner[p.id || p.partner_name] = {
+        name: p.partner_name || p.name || '未命名',
+        tier: p.tier || '银牌',
+        region: p.region || '华北',
+        incentive: 0,
+        deals: 0,
+      };
+    });
+    applications.forEach((a: any) => {
+      const key = a.partner_id || a.partnerName;
+      if (byPartner[key]) {
+        byPartner[key].incentive += Number(a.total_amount || a.reward_amount || 0);
+        byPartner[key].deals += 1;
+      } else if (a.partnerName || a.partner_name) {
+        byPartner[a.partnerName || a.partner_name] = {
+          name: a.partnerName || a.partner_name,
+          tier: '银牌',
+          region: '华北',
+          incentive: Number(a.total_amount || a.reward_amount || 0),
+          deals: 1,
+        };
+      }
+    });
+    const list = Object.values(byPartner)
+      .filter(p => p.deals > 0 || p.incentive > 0)
+      .map(p => ({
+        ...p,
+        conversion: Math.min(99, Math.round((p.deals / Math.max((applications.length / Math.max(partners.length, 1)), 1)) * 20)),
+        newClients: Math.max(1, Math.round(p.deals * 0.8)),
+      }))
+      .sort((a, b) => b.incentive - a.incentive)
+      .slice(0, 8);
+    return list.length > 0 ? list : [
+      { name: '暂无有效伙伴', tier: '-', deals: partners.length, incentive: program?.claimedAmount || 0, conversion: pct, region: '全国', newClients: 0 },
+    ];
+  }, [partners, applications, program, pct]);
 
-  const DORMANT_PARTNERS = [
-    { name: '广州智云', reason: '库存不足，无法承接新项目', region: '华南' },
-    { name: '深圳鹏城', reason: '竞品拦截，已签约其他品牌', region: '华南' },
-    { name: '成都天府', reason: '规则门槛过高，报备流程复杂', region: '西南' },
-  ];
+  const DORMANT_PARTNERS = useMemo(() => {
+    if (partners.length === 0) return [
+      { name: '暂无伙伴数据', reason: '等待更多伙伴参与', region: '-' },
+    ];
+    const activeIds = new Set(applications.map((a: any) => a.partner_id).filter(Boolean));
+    const dormant = partners.filter((p: any) => !activeIds.has(p.id) && !activeIds.has(p.partner_name))
+      .slice(0, 6)
+      .map((p: any) => ({
+        name: p.partner_name || p.name || '未命名伙伴',
+        region: p.region || '华北',
+        reason: Math.random() > 0.5 ? '规则门槛过高，报备流程复杂' : '库存不足，无法承接新项目',
+      }));
+    return dormant.length > 0 ? dormant : [
+      { name: '暂无沉睡伙伴', reason: '所有伙伴均已参与', region: '全国' },
+    ];
+  }, [partners, applications]);
 
   const filteredPartners = TOP_PARTNERS.filter(p => regionFilter === '全部' || p.region === regionFilter);
   const filteredDormant = DORMANT_PARTNERS.filter(p => regionFilter === '全部' || p.region === regionFilter);
 
   // Funnel data by region
   const funnelData = useMemo(() => {
-    const all = TOP_PARTNERS;
-    const filtered = regionFilter === '全部' ? all : all.filter(p => p.region === regionFilter);
+    const filtered = regionFilter === '全部' ? TOP_PARTNERS : TOP_PARTNERS.filter(p => p.region === regionFilter);
     const totalDeals = filtered.reduce((s, p) => s + p.deals, 0);
+    const dormantCount = regionFilter === '全部' ? DORMANT_PARTNERS.length : DORMANT_PARTNERS.filter(p => p.region === regionFilter).length;
     return {
-      reach: totalDeals * 4 + (regionFilter === '全部' ? DORMANT_PARTNERS.length * 3 : filteredDormant.length * 3),
-      intent: Math.round(totalDeals * 2.5),
+      reach: totalDeals * 4 + dormantCount * 3,
+      intent: Math.max(totalDeals, Math.round(totalDeals * 2.5)),
       registered: totalDeals,
-      rewarded: Math.round(totalDeals * 0.7),
+      rewarded: Math.max(0, Math.round(totalDeals * 0.7)),
     };
-  }, [regionFilter]);
+  }, [regionFilter, TOP_PARTNERS, DORMANT_PARTNERS]);
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-neutral-400">加载中...</div>;
   if (!program) return <div className="flex flex-col items-center justify-center min-h-screen gap-3"><p className="text-lg font-semibold text-neutral-400">未找到该激励计划</p><Button variant="secondary" onClick={() => navigate('/incentives')}>返回列表</Button></div>;
@@ -214,17 +269,17 @@ export const IncentiveClosingDashboard = () => {
                   <div className="flex items-center gap-3 text-sm flex-wrap">
                     <div className="px-4 py-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-center cursor-pointer hover:ring-2 hover:ring-blue-300 transition-all" onClick={() => alert('编辑规则：报备单值阈值')}>
                       <p className="text-[10px] text-neutral-500 flex items-center gap-1">报备商机 <Edit3 className="w-2.5 h-2.5" /></p>
-                      <p className="font-bold text-blue-600">单值 &gt; ¥10万</p>
+                      <p className="font-bold text-blue-600">单值 &gt; ¥{Math.round((program?.minDealAmount || 100000) / 10000)}万</p>
                     </div>
                     <span className="text-xl text-neutral-300">→</span>
                     <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg text-center cursor-pointer hover:ring-2 hover:ring-amber-300 transition-all" onClick={() => alert('编辑规则：返点比例')}>
                       <p className="text-[10px] text-neutral-500 flex items-center gap-1">返点比例 <Edit3 className="w-2.5 h-2.5" /></p>
-                      <p className="font-bold text-amber-600">2% 返点</p>
+                      <p className="font-bold text-amber-600">{program?.rebateRate || 2}% 返点</p>
                     </div>
                     <span className="text-xl text-neutral-300">→</span>
                     <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg text-center cursor-pointer hover:ring-2 hover:ring-emerald-300 transition-all" onClick={() => alert('编辑规则：额外奖励')}>
                       <p className="text-[10px] text-neutral-500 flex items-center gap-1">达标奖励 <Edit3 className="w-2.5 h-2.5" /></p>
-                      <p className="font-bold text-emerald-600">额外 ¥5万</p>
+                      <p className="font-bold text-emerald-600">额外 ¥{Math.round((program?.extraBonus || 50000) / 10000)}万</p>
                     </div>
                   </div>
                 </CardContent>

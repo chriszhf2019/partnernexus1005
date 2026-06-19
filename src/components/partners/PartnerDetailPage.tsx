@@ -96,6 +96,7 @@ export default function PartnerDetailPage() {
   const [previewId, setPreviewId] = useState<string | null>(null);
   const [showAdvFilter, setShowAdvFilter] = useState(false);
   const [segmentFilter, setSegmentFilter] = useState('all');
+  const [maturityStageFilter, setMaturityStageFilter] = useState<string>('all');
 
   // ── Sort state ───────────────────────────────────
   const [sortField, setSortField] = useState<SortField>('name');
@@ -109,12 +110,13 @@ export default function PartnerDetailPage() {
     if (tierFilter !== 'All') params.tier = tierFilter;
     if (typeFilter !== 'All') params.type = typeFilter;
     if (regionFilter !== 'All') params.region = regionFilter;
+    if (maturityStageFilter !== 'all') params.maturityStage = maturityStageFilter;
     if (tab !== 'all') params.tab = tab;
     if (viewMode !== 'table') params.view = viewMode;
     if (page > 1) params.page = String(page);
     Object.assign(params, overrides);
     setSearchParams(params, { replace: true });
-  }, [searchTerm, statusFilter, tierFilter, typeFilter, regionFilter, tab, viewMode, page, setSearchParams]);
+  }, [searchTerm, statusFilter, tierFilter, typeFilter, regionFilter, tab, viewMode, page, setSearchParams, segmentFilter, maturityStageFilter]);
 
   useEffect(() => { syncUrl(); }, [syncUrl]);
 
@@ -194,6 +196,7 @@ export default function PartnerDetailPage() {
       if (tierFilter !== 'All') result = result.filter((p) => p.tier === tierFilter);
       if (typeFilter !== 'All') result = result.filter((p) => p.type === typeFilter);
       if (regionFilter !== 'All') result = result.filter((p) => p.region === regionFilter);
+      if (maturityStageFilter !== 'all') result = result.filter((p) => p.maturityStage === maturityStageFilter);
     }
     // Sort
     if (sortDir) {
@@ -216,7 +219,7 @@ export default function PartnerDetailPage() {
       });
     }
     return result;
-  }, [partners, deferredSearch, statusFilter, tierFilter, typeFilter, regionFilter, tab, segmentFilter, sortField, sortDir]);
+  }, [partners, deferredSearch, statusFilter, tierFilter, typeFilter, regionFilter, tab, segmentFilter, maturityStageFilter, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPartners.length / ITEMS_PER_PAGE));
   const pagedPartners = filteredPartners.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
@@ -488,6 +491,20 @@ export default function PartnerDetailPage() {
             {partnerRegions.map(r => <option key={r} value={r}>{r}</option>)}
           </select>
         </div>
+        <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700" />
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider">关系深度</span>
+          <select className="h-8 px-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-xs text-neutral-700 dark:text-neutral-300 focus:outline-none focus:ring-1 focus:ring-brand"
+            value={maturityStageFilter} onChange={(e) => { setMaturityStageFilter(e.target.value); setPage(1); }}
+            disabled={tab === 'pending'}>
+            <option value="all">全部</option>
+            <option value="Transactional">准入期</option>
+            <option value="Transitional">赋能期</option>
+            <option value="Relational">协同期</option>
+            <option value="Symbiotic">共生期</option>
+            <option value="undefined">未评估</option>
+          </select>
+        </div>
 
         {/* Advanced filter toggle */}
         <button onClick={() => setShowAdvFilter(!showAdvFilter)} className="flex items-center gap-1 text-[10px] text-neutral-400 hover:text-neutral-600 transition-colors">
@@ -495,8 +512,8 @@ export default function PartnerDetailPage() {
           {showAdvFilter ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
         </button>
 
-        {(statusFilter !== 'All' || tierFilter !== 'All' || typeFilter !== 'All' || regionFilter !== 'All') && (
-          <button onClick={() => { setStatusFilter('All'); setTierFilter('All'); setTypeFilter('All'); setRegionFilter('All'); setPage(1); }} className="text-[10px] text-blue-500 hover:underline ml-1">清除筛选</button>
+        {(statusFilter !== 'All' || tierFilter !== 'All' || typeFilter !== 'All' || regionFilter !== 'All' || maturityStageFilter !== 'all') && (
+          <button onClick={() => { setStatusFilter('All'); setTierFilter('All'); setTypeFilter('All'); setRegionFilter('All'); setMaturityStageFilter('all'); setPage(1); }} className="text-[10px] text-blue-500 hover:underline ml-1">清除筛选</button>
         )}
         <span className="ml-auto text-xs text-neutral-400">{filteredPartners.length} 条结果</span>
       </div>

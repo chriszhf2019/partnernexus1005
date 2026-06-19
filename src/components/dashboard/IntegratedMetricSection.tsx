@@ -858,7 +858,7 @@ export const IntegratedMetricSection: React.FC<IntegratedMetricSectionProps> = (
                         <div className="absolute right-0 top-0 bottom-0 w-[5%] bg-rose-50 border-l border-rose-100" />
                       </div>
                       <p className="text-[7px] font-medium text-slate-400 mt-2 leading-relaxed italic">
-                        * 基于当前 {data.strategic_revenue?.pipeline_multiplier} 倍商机覆盖，年底预期可达成目标的 98%，缺口约 ¥200k。
+                        * 基于当前 {data.strategic_revenue?.pipeline_multiplier} 倍商机覆盖，年底预期可达成目标的 98%，缺口约 ¥${Math.round(((currentAch.target ?? 0) - (currentAch.current ?? 0)) / 1000)}k。
                       </p>
                     </div>
                   </div>

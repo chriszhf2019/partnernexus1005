@@ -8,7 +8,7 @@ BEGIN;
 -- 1. 合作伙伴行为明细表
 CREATE TABLE IF NOT EXISTS partner_activity_logs (
   id BIGSERIAL PRIMARY KEY,
-  partner_id UUID REFERENCES partners(id) ON DELETE CASCADE,
+  partner_id TEXT,
   activity_type VARCHAR(50) NOT NULL CHECK (activity_type IN (
     'LOGIN', 'LEAD_SUBMIT', 'MDF_CLAIM', 'TRAINING', 'DEAL_WIN', 'ACTIVITY_JOIN'
   )),

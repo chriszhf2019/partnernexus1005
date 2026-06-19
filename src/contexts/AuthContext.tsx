@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { authService } from '../services/auth-service';
 import type { AuthUser, UserRole } from '../services/auth-service';
 
@@ -33,7 +33,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // Fetch role from Supabase session metadata (authoritative) on user change
   useEffect(() => {
     if (user) {
       authService.getUserRole(user.uid).then(setRole).catch(() => setRole('partner_sales'));
@@ -57,8 +56,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     [role],
   );
 
+  // useMemo: prevent value object recreation on every render
+  const value = useMemo<AuthContextType>(() => ({
+    user, loading, login, logout, role, hasPermission,
+  }), [user, loading, login, logout, role, hasPermission]);
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, role, hasPermission }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );

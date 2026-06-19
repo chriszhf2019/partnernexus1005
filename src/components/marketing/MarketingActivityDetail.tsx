@@ -6,6 +6,9 @@ import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 import { MarketingEvaluation } from './MarketingEvaluation';
 import { ExecutionPhase } from './ExecutionPhase';
+import { MarketingMaturityTracker } from '../LifecycleTracker';
+import { marketingMaturityService } from '../../services/lifecycle-service';
+import type { MarketingMaturityHealth, MarketingMaturityEvent, MarketingCampaign } from '../../types';
 import { 
   ArrowLeft, Edit, Plus, Trash2, Upload, FileSpreadsheet,
   Calendar, Users, ClipboardList, CheckSquare, Star,
@@ -24,6 +27,10 @@ export const MarketingActivityDetail = ({ id }: ActivityDetailProps) => {
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<'arrangement' | 'execution' | 'evaluation'>('arrangement');
+
+  // 关系深度生命周期
+  const [maturityHealth, setMaturityHealth] = useState<MarketingMaturityHealth | null>(null);
+  const [maturityEvents, setMaturityEvents] = useState<MarketingMaturityEvent[]>([]);
 
   // 物料管理
   const [materials, setMaterials] = useState<any[]>([]);
@@ -72,6 +79,51 @@ export const MarketingActivityDetail = ({ id }: ActivityDetailProps) => {
         .eq('activity_id', activityId);
       if (!phasesData || phasesData.length === 0) {
         createDefaultPhases();
+      }
+
+      // 4支柱健康度评估
+      if (activityData) {
+        // 将 marketing_activities 转换为 MarketingCampaign 结构
+        const campaignLike: MarketingCampaign = {
+          id: activityData.id,
+          name: activityData.name,
+          type: (activityData.type as any) || 'vendor_self',
+          hostType: 'vendor',
+          year: new Date(activityData.start_date || activityData.created_at).getFullYear(),
+          quarter: `Q${Math.floor(new Date(activityData.start_date || activityData.created_at).getMonth() / 3) + 1}`,
+          category: activityData.activity_type,
+          region: activityData.region,
+          city: activityData.city,
+          budget: typeof activityData.budget === 'number' ? activityData.budget : 0,
+          actualSpend: typeof activityData.actual_cost === 'number' ? activityData.actual_cost : 0,
+          approvedAmount: typeof activityData.approved_budget === 'number' ? activityData.approved_budget : 0,
+          plannedStartDate: activityData.start_date,
+          plannedEndDate: activityData.end_date,
+          actualStartDate: activityData.actual_start_date,
+          actualEndDate: activityData.actual_end_date,
+          expectedAttendees: activityData.expected_attendees || activityData.guest_count_expected || 0,
+          actualAttendees: activityData.actual_attendees || activityData.attendance_count || 0,
+          registeredCount: guestsData ? guestsData.length : (activityData.registered_count || 0),
+          checkedInCount: activityData.checked_in_count || 0,
+          status: (activityData.status as any) || 'pending',
+          currentPhase: (activityData.phase as any) || 'planning',
+          partnerId: activityData.partner_id,
+          partnerName: activityData.partner_name,
+          responsiblePerson: activityData.responsible_person,
+          description: activityData.description,
+          hasEvaluation: !!activityData.evaluation_score,
+          leadsGenerated: activityData.leads_generated || 0,
+          dealsCreated: activityData.deals_created || 0,
+          dealsValue: activityData.deals_value || 0,
+          createdAt: activityData.created_at,
+          updatedAt: activityData.updated_at,
+        };
+        const [health, events] = await Promise.all([
+          marketingMaturityService.calculateHealth(activityData.id, campaignLike),
+          marketingMaturityService.getEvents(activityData.id),
+        ]);
+        setMaturityHealth(health);
+        setMaturityEvents(events);
       }
     } catch (e) {
       console.error('加载数据失败:', e);
@@ -544,6 +596,31 @@ export const MarketingActivityDetail = ({ id }: ActivityDetailProps) => {
       {activeTab === 'evaluation' && (
         <MarketingEvaluation activityId={activityId} activityName={activity.name} />
       )}
+
+      {/* 市场活动4阶段关系深度生命周期追踪 */}
+      <Card className="mt-6">
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Target className="w-5 h-5 text-purple-600" />
+              关系深度演进追踪 · 4支柱健康度
+            </div>
+            <div className="text-xs font-normal text-neutral-500">
+              {maturityHealth?.currentStage
+                ? `当前阶段：${maturityHealth.currentStage}（${maturityHealth.daysInCurrentStage}天） · 综合评分 ${maturityHealth.overallScore}`
+                : '暂无评估数据'}
+            </div>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <MarketingMaturityTracker
+            campaignName={activity?.name || '市场活动'}
+            maturityHealth={maturityHealth}
+            events={maturityEvents}
+            onStageClick={(stage) => console.log('[MarketingActivityDetail] stage clicked:', stage)}
+          />
+        </CardContent>
+      </Card>
     </div>
   );
 };

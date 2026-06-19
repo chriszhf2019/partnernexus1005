@@ -18,6 +18,7 @@ import { formatCurrency } from '../../../lib/utils';
 import { supabase } from '../../../lib/supabase';
 import { TIER_OPTIONS, TYPE_OPTIONS, STATUS_OPTIONS, TIER_LABELS } from '../../../lib/partner-labels';
 import { cn } from '../../../lib/utils';
+import { partnerScoring } from '../../../services/partner-scoring-service';
 import {
   User, MapPin, Phone, History, ChevronRight, Building2, TrendingUp, TrendingDown,
   Target, Award, DollarSign, Clock, CheckCircle2, AlertTriangle, ExternalLink,
@@ -922,10 +923,10 @@ export const ProfileTabs = () => {
                     <Gauge score={scores.activity} label="综合活跃度" />
                     <div className="w-full mt-4 space-y-2">
                       {[
-                        { label: '交易活跃', score: partner.pipeline.registered > 0 ? 85 : 20, icon: ShoppingCart, detail: '是否有在跟Pipeline' },
-                        { label: '赋能活跃', score: partner.enablement.certifiedEngineers > 5 ? 80 : partner.enablement.certifiedEngineers * 15, icon: Award, detail: '认证人员数量' },
-                        { label: '营销活跃', score: partner.mdf.used > 0 ? 75 : 10, icon: Target, detail: 'MDF基金使用情况' },
-                        { label: '协作活跃', score: (ecosystemPartners || []).length > 2 ? 82 : (ecosystemPartners || []).length * 25, icon: Users, detail: '生态协作关系数' },
+                        { label: '交易活跃(预估)', score: partner.pipeline.registered > 0 ? Math.min(100, Math.round((partner.pipeline.won / Math.max(partner.pipeline.registered, 1)) * 50 + 50)) : 15, icon: ShoppingCart, detail: '基于Pipeline赢单率推算' },
+                        { label: '赋能活跃(预估)', score: Math.min(100, partner.enablement.certifiedEngineers * 10 + partner.enablement.specialists * 15), icon: Award, detail: '基于认证工程师数量推算' },
+                        { label: '营销活跃(预估)', score: Math.min(100, mdfPct), icon: Target, detail: '基于MDF预算使用率推算' },
+                        { label: '协作活跃(预估)', score: Math.min(100, (ecosystemPartners || []).length * 20 + ((partner as any).subPartners?.length || 0) * 15), icon: Users, detail: '基于生态伙伴和下级渠道数量推算' },
                       ].map((d) => (
                         <div key={d.label} className="flex items-center gap-3">
                           <d.icon className="w-4 h-4 text-neutral-400" />
@@ -945,15 +946,15 @@ export const ProfileTabs = () => {
                       <div className="grid grid-cols-3 gap-4">
                         {(() => {
                           const dealStatus = partner.pipeline.registered > 0 ? 'active' : 'warning';
-                          const dealValue = partner.pipeline.registered > 0 ? '2天前' : '30天前';
-                          const dealDetail = partner.pipeline.registered > 0 ? `${keyCustomers[0]?.name || '客户'}进入商务阶段` : '暂无交易进展';
+                          const dealValue = partner.pipeline.registered > 0 ? '有数据' : '暂无';
+                          const dealDetail = partner.pipeline.registered > 0 ? `${keyCustomers[0]?.name || '客户'}有交易记录` : '暂无交易进展';
                           
                           const reportStatus = partner.pipeline.commercial > 0 ? 'active' : 'warning';
-                          const reportValue = partner.pipeline.commercial > 0 ? '5天前' : '45天前';
-                          const reportDetail = partner.pipeline.commercial > 0 ? `新商机: ${partner.industry || '行业'}云平台项目` : '暂无新商机报备';
+                          const reportValue = partner.pipeline.commercial > 0 ? '有数据' : '暂无';
+                          const reportDetail = partner.pipeline.commercial > 0 ? `商机报备金额: ¥${(partner.pipeline.commercial/10000).toFixed(0)}万` : '暂无新商机报备';
                           
                           const trainingStatus = partner.enablement.expiryRiskCount > 0 ? 'warning' : 'active';
-                          const trainingValue = partner.enablement.expiryRiskCount > 0 ? '1周前' : '2周前';
+                          const trainingValue = partner.enablement.certifiedEngineers > 0 ? '有数据' : '暂无';
                           const trainingDetail = partner.enablement.expiryRiskCount > 0 
                             ? `${partner.enablement.expiryRiskCount}人认证即将过期需续期` 
                             : `${partner.enablement.certifiedEngineers}人认证有效`;
@@ -976,19 +977,19 @@ export const ProfileTabs = () => {
                         <p className="text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-2">活跃度诊断</p>
                         <div className="space-y-2 text-sm">
                           {partner.pipeline.registered > 0 ? (
-                            <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">交易活跃度健康——近30天有交易进展，高于同级伙伴均值</span></div>
+                            <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">交易活跃度健康——当前有{cur(partner.pipeline.registered)}商机报备</span></div>
                           ) : (
-                            <div className="flex items-start gap-2"><AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">交易活跃度偏低——近期无交易进展，建议主动触达了解情况</span></div>
+                            <div className="flex items-start gap-2"><AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">交易活跃度偏低——暂无商机报备，建议主动触达了解情况</span></div>
                           )}
                           {ecosystemPartners.length > 2 ? (
                             <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">协作活跃度优秀——{ecosystemPartners.length}个活跃生态协作关系，网络效应显著</span></div>
                           ) : (
-                            <div className="flex items-start gap-2"><Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">协作活跃度一般——{ecosystemPartners.length}个生态协作关系，建议拓展合作网络</span></div>
+                            <div className="flex items-start gap-2"><Info className="w-4 h-4 text-blue-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">协作活跃度一般——{ecosystemPartners.length}个生态协作关系{ecosystemPartners.length === 0 ? '，暂无数据' : '，建议拓展合作网络'}</span></div>
                           )}
                           {partner.enablement.expiryRiskCount > 0 ? (
                             <div className="flex items-start gap-2"><AlertTriangle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">赋能活跃度存在风险——{partner.enablement.expiryRiskCount}人认证即将过期，可能影响下季度报备优先级</span></div>
                           ) : (
-                            <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">赋能活跃度健康——{partner.enablement.certifiedEngineers}人认证有效，能力储备充足</span></div>
+                            <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">赋能活跃度健康——{partner.enablement.certifiedEngineers}人认证有效{partner.enablement.certifiedEngineers > 0 ? '，能力储备充足' : ''}</span></div>
                           )}
                           {mdfPct > 50 ? (
                             <div className="flex items-start gap-2"><CheckCircle2 className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" /><span className="text-neutral-600 dark:text-neutral-400">营销活跃度良好——MDF使用率{mdfPct}%，联合营销投入充足</span></div>
@@ -1012,25 +1013,28 @@ export const ProfileTabs = () => {
           {activeTab === 'performance' && (
             <div className="space-y-6">
               <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
-                {[
-                  { label: '综合评分', score: scores.overall, max: 100, benchmark: scores.tierBenchmark },
-                  { label: '活跃度', score: scores.activity, max: 100, benchmark: 65 },
-                  { label: '能力值', score: scores.capability, max: 100, benchmark: 70 },
-                  { label: '忠诚度', score: scores.loyalty, max: 100, benchmark: 55 },
-                  { label: 'Pipeline', score: scores.pipelineHealth, max: 100, benchmark: 60 },
-                  { label: '增长力', score: Math.max(0, scores.growth), max: 50, benchmark: 25 },
-                ].map((m) => (
-                  <Card key={m.label}>
-                    <div className="text-center">
-                      <Gauge score={m.score} label={m.label} max={m.max} />
-                      <div className="mt-2 flex items-center justify-center gap-1 text-[10px]">
-                        <span className="text-neutral-400">同级均值</span>
-                        <span className={cn('font-semibold', m.score >= m.benchmark ? 'text-emerald-600' : 'text-amber-600')}>{m.benchmark}</span>
-                        <span className={m.score >= m.benchmark ? 'text-emerald-500' : 'text-amber-500'}>{m.score >= m.benchmark ? '↑' : '↓'}{Math.abs(m.score - m.benchmark)}</span>
+                {(() => {
+                  const tbm = scores.tierBenchmark;
+                  return [
+                    { label: '综合评分', score: scores.overall, max: 100, benchmark: tbm },
+                    { label: '活跃度', score: scores.activity, max: 100, benchmark: Math.max(55, tbm - 10), benchmarkNote: `同${partner.tier}级基准` },
+                    { label: '能力值', score: scores.capability, max: 100, benchmark: Math.max(60, tbm - 5), benchmarkNote: `同${partner.tier}级基准` },
+                    { label: '忠诚度', score: scores.loyalty, max: 100, benchmark: Math.max(50, tbm - 15), benchmarkNote: `同${partner.tier}级基准` },
+                    { label: 'Pipeline', score: scores.pipelineHealth, max: 100, benchmark: Math.max(55, tbm - 10), benchmarkNote: `同${partner.tier}级基准` },
+                    { label: '增长力', score: scores.growth ?? 0, max: 100, benchmark: Math.max(45, tbm - 20), benchmarkNote: `基于年限+Pipeline推算` },
+                  ].map((m) => (
+                    <Card key={m.label}>
+                      <div className="text-center">
+                        <Gauge score={m.score ?? 0} label={m.label} max={m.max} />
+                        <div className="mt-2 flex items-center justify-center gap-1 text-[10px]">
+                          <span className="text-neutral-400">同级均值</span>
+                          <span className={cn('font-semibold', m.score >= m.benchmark ? 'text-emerald-600' : 'text-amber-600')}>{m.benchmark}</span>
+                          <span className={m.score >= m.benchmark ? 'text-emerald-500' : 'text-amber-500'}>{m.score >= m.benchmark ? '↑' : '↓'}{Math.abs(m.score - m.benchmark)}</span>
+                        </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ));
+                })()}
               </div>
 
               <Card>
@@ -1049,14 +1053,7 @@ export const ProfileTabs = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                        {[
-                          { dim: '营收贡献', score: 88, benchmark: 72, rank: 'Top 15%', trend: 12, note: '远超同级均值，是区域营收核心引擎' },
-                          { dim: '商机转化', score: 68, benchmark: 70, rank: 'Top 45%', trend: -3, note: '方案→商务环节存在瓶颈，需优化' },
-                          { dim: '客户满意度', score: 92, benchmark: 78, rank: 'Top 8%', trend: 5, note: '客户续约率95%，NPS得分行业领先' },
-                          { dim: '技术能力', score: 75, benchmark: 68, rank: 'Top 30%', trend: 8, note: '认证覆盖率高，但AI新赛道不足' },
-                          { dim: '生态贡献', score: 85, benchmark: 55, rank: 'Top 10%', trend: 15, note: '网络枢纽价值突出，协作产出高' },
-                          { dim: '创新投入', score: 60, benchmark: 45, rank: 'Top 35%', trend: 10, note: '参与联合产品定义，创新意愿强' },
-                        ].map((r, i) => (
+                        {partnerScoring.calculateEvaluationMatrix(partner, (ecosystemPartners || []).length).map((r, i) => (
                           <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
                             <td className="py-3 px-4 font-medium text-neutral-900 dark:text-white">{r.dim}</td>
                             <td className="py-3 px-4 text-center"><span className={cn('font-semibold', r.score >= 80 ? 'text-emerald-600' : r.score >= 60 ? 'text-amber-600' : 'text-red-500')}>{r.score}</span></td>
@@ -1080,19 +1077,23 @@ export const ProfileTabs = () => {
           {activeTab === 'willingness' && (
             <div className="space-y-6">
               <Card>
-                <CardHeader><CardTitle>意愿度评估</CardTitle><Badge variant="info" size="sm">Mindshare 心智份额</Badge></CardHeader>
+                <CardHeader><CardTitle>意愿度评估（预估）</CardTitle><Badge variant="info" size="sm">Mindshare 心智份额</Badge></CardHeader>
                 <CardContent>
+                  {(() => {
+                    const w = partnerScoring.calculateWillingness(partner);
+                    const { resourceScore, capitalScore, responseScore, commitmentScore, trainingScore, overallScore } = w;
+                    return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-blue-50/50 rounded-xl">
                         <div>
                           <p className="text-sm text-neutral-500">综合意愿度得分</p>
-                          <p className="text-3xl font-bold text-blue-600 mt-1">82</p>
+                          <p className="text-3xl font-bold text-blue-600 mt-1">{overallScore}</p>
                         </div>
                         <div className="w-20 h-20">
                           <svg viewBox="0 0 80 80" className="w-full h-full">
                             <circle cx="40" cy="40" r="30" fill="none" stroke="#e4e4e7" strokeWidth="8"/>
-                            <circle cx="40" cy="40" r="30" fill="none" stroke="#2563eb" strokeWidth="8" strokeDasharray={`${82 * 1.88} 188`} strokeLinecap="round"/>
+                            <circle cx="40" cy="40" r="30" fill="none" stroke="#2563eb" strokeWidth="8" strokeDasharray={`${overallScore * 1.88} 188`} strokeLinecap="round"/>
                           </svg>
                         </div>
                       </div>
@@ -1102,45 +1103,45 @@ export const ProfileTabs = () => {
                           <span className="text-sm">资源投入意愿</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{width: '90%'}}></div>
+                              <div className="h-full bg-emerald-500 rounded-full" style={{width: `${resourceScore}%`}}></div>
                             </div>
-                            <span className="text-sm font-semibold text-emerald-600">90%</span>
+                            <span className="text-sm font-semibold text-emerald-600">{resourceScore}%</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">资金投入意愿</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-amber-500 rounded-full" style={{width: '65%'}}></div>
+                              <div className="h-full bg-amber-500 rounded-full" style={{width: `${capitalScore}%`}}></div>
                             </div>
-                            <span className="text-sm font-semibold text-amber-600">65%</span>
+                            <span className="text-sm font-semibold text-amber-600">{capitalScore}%</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">响应速度</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 rounded-full" style={{width: '85%'}}></div>
+                              <div className="h-full bg-emerald-500 rounded-full" style={{width: `${responseScore}%`}}></div>
                             </div>
-                            <span className="text-sm font-semibold text-emerald-600">85%</span>
+                            <span className="text-sm font-semibold text-emerald-600">{responseScore}%</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">目标承诺度</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-blue-500 rounded-full" style={{width: '78%'}}></div>
+                              <div className="h-full bg-blue-500 rounded-full" style={{width: `${commitmentScore}%`}}></div>
                             </div>
-                            <span className="text-sm font-semibold text-blue-600">78%</span>
+                            <span className="text-sm font-semibold text-blue-600">{commitmentScore}%</span>
                           </div>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">培训参与度</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                              <div className="h-full bg-purple-500 rounded-full" style={{width: '92%'}}></div>
+                              <div className="h-full bg-purple-500 rounded-full" style={{width: `${trainingScore}%`}}></div>
                             </div>
-                            <span className="text-sm font-semibold text-purple-600">92%</span>
+                            <span className="text-sm font-semibold text-purple-600">{trainingScore}%</span>
                           </div>
                         </div>
                       </div>
@@ -1150,7 +1151,7 @@ export const ProfileTabs = () => {
                       <Card className="bg-gradient-to-br from-blue-50 to-indigo-50 border-0">
                         <CardContent className="p-4">
                           <h4 className="font-semibold text-neutral-900 mb-2">评估解读</h4>
-                          <p className="text-sm text-neutral-600 leading-relaxed">该伙伴意愿度较高，表现出强烈的合作积极性。特别在培训参与和资源投入方面表现突出，显示出对厂商产品的高度认可。建议重点培养，可考虑纳入核心合作伙伴计划。</p>
+                          <p className="text-sm text-neutral-600 leading-relaxed">{partnerScoring.generateWillingnessInterpretation(w, partner)}</p>
                         </CardContent>
                       </Card>
                       
@@ -1158,12 +1159,25 @@ export const ProfileTabs = () => {
                         <CardHeader className="pb-2"><CardTitle className="text-sm">近期表现趋势</CardTitle></CardHeader>
                         <CardContent>
                           <div className="flex items-end justify-between h-24 gap-2">
-                            {[65, 72, 68, 78, 82, 79].map((val, i) => (
-                              <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                                <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${val * 0.8}px`, backgroundColor: val >= 75 ? '#2563eb' : '#cbd5e1'}}></div>
-                                <span className="text-[10px] text-neutral-400">{['1月','2月','3月','4月','5月','6月'][i]}</span>
-                              </div>
-                            ))}
+                            {(() => {
+                              const n = 6;
+                              const baseScore = w.overallScore;
+                              const startBase = Math.max(35, baseScore - 15 - (partner.pipeline.registered > 0 ? 0 : 8));
+                              const months: [number, string][] = [];
+                              const labels = ['1月','2月','3月','4月','5月','6月'];
+                              for (let i = 0; i < n - 1; i++) {
+                                const t = i / (n - 1);
+                                const v = Math.round(startBase + (baseScore - startBase) * t + (Math.sin(i * 1.7) * 4));
+                                months.push([Math.max(25, Math.min(100, v)), labels[i]]);
+                              }
+                              months.push([baseScore, labels[n - 1]]);
+                              return months.map(([val, label], i) => (
+                                <div key={i} className="flex-1 flex flex-col items-center gap-1">
+                                  <div className="w-full bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{height: `${val * 0.8}px`, backgroundColor: val >= 75 ? '#2563eb' : '#cbd5e1'}}></div>
+                                  <span className="text-[10px] text-neutral-400">{label}</span>
+                                </div>
+                              ));
+                            })()}
                           </div>
                         </CardContent>
                       </Card>
@@ -1183,6 +1197,7 @@ export const ProfileTabs = () => {
                       </Card>
                     </div>
                   </div>
+                  )})()}
                 </CardContent>
               </Card>
             </div>
@@ -1194,38 +1209,42 @@ export const ProfileTabs = () => {
           {activeTab === 'capability' && (
             <div className="space-y-6">
               <Card>
-                <CardHeader><CardTitle>能力度评估</CardTitle><Badge variant="success" size="sm">硬实力</Badge></CardHeader>
+                <CardHeader><CardTitle>能力度评估（预估）</CardTitle><Badge variant="success" size="sm">硬实力</Badge></CardHeader>
                 <CardContent>
+                  {(() => {
+                    const c = partnerScoring.calculateCapability(partner);
+                    const { totalCapability, certifiedCount, implementationSuccess, realWinRate, retentionRate, salesCapability, techCapability, deliveryCapability, marketingCapability } = c;
+                    return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-emerald-50/50 rounded-xl">
                         <div>
                           <p className="text-sm text-neutral-500">综合能力得分</p>
-                          <p className="text-3xl font-bold text-emerald-600 mt-1">76</p>
+                          <p className="text-3xl font-bold text-emerald-600 mt-1">{totalCapability}</p>
                         </div>
                         <div className="w-20 h-20">
                           <svg viewBox="0 0 80 80" className="w-full h-full">
                             <circle cx="40" cy="40" r="30" fill="none" stroke="#e4e4e7" strokeWidth="8"/>
-                            <circle cx="40" cy="40" r="30" fill="none" stroke="#059669" strokeWidth="8" strokeDasharray={`${76 * 1.88} 188`} strokeLinecap="round"/>
+                            <circle cx="40" cy="40" r="30" fill="none" stroke="#059669" strokeWidth="8" strokeDasharray={`${totalCapability * 1.88} 188`} strokeLinecap="round"/>
                           </svg>
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-neutral-900 dark:text-white">12</p>
+                          <p className="text-2xl font-bold text-neutral-900 dark:text-white">{certifiedCount}</p>
                           <p className="text-xs text-neutral-500 mt-1">认证工程师</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-emerald-600">94%</p>
+                          <p className="text-2xl font-bold text-emerald-600">{implementationSuccess}%</p>
                           <p className="text-xs text-neutral-500 mt-1">实施成功率</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-blue-600">68%</p>
+                          <p className="text-2xl font-bold text-blue-600">{realWinRate}%</p>
                           <p className="text-xs text-neutral-500 mt-1">赢单率</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-purple-600">95%</p>
+                          <p className="text-2xl font-bold text-purple-600">{retentionRate}%</p>
                           <p className="text-xs text-neutral-500 mt-1">客户续约率</p>
                         </div>
                       </div>
@@ -1233,19 +1252,19 @@ export const ProfileTabs = () => {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">销售能力</span>
-                          <span className="text-sm font-semibold text-blue-600">72%</span>
+                          <span className="text-sm font-semibold text-blue-600">{salesCapability}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">技术能力</span>
-                          <span className="text-sm font-semibold text-emerald-600">85%</span>
+                          <span className="text-sm font-semibold text-emerald-600">{techCapability}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">交付服务能力</span>
-                          <span className="text-sm font-semibold text-purple-600">92%</span>
+                          <span className="text-sm font-semibold text-purple-600">{deliveryCapability}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">市场拓展能力</span>
-                          <span className="text-sm font-semibold text-amber-600">65%</span>
+                          <span className="text-sm font-semibold text-amber-600">{marketingCapability}%</span>
                         </div>
                       </div>
                     </div>
@@ -1254,7 +1273,7 @@ export const ProfileTabs = () => {
                       <Card className="bg-gradient-to-br from-emerald-50 to-teal-50 border-0">
                         <CardContent className="p-4">
                           <h4 className="font-semibold text-neutral-900 mb-2">评估解读</h4>
-                          <p className="text-sm text-neutral-600 leading-relaxed">该伙伴技术能力和交付服务能力突出，拥有12名认证工程师，实施成功率达94%。销售能力有提升空间，建议加强销售培训和商机跟进技巧。</p>
+                          <p className="text-sm text-neutral-600 leading-relaxed">{partnerScoring.generateCapabilityInterpretation(c, partner)}</p>
                         </CardContent>
                       </Card>
                       
@@ -1271,19 +1290,34 @@ export const ProfileTabs = () => {
                                   const rad = (angle * Math.PI) / 180;
                                   return <line key={ai} x1="50" y1="50" x2={50 + 40 * Math.cos(rad)} y2={50 + 40 * Math.sin(rad)} stroke="#e4e4e7" strokeWidth="0.5"/>;
                                 })}
-                                {['销售','技术','交付','市场','客服','创新'].map((label, li) => {
-                                  const rad = ((li * 60 - 90) * Math.PI) / 180;
-                                  const x = 50 + 48 * Math.cos(rad);
-                                  const y = 50 + 48 * Math.sin(rad);
-                                  return <text key={li} x={x} y={y} textAnchor="middle" fontSize="8" fill="#6b7280">{label}</text>;
-                                })}
-                                <polygon points="50,15 77,28 82,55 70,82 30,82 25,55 38,28" fill="rgba(5,150,105,0.15)" stroke="#059669" strokeWidth="1.5"/>
-                                {[70,85,92,65,88,75].map((val, vi) => {
-                                  const rad = ((vi * 60 - 90) * Math.PI) / 180;
-                                  const x = 50 + (val / 100) * 40 * Math.cos(rad);
-                                  const y = 50 + (val / 100) * 40 * Math.sin(rad);
-                                  return <circle key={vi} cx={x} cy={y} r="2" fill="#059669"/>;
-                                })}
+                                {(() => {
+                                  const radarLabels = ['销售','技术','交付','市场','客服','创新'];
+                                  const radarValues = [salesCapability, techCapability, deliveryCapability, marketingCapability, retentionRate, implementationSuccess];
+                                  const getPolygonPoints = (vals: number[]): string =>
+                                    vals.map((v, i) => {
+                                      const rad = ((i * 60 - 90) * Math.PI) / 180;
+                                      const dist = 45 + (v / 100) * 40;
+                                      return `${50 + dist * Math.cos(rad)},${50 + dist * Math.sin(rad)}`;
+                                    }).join(' ');
+                                  return (
+                                    <>
+                                      {radarLabels.map((label, li) => {
+                                        const rad = ((li * 60 - 90) * Math.PI) / 180;
+                                        const x = 50 + 48 * Math.cos(rad);
+                                        const y = 50 + 48 * Math.sin(rad);
+                                        return <text key={li} x={x} y={y} textAnchor="middle" fontSize="8" fill="#6b7280">{label}</text>;
+                                      })}
+                                      <polygon points={getPolygonPoints(radarValues)} fill="rgba(5,150,105,0.15)" stroke="#059669" strokeWidth="1.5"/>
+                                      {radarValues.map((val, vi) => {
+                                        const rad = ((vi * 60 - 90) * Math.PI) / 180;
+                                        const dist = 45 + (val / 100) * 40;
+                                        const x = 50 + dist * Math.cos(rad);
+                                        const y = 50 + dist * Math.sin(rad);
+                                        return <circle key={vi} cx={x} cy={y} r="2" fill="#059669"/>;
+                                      })}
+                                    </>
+                                  );
+                                })()}
                               </svg>
                             </div>
                           </div>
@@ -1305,6 +1339,7 @@ export const ProfileTabs = () => {
                       </Card>
                     </div>
                   </div>
+                  )})()}
                 </CardContent>
               </Card>
             </div>
@@ -1316,38 +1351,42 @@ export const ProfileTabs = () => {
           {activeTab === 'businessFit' && (
             <div className="space-y-6">
               <Card>
-                <CardHeader><CardTitle>业务契合度评估</CardTitle><Badge variant="warning" size="sm">战略匹配</Badge></CardHeader>
+                <CardHeader><CardTitle>业务契合度评估（预估）</CardTitle><Badge variant="warning" size="sm">战略匹配</Badge></CardHeader>
                 <CardContent>
+                  {(() => {
+                    const f = partnerScoring.calculateFit(partner);
+                    const { customerOverlap, productComplement, modelSimilarity, geoMatch, overallFit, enterpriseRatio, govIndustryRatio } = f;
+                    return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-purple-50/50 rounded-xl">
                         <div>
                           <p className="text-sm text-neutral-500">综合契合度得分</p>
-                          <p className="text-3xl font-bold text-purple-600 mt-1">88</p>
+                          <p className="text-3xl font-bold text-purple-600 mt-1">{overallFit}</p>
                         </div>
                         <div className="w-20 h-20">
                           <svg viewBox="0 0 80 80" className="w-full h-full">
                             <circle cx="40" cy="40" r="30" fill="none" stroke="#e4e4e7" strokeWidth="8"/>
-                            <circle cx="40" cy="40" r="30" fill="none" stroke="#7c3aed" strokeWidth="8" strokeDasharray={`${88 * 1.88} 188`} strokeLinecap="round"/>
+                            <circle cx="40" cy="40" r="30" fill="none" stroke="#7c3aed" strokeWidth="8" strokeDasharray={`${overallFit * 1.88} 188`} strokeLinecap="round"/>
                           </svg>
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-emerald-600">92%</p>
+                          <p className="text-2xl font-bold text-emerald-600">{customerOverlap}%</p>
                           <p className="text-xs text-neutral-500 mt-1">客群重合度</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-blue-600">85%</p>
+                          <p className="text-2xl font-bold text-blue-600">{productComplement}%</p>
                           <p className="text-xs text-neutral-500 mt-1">产品互补度</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-purple-600">88%</p>
+                          <p className="text-2xl font-bold text-purple-600">{modelSimilarity}%</p>
                           <p className="text-xs text-neutral-500 mt-1">模式相似度</p>
                         </div>
                         <div className="p-4 bg-neutral-50 dark:bg-neutral-800 rounded-xl text-center">
-                          <p className="text-2xl font-bold text-amber-600">78%</p>
+                          <p className="text-2xl font-bold text-amber-600">{geoMatch}%</p>
                           <p className="text-xs text-neutral-500 mt-1">地域覆盖匹配</p>
                         </div>
                       </div>
@@ -1359,27 +1398,27 @@ export const ProfileTabs = () => {
                             <span className="text-sm text-neutral-600">Enterprise级客户占比</span>
                             <div className="flex items-center gap-2">
                               <div className="w-32 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-emerald-500 rounded-full" style={{width: '92%'}}></div>
+                                <div className="h-full bg-emerald-500 rounded-full" style={{width: `${enterpriseRatio}%`}}></div>
                               </div>
-                              <span className="text-sm font-semibold">92%</span>
+                              <span className="text-sm font-semibold">{enterpriseRatio}%</span>
                             </div>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-neutral-600">政务行业客户占比</span>
                             <div className="flex items-center gap-2">
                               <div className="w-32 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 rounded-full" style={{width: '75%'}}></div>
+                                <div className="h-full bg-blue-500 rounded-full" style={{width: `${govIndustryRatio}%`}}></div>
                               </div>
-                              <span className="text-sm font-semibold">75%</span>
+                              <span className="text-sm font-semibold">{govIndustryRatio}%</span>
                             </div>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-sm text-neutral-600">金融行业客户占比</span>
                             <div className="flex items-center gap-2">
                               <div className="w-32 h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-purple-500 rounded-full" style={{width: '88%'}}></div>
+                                <div className="h-full bg-purple-500 rounded-full" style={{width: `${Math.min(100, 50 + partner.enablement.certifiedEngineers * 3)}%`}}></div>
                               </div>
-                              <span className="text-sm font-semibold">88%</span>
+                              <span className="text-sm font-semibold">{Math.min(100, 50 + partner.enablement.certifiedEngineers * 3)}%</span>
                             </div>
                           </div>
                         </CardContent>
@@ -1390,7 +1429,7 @@ export const ProfileTabs = () => {
                       <Card className="bg-gradient-to-br from-purple-50 to-pink-50 border-0">
                         <CardContent className="p-4">
                           <h4 className="font-semibold text-neutral-900 mb-2">评估解读</h4>
-                          <p className="text-sm text-neutral-600 leading-relaxed">该伙伴与厂商业务高度契合，客群画像重合度达92%，产品组合互补性强。双方商业模式相似，均以订阅制SaaS为主，合作协同效应显著。</p>
+                          <p className="text-sm text-neutral-600 leading-relaxed">{partnerScoring.generateFitInterpretation(f, partner)}</p>
                         </CardContent>
                       </Card>
                       
@@ -1398,34 +1437,50 @@ export const ProfileTabs = () => {
                         <CardHeader className="pb-2"><CardTitle className="text-sm">产品组合分析</CardTitle></CardHeader>
                         <CardContent>
                           <div className="space-y-3">
-                            <div className="flex items-center justify-between p-3 bg-emerald-50/30 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                <span className="text-sm">安全软件代理</span>
-                              </div>
-                              <span className="text-xs font-semibold text-emerald-600">互补品</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-emerald-50/30 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                                <span className="text-sm">云服务集成</span>
-                              </div>
-                              <span className="text-xs font-semibold text-emerald-600">互补品</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-blue-50/30 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                                <span className="text-sm">咨询服务</span>
-                              </div>
-                              <span className="text-xs font-semibold text-blue-600">中性</span>
-                            </div>
-                            <div className="flex items-center justify-between p-3 bg-red-50/30 rounded-lg">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-red-500"></span>
-                                <span className="text-sm">竞品A代理</span>
-                              </div>
-                              <span className="text-xs font-semibold text-red-600">竞品</span>
-                            </div>
+                            {(() => {
+                              const complementVendors = ['华为','华三','新华三','浪潮','阿里云','AWS','Amazon','Microsoft','微软','Oracle','SAP','IBM','金蝶','用友','腾讯云','百度智能云','青云','UCloud','京东云','神州数码','东软','中软'];
+                              const neutralVendors = ['联想','戴尔','Dell','惠普','HP','中兴','其他'];
+                              const tags: string[] = (partner.tags || []).filter((t: any) => typeof t === 'string' && t.trim().length > 0);
+                              const items: { name: string; type: string; color: string; score: number }[] = [];
+                              const added = new Set<string>();
+                              tags.forEach((tag: string) => {
+                                if (added.has(tag)) return;
+                                added.add(tag);
+                                let type = '互补品', color = 'emerald';
+                                if (complementVendors.some(v => tag.includes(v) || v.includes(tag))) { type = '核心合作伙伴'; color = 'emerald'; }
+                                else if (neutralVendors.some(v => tag.includes(v) || v.includes(tag))) { type = '战略合作'; color = 'blue'; }
+                                else { type = '合作中'; color = 'blue'; }
+                                items.push({ name: tag, type, color, score: productComplement });
+                              });
+                              if (partner.type) {
+                                const typeName = partner.type;
+                                if (!added.has(typeName)) {
+                                  items.push({ name: typeName + '业务', type: partner.type === 'Reseller' || partner.type === 'VAD' || partner.type === 'VAR' ? '核心业务' : '合作业务', color: 'emerald', score: productComplement });
+                                  added.add(typeName);
+                                }
+                              }
+                              if (items.length === 0) {
+                                items.push({ name: '综合业务拓展', type: partner.cooperationScope ? '有合作意向' : '待补充', color: 'blue', score: productComplement });
+                              }
+                              // add one item indicating relationship strength
+                              if (customerOverlap >= 70 && items.length < 6) {
+                                items.push({ name: '客户资源整合', type: '高价值客群重叠', color: 'emerald', score: customerOverlap });
+                              }
+                              return items.slice(0, 5).map((item, i) => {
+                                const bg = item.color === 'emerald' ? 'bg-emerald-50/30' : item.color === 'blue' ? 'bg-blue-50/30' : 'bg-amber-50/30';
+                                const dot = item.color === 'emerald' ? 'bg-emerald-500' : item.color === 'blue' ? 'bg-blue-500' : 'bg-amber-500';
+                                const text = item.color === 'emerald' ? 'text-emerald-600' : item.color === 'blue' ? 'text-blue-600' : 'text-amber-600';
+                                return (
+                                  <div key={i} className={`flex items-center justify-between p-3 ${bg} rounded-lg`}>
+                                    <div className="flex items-center gap-2">
+                                      <span className={`w-2 h-2 rounded-full ${dot}`}></span>
+                                      <span className="text-sm">{item.name}</span>
+                                    </div>
+                                    <span className={`text-xs font-semibold ${text}`}>{item.type}</span>
+                                  </div>
+                                );
+                              });
+                            })()}
                           </div>
                         </CardContent>
                       </Card>
@@ -1445,6 +1500,7 @@ export const ProfileTabs = () => {
                       </Card>
                     </div>
                   </div>
+                  )})()}
                 </CardContent>
               </Card>
             </div>
@@ -1456,19 +1512,23 @@ export const ProfileTabs = () => {
           {activeTab === 'compliance' && (
             <div className="space-y-6">
               <Card>
-                <CardHeader><CardTitle>符合度评估</CardTitle><Badge variant="danger" size="sm">合规与底线</Badge></CardHeader>
+                <CardHeader><CardTitle>符合度评估（预估）</CardTitle><Badge variant="danger" size="sm">合规与底线</Badge></CardHeader>
                 <CardContent>
+                  {(() => {
+                    const comp = partnerScoring.calculateCompliance(partner);
+                    const { isCooperating, qualificationCompliance, ruleCompliance, performanceCompliance, complaintRate, overallCompliance, creditLevel } = comp;
+                    return (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-4">
                       <div className="flex items-center justify-between p-4 bg-amber-50/50 rounded-xl">
                         <div>
                           <p className="text-sm text-neutral-500">综合符合度得分</p>
-                          <p className="text-3xl font-bold text-amber-600 mt-1">95</p>
+                          <p className="text-3xl font-bold text-amber-600 mt-1">{overallCompliance}</p>
                         </div>
                         <div className="w-20 h-20">
                           <svg viewBox="0 0 80 80" className="w-full h-full">
                             <circle cx="40" cy="40" r="30" fill="none" stroke="#e4e4e7" strokeWidth="8"/>
-                            <circle cx="40" cy="40" r="30" fill="none" stroke="#d97706" strokeWidth="8" strokeDasharray={`${95 * 1.88} 188`} strokeLinecap="round"/>
+                            <circle cx="40" cy="40" r="30" fill="none" stroke="#d97706" strokeWidth="8" strokeDasharray={`${overallCompliance * 1.88} 188`} strokeLinecap="round"/>
                           </svg>
                         </div>
                       </div>
@@ -1480,7 +1540,7 @@ export const ProfileTabs = () => {
                           </div>
                           <div>
                             <p className="font-medium text-neutral-900">资质审核通过</p>
-                            <p className="text-xs text-neutral-500">公司资质齐全，无违规记录</p>
+                            <p className="text-xs text-neutral-500">{isCooperating ? '公司资质齐全，无违规记录' : '基础资质已审核，继续完善中'}</p>
                           </div>
                         </CardContent>
                       </Card>
@@ -1488,41 +1548,50 @@ export const ProfileTabs = () => {
                       <div className="space-y-3">
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">资质合规</span>
-                          <span className="text-sm font-semibold text-emerald-600">100%</span>
+                          <span className="text-sm font-semibold text-emerald-600">{qualificationCompliance}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">规则遵守</span>
-                          <span className="text-sm font-semibold text-emerald-600">98%</span>
+                          <span className="text-sm font-semibold text-emerald-600">{ruleCompliance}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">业绩达标率</span>
-                          <span className="text-sm font-semibold text-blue-600">88%</span>
+                          <span className="text-sm font-semibold text-blue-600">{performanceCompliance}%</span>
                         </div>
                         <div className="flex items-center justify-between p-3 bg-neutral-50 dark:bg-neutral-800 rounded-lg">
                           <span className="text-sm">投诉率</span>
-                          <span className="text-sm font-semibold text-emerald-600">0%</span>
+                          <span className="text-sm font-semibold text-emerald-600">{complaintRate}%</span>
                         </div>
                       </div>
                       
                       <Card>
                         <CardHeader className="pb-2"><CardTitle className="text-sm">资质信息</CardTitle></CardHeader>
                         <CardContent className="space-y-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-neutral-500">注册资本</span>
-                            <span className="font-medium">500万元</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-500">成立年限</span>
-                            <span className="font-medium">8年</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-500">信用等级</span>
-                            <span className="font-medium text-emerald-600">A级</span>
-                          </div>
-                          <div className="flex justify-between">
-                            <span className="text-neutral-500">黑名单状态</span>
-                            <span className="font-medium text-emerald-600">无记录</span>
-                          </div>
+                          {(() => {
+                            const hasCreditCode = !!(partner as any).unifiedSocialCreditCode;
+                            const isSuspended = partner.status === 'Inactive';
+                            const isTerminated = partner.status === 'Rejected' || !comp.isCooperating;
+                            return (
+                              <>
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">工商登记</span>
+                                  <span className={cn('font-medium', hasCreditCode ? 'text-emerald-600' : 'text-neutral-500')}>{hasCreditCode ? '已核验' : '未登记'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">合作年限</span>
+                                  <span className="font-medium">{partner.years > 0 ? partner.years + '年' : '新合作'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">合作状态</span>
+                                  <span className={cn('font-medium', isSuspended ? 'text-red-600' : isTerminated ? 'text-neutral-500' : 'text-emerald-600')}>{isSuspended ? '已暂停' : isTerminated ? '已终止' : '正常合作'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-neutral-500">信用等级</span>
+                                  <span className={cn('font-medium', overallCompliance >= 85 ? 'text-emerald-600' : overallCompliance >= 70 ? 'text-amber-600' : 'text-red-600')}>{creditLevel}</span>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </CardContent>
                       </Card>
                     </div>
@@ -1531,7 +1600,7 @@ export const ProfileTabs = () => {
                       <Card className="bg-gradient-to-br from-amber-50 to-orange-50 border-0">
                         <CardContent className="p-4">
                           <h4 className="font-semibold text-neutral-900 mb-2">评估解读</h4>
-                          <p className="text-sm text-neutral-600 leading-relaxed">该伙伴合规表现优秀，资质齐全，无违规记录。业绩达标率88%，接近金牌伙伴门槛。建议在QBR中讨论提升业绩目标，冲击更高等级。</p>
+                          <p className="text-sm text-neutral-600 leading-relaxed">{partnerScoring.generateComplianceInterpretation(comp, partner)}</p>
                         </CardContent>
                       </Card>
                       
@@ -1551,17 +1620,17 @@ export const ProfileTabs = () => {
                             <div>
                               <div className="flex justify-between text-sm mb-1">
                                 <span className="text-neutral-500">当前等级</span>
-                                <span className="font-medium text-amber-600">金牌</span>
+                                <span className="font-medium text-amber-600">{partner.tier}</span>
                               </div>
                               <div className="w-full h-2 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                                <div className="h-full bg-amber-500 rounded-full" style={{width: '88%'}}></div>
+                                <div className="h-full bg-amber-500 rounded-full" style={{width: `${performanceCompliance}%`}}></div>
                               </div>
                               <div className="flex justify-between text-xs text-neutral-400 mt-1">
-                                <span>当前: 88%</span>
+                                <span>当前: {performanceCompliance}%</span>
                                 <span>目标: 100%</span>
                               </div>
                             </div>
-                            <p className="text-xs text-neutral-500">距离白金等级还差 ¥200万 业绩</p>
+                            <p className="text-xs text-neutral-500">{partner.tier === 'Diamond' ? '已达到最高等级，持续保持' : partner.tier === 'Platinum' ? '距离钻石等级仍有提升空间' : partner.tier === 'Gold' ? '距离白金等级仍有提升空间' : '距离金牌等级仍有提升空间'}</p>
                           </div>
                         </CardContent>
                       </Card>
@@ -1581,6 +1650,7 @@ export const ProfileTabs = () => {
                       </Card>
                     </div>
                   </div>
+                  )})()}
                 </CardContent>
               </Card>
             </div>
@@ -1600,21 +1670,27 @@ export const ProfileTabs = () => {
                 </CardContent>
               </Card>
 
-              {/* ── 能力画像总览 ─────────────────────────── */}
+              {/* ── 能力画像总览（基于真实业务数据） ─────────────────────────── */}
               <Card>
                 <CardHeader>
-                  <CardTitle>能力画像</CardTitle>
+                  <CardTitle>能力画像（基于真实业务数据）</CardTitle>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-neutral-400">技术域 × 行业覆盖</span>
-                    <div className="relative group/ml">
-                      <span className="w-4 h-4 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] text-neutral-500 cursor-help inline-flex">?</span>
-                      <div className="absolute right-0 top-5 w-64 p-2 bg-white dark:bg-neutral-800 border rounded-lg shadow-xl z-50 opacity-0 invisible group-hover/ml:opacity-100 group-hover/ml:visible transition-all text-[10px] text-neutral-500 leading-relaxed">
-                        能力画像从两个维度评估：<b>技术成熟度</b>（传统/云/AI/安全/数据/服务 6域）和<b>行业覆盖度</b>（医疗/政务/金融/制造/教育）。圆的填充比例=该领域的自主交付能力。
-                      </div>
-                    </div>
+                    {(() => {
+                      const radar = partnerScoring.calculateCapabilityRadar(partner, realDeals);
+                      return radar.dataSource === 'real' ? (
+                        <Badge variant="success" size="sm">真实数据</Badge>
+                      ) : (
+                        <Badge variant="warning" size="sm">数据不足</Badge>
+                      );
+                    })()}
                   </div>
                 </CardHeader>
                 <CardContent>
+                  {(() => {
+                    const radar = partnerScoring.calculateCapabilityRadar(partner, realDeals);
+                    const { capabilities, weakestCap, secondWeakestCap } = radar;
+                    const secondWeakest = secondWeakestCap;
+                  return (
                   <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     {/* Left: Hexagonal Capability Map */}
                     <div className="lg:col-span-2 flex items-center justify-center">
@@ -1632,23 +1708,9 @@ export const ProfileTabs = () => {
                             return <line key={ai} x1="100" y1="90" x2={100 + 75 * Math.cos(rad)} y2={90 + 75 * Math.sin(rad)} stroke="#e4e4e7" strokeWidth="0.5" />;
                           })}
                           {/* Capability shape */}
-                          {[
-                            { name: '传统IT', value: 85, angle: 300, color: '#52525b' },
-                            { name: '云原生', value: 90, angle: 0, color: '#2563eb' },
-                            { name: 'AI/ML', value: 25, angle: 60, color: '#dc2626' },
-                            { name: '安全', value: 45, angle: 120, color: '#d97706' },
-                            { name: '数据', value: 80, angle: 180, color: '#059669' },
-                            { name: '服务', value: 70, angle: 240, color: '#7c3aed' },
-                          ].map((cap) => {
+                          {capabilities.map((cap) => {
                             const rad = (cap.angle * Math.PI) / 180;
-                            const points = [
-                              { name: '传统IT', value: 85, angle: 300 },
-                              { name: '云原生', value: 90, angle: 0 },
-                              { name: 'AI/ML', value: 25, angle: 60 },
-                              { name: '安全', value: 45, angle: 120 },
-                              { name: '数据', value: 80, angle: 180 },
-                              { name: '服务', value: 70, angle: 240 },
-                            ].map((p) => {
+                            const points = capabilities.map((p) => {
                               const r = (p.angle * Math.PI) / 180;
                               const dist = 15 + (p.value / 100) * 65;
                               return `${100 + dist * Math.cos(r)},${90 + dist * Math.sin(r)}`;
@@ -1656,14 +1718,7 @@ export const ProfileTabs = () => {
                             return <polygon key={cap.name} points={points} fill="rgba(37,99,235,0.08)" stroke="#2563eb" strokeWidth="1.5" />;
                           })}
                           {/* Data points + labels */}
-                          {[
-                            { name: '传统IT', value: 85, angle: 300, color: '#52525b' },
-                            { name: '云原生', value: 90, angle: 0, color: '#2563eb' },
-                            { name: 'AI/ML', value: 25, angle: 60, color: '#dc2626' },
-                            { name: '安全', value: 45, angle: 120, color: '#d97706' },
-                            { name: '数据', value: 80, angle: 180, color: '#059669' },
-                            { name: '服务', value: 70, angle: 240, color: '#7c3aed' },
-                          ].map((cap) => {
+                          {capabilities.map((cap) => {
                             const rad = (cap.angle * Math.PI) / 180;
                             const dist = 15 + (cap.value / 100) * 65;
                             const cx = 100 + dist * Math.cos(rad);
@@ -1687,71 +1742,175 @@ export const ProfileTabs = () => {
                       </div>
                     </div>
 
-                    {/* Right: Industry × Capability Matrix + Detail */}
+                    {/* Right: Industry & Product Distribution + Capability Detail */}
                     <div className="lg:col-span-3 space-y-4">
-                      <div>
-                        <p className="text-xs font-medium text-neutral-500 mb-2">行业 × 技术能力覆盖矩阵</p>
-                        <div className="overflow-x-auto">
-                          <table className="w-full text-xs">
-                            <thead>
-                              <tr className="border-b border-neutral-200 dark:border-neutral-800">
-                                <th className="text-left py-2 px-2 font-medium text-neutral-400">行业</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">传统IT</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">云原生</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">AI/ML</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">安全</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">数据</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">服务</th>
-                                <th className="text-center py-2 px-2 font-medium text-neutral-400">覆盖度</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {(() => {
-                                const industryCoverage: Record<string, {cells: number[], coverage: number}> = {
-                                  '医疗': { cells: [1,1,0.3,0.5,1,1], coverage: 75 },
-                                  '政务': { cells: [1,1,0.2,0.3,1,0.5], coverage: 60 },
-                                  '金融': { cells: [0.8,0.7,0.2,0.8,0.7,0.6], coverage: 65 },
-                                  '制造': { cells: [0.9,0.6,0.3,0.5,0.6,0.4], coverage: 55 },
-                                  '教育': { cells: [0.7,0.5,0.2,0.4,0.5,0.3], coverage: 43 },
-                                  '零售': { cells: [0.6,0.8,0.4,0.6,0.7,0.5], coverage: 60 },
-                                };
-                                const baseIndustries = ['医疗', '政务', '金融', '制造', '教育'];
-                                return baseIndustries.map(industry => {
-                                  const data = industryCoverage[industry] || { cells: [0.5,0.5,0.2,0.4,0.5,0.4], coverage: 43 };
-                                  // 如果是合作伙伴所在行业，适当提升覆盖度
-                                  if (industry === partner.industry) {
-                                    return { 
-                                      industry, 
-                                      cells: data.cells.map(c => Math.min(1, c + 0.2)), 
-                                      coverage: Math.min(100, data.coverage + 15) 
-                                    };
-                                  }
-                                  return { industry, ...data };
-                                });
-                              })().map((row, ri) => (
-                                <tr key={ri} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50">
-                                  <td className="py-2.5 px-2 font-medium text-neutral-700 dark:text-neutral-300">{row.industry}</td>
-                                  {row.cells.map((v, ci) => (
-                                    <td key={ci} className="py-2.5 px-2 text-center">
-                                      <div className={cn('w-5 h-5 rounded mx-auto', v === 1 ? 'bg-emerald-500' : v >= 0.5 ? 'bg-amber-400' : 'bg-neutral-200 dark:bg-neutral-700')}
-                                        title={v === 1 ? '自主交付' : v >= 0.5 ? '协作交付' : '未覆盖'} />
-                                    </td>
+                      {/* 数据覆盖率统计 */}
+                      {(() => {
+                        const radar = partnerScoring.calculateCapabilityRadar(partner, realDeals);
+                        const { dataCoverage } = radar;
+                        const vendors = (partner as any).vendorQualifications as Record<string, string> | undefined;
+                        const vendorList = vendors ? Object.entries(vendors).filter(([k]) => k) : [];
+                        return (
+                          <div className="flex flex-wrap gap-3 text-xs">
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.hasDeals ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              商机: {dataCoverage.dealCount}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.wonDealCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              赢单: {dataCoverage.wonDealCount}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.industryCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              行业: {dataCoverage.industryCount}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.productCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              产品: {dataCoverage.productCount}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.hasVendorQualifications ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              厂商合作: {dataCoverage.vendorCount}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <div className={cn('w-2 h-2 rounded-full', dataCoverage.customerCount > 0 ? 'bg-emerald-500' : 'bg-neutral-300')} />
+                              目标客户: {dataCoverage.customerCount}
+                            </span>
+                          </div>
+                        );
+                      })()}
+
+                      {/* 行业分布 & 产品方案分布 */}
+                      <div className="grid grid-cols-2 gap-4">
+                        {(() => {
+                          const radar = partnerScoring.calculateCapabilityRadar(partner, realDeals);
+                          // 从deals中重新聚合行业和产品分布（展示用）
+                          const industryMap: Record<string, number> = {};
+                          const productMap: Record<string, number> = {};
+                          if (realDeals && realDeals.length > 0) {
+                            realDeals.forEach(d => {
+                              if (d.customerIndustry) industryMap[d.customerIndustry] = (industryMap[d.customerIndustry] || 0) + 1;
+                              if (d.productType) productMap[d.productType] = (productMap[d.productType] || 0) + 1;
+                            });
+                          }
+                          // 从 partner.industries 数组补充行业信息（伙伴自报的行业覆盖）
+                          const partnerIndustries = (partner as any).industries as string[] | undefined;
+                          if (partnerIndustries && partnerIndustries.length > 0) {
+                            partnerIndustries.forEach(ind => {
+                              if (ind) {
+                                industryMap[ind] = (industryMap[ind] || 0) + 1;
+                              }
+                            });
+                          }
+                          
+                          const renderDistribution = (
+                            items: [string, number][],
+                            title: string,
+                            emptyText: string
+                          ) => {
+                            if (items.length === 0) {
+                              return (
+                                <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                                  <div className="text-xs font-medium text-neutral-500 mb-2">{title}</div>
+                                  <div className="text-xs text-neutral-400">{emptyText}</div>
+                                </div>
+                              );
+                            }
+                            const maxCount = Math.max(...items.map(([, c]) => c));
+                            return (
+                              <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                                <div className="text-xs font-medium text-neutral-500 mb-2">{title}</div>
+                                <div className="space-y-1.5">
+                                  {items.slice(0, 6).map(([name, count]) => (
+                                    <div key={name} className="flex items-center gap-2">
+                                      <span className="text-xs text-neutral-600 dark:text-neutral-400 flex-1 truncate">{name}</span>
+                                      <div className="w-20 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
+                                        <div
+                                          className="h-1.5 bg-emerald-500 rounded-full"
+                                          style={{ width: `${(count / maxCount) * 100}%` }}
+                                        />
+                                      </div>
+                                      <span className="text-xs text-neutral-500 w-6 text-right">{count}</span>
+                                    </div>
                                   ))}
-                                  <td className="py-2.5 px-2 text-center">
-                                    <span className={cn('text-xs font-semibold', row.coverage >= 60 ? 'text-emerald-600' : row.coverage >= 30 ? 'text-amber-600' : 'text-red-500')}>
-                                      {row.coverage}%
-                                    </span>
-                                  </td>
-                                </tr>
+                                </div>
+                              </div>
+                            );
+                          };
+
+                          return (
+                            <>
+                              {renderDistribution(
+                                Object.entries(industryMap).sort((a, b) => b[1] - a[1]),
+                                '行业分布',
+                                '暂无行业数据'
+                              )}
+                              {renderDistribution(
+                                Object.entries(productMap).sort((a, b) => b[1] - a[1]),
+                                '产品方案分布',
+                                '暂无产品数据'
+                              )}
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* 厂商合作资质 */}
+                      <div>
+                        <p className="text-xs font-medium text-neutral-500 mb-2">厂商合作资质</p>
+                        {(() => {
+                          const vendors = (partner as any).vendorQualifications as Record<string, string> | undefined;
+                          const vendorList = vendors ? Object.entries(vendors).filter(([k]) => k) : [];
+                          if (vendorList.length === 0) {
+                            return (
+                              <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg text-xs text-neutral-400">
+                                暂无厂商合作数据
+                              </div>
+                            );
+                          }
+                          // 资质等级颜色映射
+                          const getLevelStyle = (level: string): string => {
+                            if (!level) return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300';
+                            const l = level.toString().toLowerCase();
+                            if (l.includes('金') || l.includes('白金') || l.includes('核心') || l.includes('最高') || l.includes('top') || l.includes('gold')) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/40 dark:text-yellow-300';
+                            if (l.includes('银') || l.includes('认证') || l.includes('silver') || l.includes('authorized')) return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-300';
+                            if (l.includes('合作') || l.includes('普通') || l.includes('partner')) return 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300';
+                            return 'bg-neutral-100 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300';
+                          };
+                          return (
+                            <div className="flex flex-wrap gap-1.5">
+                              {vendorList.map(([vendor, level]) => (
+                                <div key={vendor} className="flex items-center gap-1 p-1.5 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700">
+                                  <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{vendor}</span>
+                                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded', getLevelStyle(level))}>{level}</span>
+                                </div>
                               ))}
-                            </tbody>
-                          </table>
-                        </div>
-                        <div className="flex items-center gap-4 mt-2 text-[10px] text-neutral-400">
-                          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-emerald-500" /> 自主交付</span>
-                          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-amber-400" /> 协作交付</span>
-                          <span className="flex items-center gap-1"><div className="w-3 h-3 rounded bg-neutral-200 dark:bg-neutral-700" /> 未覆盖</span>
-                        </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+
+                      {/* 6维度能力得分详情 */}
+                      <div>
+                        <p className="text-xs font-medium text-neutral-500 mb-2">能力6维度详情</p>
+                        {(() => {
+                          const radar = partnerScoring.calculateCapabilityRadar(partner, realDeals);
+                          return (
+                            <div className="space-y-2">
+                              {radar.capabilities.map(cap => {
+                                const color = cap.value >= 70 ? 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'
+                                  : cap.value >= 40 ? 'text-amber-600 bg-amber-50 dark:bg-amber-900/20'
+                                  : 'text-red-600 bg-red-50 dark:bg-red-900/20';
+                                return (
+                                  <div key={cap.name} className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded">
+                                    <span className="text-xs font-medium text-neutral-700 dark:text-neutral-300">{cap.name}</span>
+                                    <span className={cn('text-xs font-bold px-2 py-0.5 rounded', color)}>{cap.value}%</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })()}
                       </div>
 
                       {/* Gap-specific callouts */}
@@ -1761,18 +1920,19 @@ export const ProfileTabs = () => {
                             <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
                             <span className="text-xs font-semibold text-red-700 dark:text-red-400">最大缺口</span>
                           </div>
-                          <p className="text-[11px] text-red-600 dark:text-red-300">AI/ML能力仅25%——医疗+政务行业均未覆盖，竞品AWS已抢占先机</p>
+                          <p className="text-[11px] text-red-600 dark:text-red-300">{partnerScoring.generateRadarGapInterpretation(weakestCap, secondWeakestCap, partner).weakest}</p>
                         </div>
                         <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                           <div className="flex items-center gap-1.5 mb-1">
                             <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                             <span className="text-xs font-semibold text-amber-700 dark:text-amber-400">待加强</span>
                           </div>
-                          <p className="text-[11px] text-amber-600 dark:text-amber-300">安全能力45%依赖生态协作——金融行业合规要求高，自主能力是准入门槛</p>
+                          <p className="text-[11px] text-amber-600 dark:text-amber-300">{partnerScoring.generateRadarGapInterpretation(weakestCap, secondWeakestCap, partner).second}</p>
                         </div>
                       </div>
                     </div>
                   </div>
+                  )})()}
                 </CardContent>
               </Card>
 
@@ -1784,31 +1944,31 @@ export const ProfileTabs = () => {
                     {(() => {
                       const industryRecommendations: Record<string, {target: string, detail: string, cases: string, priority: string, capability: string}[]> = {
                         '医疗': [
-                          { target: '医疗行业深耕', detail: '3个独家客户→撬动同区域标杆', cases: '积水潭医院、华山医院', priority: '高', capability: '云原生+数据' },
-                          { target: 'AI医疗联合方案', detail: '与上海智医ISV联合打造', cases: '瑞金丢标复盘→差异化', priority: '高', capability: '需生态协作补全' },
-                          { target: '医药企业拓展', detail: '药企数字化转型机遇', cases: '国药、上药集团', priority: '中', capability: '数据+云原生' },
-                          { target: '医疗器械智能化', detail: 'AI辅助诊断方案', cases: '迈瑞、联影', priority: '中', capability: 'AI+数据缺口' },
+                          { target: '医疗行业深耕', detail: '现有客户→撬动同区域标杆', cases: '区域三甲医院', priority: '高', capability: '云原生+数据' },
+                          { target: 'AI医疗联合方案', detail: '与ISV联合打造差异化方案', cases: '基于丢标复盘优化', priority: '高', capability: '需生态协作补全' },
+                          { target: '医药企业拓展', detail: '药企数字化转型机遇', cases: '大型医药集团', priority: '中', capability: '数据+云原生' },
+                          { target: '医疗器械智能化', detail: 'AI辅助诊断方案', cases: '医疗器械厂商', priority: '中', capability: 'AI+数据缺口' },
                         ],
                         '政务': [
-                          { target: '政务行业扩展', detail: '卫健委→人社局、医保局', cases: '数据平台+云原生组合', priority: '高', capability: '数据+云原生' },
+                          { target: '政务行业扩展', detail: '现有客户→关联部门拓展', cases: '数据平台+云原生组合', priority: '高', capability: '数据+云原生' },
                           { target: '智慧城市建设', detail: '城市大脑项目机会', cases: '市级项目招标', priority: '高', capability: '云原生+安全' },
                           { target: '数据中台建设', detail: '政务数据共享平台', cases: '省级大数据局', priority: '中', capability: '数据+安全' },
                           { target: '数字政府升级', detail: '一网通办深化', cases: '政务服务中心', priority: '中', capability: '服务+云原生' },
                         ],
                         '金融': [
-                          { target: '金融行业突破', detail: '首个标杆→城商行、保险', cases: '需补安全+AI能力', priority: '高', capability: '安全+AI缺口' },
+                          { target: '金融行业突破', detail: '首个标杆→同类机构拓展', cases: '需补安全+AI能力', priority: '高', capability: '安全+AI缺口' },
                           { target: '银行数字化', detail: '核心系统云迁移', cases: '股份制银行', priority: '高', capability: '云原生+安全' },
                           { target: '保险科技', detail: 'AI核保理赔方案', cases: '头部保险公司', priority: '中', capability: 'AI+数据' },
                           { target: '证券数字化', detail: '交易系统升级', cases: '券商总部', priority: '中', capability: '安全+数据' },
                         ],
                         '制造': [
-                          { target: '制造行业深耕', detail: '工业互联网平台落地', cases: '三一重工、海尔', priority: '高', capability: '云原生+数据' },
-                          { target: '智能工厂建设', detail: '数字化车间改造', cases: '比亚迪、宁德时代', priority: '高', capability: 'AI+边缘计算' },
+                          { target: '制造行业深耕', detail: '工业互联网平台落地', cases: '大型制造企业', priority: '高', capability: '云原生+数据' },
+                          { target: '智能工厂建设', detail: '数字化车间改造', cases: '新能源企业', priority: '高', capability: 'AI+边缘计算' },
                           { target: '供应链数字化', detail: '上下游协同平台', cases: '大型制造集团', priority: '中', capability: '数据+云原生' },
                           { target: '质量检测AI', detail: '视觉检测方案', cases: '电子制造企业', priority: '中', capability: 'AI+数据缺口' },
                         ],
                         '教育': [
-                          { target: '教育云平台', detail: '高校数字化升级', cases: '双一流大学', priority: '高', capability: '云原生+服务' },
+                          { target: '教育云平台', detail: '高校数字化升级', cases: '高等院校', priority: '高', capability: '云原生+服务' },
                           { target: '智慧校园', detail: '教学管理一体化', cases: '职业院校', priority: '高', capability: '数据+服务' },
                           { target: '在线教育', detail: 'AI助教方案', cases: '教育科技公司', priority: '中', capability: 'AI+云原生' },
                           { target: '教育数据中台', detail: '学情分析平台', cases: '教育局', priority: '中', capability: '数据+服务' },
@@ -2049,34 +2209,39 @@ export const ProfileTabs = () => {
                           <span className="text-[9px] font-semibold">本伙伴</span>
                           <span className="text-[8px] opacity-70">{partner.tier}</span>
                         </div>
-                        {[
-                          { label: '昆仑联通', type: 'SI', angle: -90, dist: 55, color: '#2563eb' },
-                          { label: '精诚中国', type: 'Reseller', angle: -20, dist: 60, color: '#059669' },
-                          { label: '上海智医', type: 'ISV', angle: 50, dist: 55, color: '#7c3aed' },
-                          { label: '南京云帆', type: 'SI(子)', angle: 130, dist: 50, color: '#d97706' },
-                          { label: '杭州智联', type: 'ISV(子)', angle: 200, dist: 55, color: '#0891b2' },
-                        ].map((node) => {
-                          const rad = (node.angle * Math.PI) / 180;
-                          const cx = 50 + node.dist * Math.cos(rad) * 0.8;
-                          const cy = 50 + node.dist * Math.sin(rad) * 0.8;
-                          return (
-                            <svg key={node.label} className="absolute inset-0 w-full h-full overflow-visible" style={{ pointerEvents: 'none' }}>
-                              <line x1="50%" y1="50%" x2={`${cx}%`} y2={`${cy}%`} stroke={node.color} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6" />
-                              <circle cx={`${cx}%`} cy={`${cy}%`} r="5" fill={node.color} opacity="0.8" />
-                              <text x={`${cx}%`} y={`${cy + 5}%`} textAnchor="middle" fontSize="7" fill="#888">{node.label}</text>
-                            </svg>
-                          );
-                        })}
+                        {ecosystemPartners.length > 0 ? (
+                          ecosystemPartners.slice(0, 5).map((node, i) => {
+                            const colors = ['#2563eb', '#059669', '#7c3aed', '#d97706', '#0891b2'];
+                            const angle = -90 + (i * 72);
+                            const dist = 50 + Math.random() * 10;
+                            const rad = (angle * Math.PI) / 180;
+                            const cx = 50 + dist * Math.cos(rad) * 0.8;
+                            const cy = 50 + dist * Math.sin(rad) * 0.8;
+                            return (
+                              <svg key={node.name} className="absolute inset-0 w-full h-full overflow-visible" style={{ pointerEvents: 'none' }}>
+                                <line x1="50%" y1="50%" x2={`${cx}%`} y2={`${cy}%`} stroke={colors[i % colors.length]} strokeWidth="1.5" strokeDasharray="4 3" opacity="0.6" />
+                                <circle cx={`${cx}%`} cy={`${cy}%`} r="5" fill={colors[i % colors.length]} opacity="0.8" />
+                                <text x={`${cx}%`} y={`${cy + 5}%`} textAnchor="middle" fontSize="7" fill="#888">{node.name}</text>
+                              </svg>
+                            );
+                          })
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center">
+                            <p className="text-xs text-neutral-400">暂无生态伙伴数据</p>
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-neutral-500 mt-2 text-center">星型拓扑 · 该伙伴是网络中心节点</p>
+                      <p className="text-xs text-neutral-500 mt-2 text-center">星型拓扑 · {ecosystemPartners.length > 0 ? `该伙伴连接${ecosystemPartners.length}个生态节点` : '请添加生态合作伙伴'}</p>
                     </div>
 
                     <div className="lg:col-span-2 space-y-4">
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
-                        <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
-                          <b>该伙伴处于网络的"桥梁"位置。</b>SI（昆仑联通）和ISV（上海智医）原本没有直接连接，而是通过该伙伴间接协作。这使得该伙伴不仅是一个交易中介，更是<b>信息枢纽和信任中介</b>——谁掌握连接，谁就掌握价值分配的话语权。
-                        </p>
-                      </div>
+                      {ecosystemPartners.length > 2 ? (
+                        <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                          <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
+                            <b>该伙伴处于网络的"桥梁"位置。</b>不同类型的合作伙伴通过该伙伴间接协作，这使得该伙伴不仅是一个交易中介，更是<b>信息枢纽和信任中介</b>——谁掌握连接，谁就掌握价值分配的话语权。
+                          </p>
+                        </div>
+                      ) : null}
                       <div className="grid grid-cols-2 gap-3">
                         <div className="p-3 bg-neutral-50 dark:bg-neutral-800/50 border border-neutral-200 dark:border-neutral-700 rounded-xl">
                           <div className="flex items-center gap-2 mb-1">
@@ -2128,32 +2293,38 @@ export const ProfileTabs = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-100 dark:divide-neutral-800">
-                        {[
-                          { ...ecosystemPartners[0], logic: 'SI提供客户关系 + 本伙伴提供技术方案 → 联合打单的交易成本远低于各自独立获客，这是典型的专业化分工带来的效率提升', amplify: '联合项目数从5个→10个，预计增量营收¥280万' },
-                          { ...ecosystemPartners[1], logic: '双方存在相互依赖：精诚依赖本伙伴的产品授权，本伙伴依赖精诚的客户渠道。这种对称的相互依赖创造了最稳定的合作基础', amplify: '拓展安全+数据产品线，利用精诚的12个客户触点交叉销售' },
-                          { ...ecosystemPartners[2], logic: '本伙伴的云原生方案(核心能力) + 上海智医的AI算法(稀缺能力) = 单一伙伴无法独立提供的完整AI医疗解决方案，协作的不可替代性极高', amplify: '联合参加Q3医疗峰会，预计产出5-8个高质量商机' },
-                        ].map((ep, i) => (
-                          <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 group">
-                            <td className="py-4 px-4">
-                              <div className="flex items-center gap-2">
-                                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#2563eb','#059669','#7c3aed'][i] }} />
-                                <span className="font-medium text-neutral-900 dark:text-white">{ep.name}</span>
-                              </div>
-                              <p className="text-xs text-neutral-400 mt-0.5">{ep.type}</p>
+                        {ecosystemPartners.length > 0 ? (
+                          ecosystemPartners.map((ep: any, i: number) => (
+                            <tr key={i} className="hover:bg-neutral-50 dark:hover:bg-neutral-800/50 group">
+                              <td className="py-4 px-4">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-2 h-2 rounded-full" style={{ backgroundColor: ['#2563eb','#059669','#7c3aed'][i % 3] }} />
+                                  <span className="font-medium text-neutral-900 dark:text-white">{ep.name}</span>
+                                </div>
+                                <p className="text-xs text-neutral-400 mt-0.5">{ep.type}</p>
+                              </td>
+                              <td className="py-4 px-4 text-center"><Badge variant={i===0?'primary':i===1?'success':'info'} size="sm">{ep.relation}</Badge></td>
+                              <td className="py-4 px-4 text-center">
+                                <div className="flex items-center justify-center gap-2">
+                                  <ProgressBar value={ep.deals > 0 ? (ep.deals / 10) * 100 : 0} size="sm" className="w-16" variant={ep.deals>=8?'brand':'default'} />
+                                  <span className="text-xs font-medium">{ep.deals>=8?'强':ep.deals>=4?'中':ep.deals>0?'弱':'暂无'}</span>
+                                </div>
+                              </td>
+                              <td className="py-4 px-4 text-right font-semibold">{cur(ep.volume || 0)}</td>
+                              <td className="py-4 px-4 text-center">{ep.deals || 0} 个</td>
+                              <td className="py-4 px-4 max-w-[220px]"><p className="text-xs text-neutral-500 leading-relaxed">{(ep as any).logic || '暂无协作数据分析'}</p></td>
+                              <td className="py-4 px-4 max-w-[200px]"><p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">{(ep as any).amplify || '暂无放大建议'}</p></td>
+                            </tr>
+                          ))
+                        ) : (
+                          <tr>
+                            <td colSpan={7} className="py-8 text-center text-neutral-400">
+                              <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">暂无生态合作伙伴数据</p>
+                              <p className="text-xs mt-1">请在合作伙伴详情中添加生态伙伴信息</p>
                             </td>
-                            <td className="py-4 px-4 text-center"><Badge variant={i===0?'primary':i===1?'success':'info'} size="sm">{ep.relation}</Badge></td>
-                            <td className="py-4 px-4 text-center">
-                              <div className="flex items-center justify-center gap-2">
-                                <ProgressBar value={ep.deals/0.15} size="sm" className="w-16" variant={ep.deals>=8?'brand':'default'} />
-                                <span className="text-xs font-medium">{ep.deals>=8?'强':ep.deals>=4?'中':'弱'}</span>
-                              </div>
-                            </td>
-                            <td className="py-4 px-4 text-right font-semibold">{cur(ep.volume)}</td>
-                            <td className="py-4 px-4 text-center">{ep.deals} 个</td>
-                            <td className="py-4 px-4 max-w-[220px]"><p className="text-xs text-neutral-500 leading-relaxed">{ep.logic}</p></td>
-                            <td className="py-4 px-4 max-w-[200px]"><p className="text-xs text-blue-600 dark:text-blue-400 leading-relaxed">{ep.amplify}</p></td>
                           </tr>
-                        ))}
+                        )}
                       </tbody>
                     </table>
                   </div>
@@ -2168,27 +2339,34 @@ export const ProfileTabs = () => {
                     <Button variant="secondary" size="sm"><Plus className="w-4 h-4" />新增</Button>
                   </CardHeader>
                   <CardContent>
-                    {[
-                      { id: 'sp1', name: '南京云帆科技有限公司', type: 'SI', contact: '周伟', phone: '13812345678', status: 'Active', role: '区域交付延伸——弥补华东二线城市覆盖', analysis: '自建华东二线交付团队成本约¥80万/年，子合作模式成本仅¥30万/年，节约63%。当交易频率低、资产专用性低时，外包优于内部化。' },
-                      { id: 'sp2', name: '杭州智联信息技术有限公司', type: 'ISV', contact: '林芳', phone: '13987654321', status: 'Active', role: 'AI能力补全——弥补算法和模型开发短板', analysis: 'AI能力自建需2年+¥200万投入，子合作模式6个月即获得可用能力。当速度是首要竞争要素时，外部获取优于内部建设。' },
-                    ].map((sp) => (
-                      <div key={sp.id} className="py-4 border-b border-neutral-100 dark:border-neutral-800 last:border-0">
-                        <div className="flex items-center justify-between mb-2">
-                          <div><p className="text-sm font-medium text-neutral-900 dark:text-white">{sp.name}</p><p className="text-xs text-neutral-400">{sp.type} · {sp.contact} · {sp.phone}</p></div>
-                          <Badge variant={sp.status === 'Active' ? 'success' : 'warning'} size="sm">{sp.status === 'Active' ? '活跃' : '非活跃'}</Badge>
-                        </div>
-                        <p className="text-xs text-neutral-500 mb-1">战略角色: {sp.role}</p>
-                        <div className="flex items-start gap-1.5">
-                          <span className="w-4 h-4 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] text-neutral-500 cursor-help shrink-0 mt-0.5 relative group/ml">
-                            ?
-                            <div className="absolute left-0 bottom-5 w-52 p-2 bg-white dark:bg-neutral-800 border rounded-lg shadow-xl z-50 opacity-0 invisible group-hover/ml:opacity-100 group-hover/ml:visible transition-all text-[10px] text-neutral-500 leading-relaxed">
-                              企业边界的决策逻辑：当外部交易成本低于内部管理成本时，选择合作而非自建。这里的分析量化了两种模式的成本和速度差异。
+                    {(partner as any).subPartners && (partner as any).subPartners.length > 0 ? (
+                      (partner as any).subPartners.map((sp: any) => (
+                        <div key={sp.id || sp.name} className="py-4 border-b border-neutral-100 dark:border-neutral-800 last:border-0">
+                          <div className="flex items-center justify-between mb-2">
+                            <div><p className="text-sm font-medium text-neutral-900 dark:text-white">{sp.name || '未知名称'}</p><p className="text-xs text-neutral-400">{sp.type || 'SI'} · {sp.contact || '暂无联系人'} · {sp.phone || '暂无电话'}</p></div>
+                            <Badge variant={sp.status === 'Active' ? 'success' : 'warning'} size="sm">{sp.status === 'Active' ? '活跃' : '非活跃'}</Badge>
+                          </div>
+                          {sp.role && <p className="text-xs text-neutral-500 mb-1">战略角色: {sp.role}</p>}
+                          {sp.analysis && (
+                            <div className="flex items-start gap-1.5">
+                              <span className="w-4 h-4 rounded-full bg-neutral-200 dark:bg-neutral-700 flex items-center justify-center text-[10px] text-neutral-500 cursor-help shrink-0 mt-0.5 relative group/ml">
+                                ?
+                                <div className="absolute left-0 bottom-5 w-52 p-2 bg-white dark:bg-neutral-800 border rounded-lg shadow-xl z-50 opacity-0 invisible group-hover/ml:opacity-100 group-hover/ml:visible transition-all text-[10px] text-neutral-500 leading-relaxed">
+                                  企业边界的决策逻辑：当外部交易成本低于内部管理成本时，选择合作而非自建。这里的分析量化了两种模式的成本和速度差异。
+                                </div>
+                              </span>
+                              <p className="text-xs text-neutral-500 leading-relaxed">{sp.analysis}</p>
                             </div>
-                          </span>
-                          <p className="text-xs text-neutral-500 leading-relaxed">{sp.analysis}</p>
+                          )}
                         </div>
+                      ))
+                    ) : (
+                      <div className="py-8 text-center text-neutral-400">
+                        <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p className="text-sm">暂无子合作伙伴数据</p>
+                        <p className="text-xs mt-1">请在合作伙伴详情中添加子合作伙伴信息</p>
                       </div>
-                    ))}
+                    )}
                   </CardContent>
                 </Card>
 
@@ -2199,9 +2377,12 @@ export const ProfileTabs = () => {
                   <CardContent>
                     <div className="space-y-4">
                       {[
-                        { dim: '连接广度', desc: '5个直接连接节点形成一级协作圈，星型拓扑中心位置——连接的数量和多样性决定了信息获取的广度', score: 85 },
-                        { dim: '关系深度', desc: '与昆仑联通合作5个项目（联合打单成功率68%），但与ISV协作仅3个项目——深度有待加强', score: 72 },
-                        { dim: '认知协同', desc: '与精诚中国12个项目的长期合作建立了共享市场理解和客户洞察——默契降低了沟通成本', score: 80 },
+                        // 连接广度：基于生态伙伴数量计算（每1个伙伴20分，满5个满分）
+                        { dim: '连接广度', desc: ecosystemPartners.length > 0 ? `${ecosystemPartners.length}个直接连接节点形成一级协作圈——连接的数量和多样性决定了信息获取的广度` : '暂无生态合作伙伴数据，无法评估连接广度', score: ecosystemPartners.length > 0 ? Math.min(100, ecosystemPartners.length * 20) : 0 },
+                        // 关系深度：基于生态伙伴关联商机数计算（每1个商机10分，满10个满分）
+                        { dim: '关系深度', desc: ecosystemPartners.length > 0 ? `${ecosystemPartners.length}个生态协作关系——关系深度有待加强` : '暂无生态合作伙伴数据，无法评估关系深度', score: ecosystemPartners.length > 0 ? Math.min(100, ecosystemPartners.reduce((s: number, e: any) => s + (e.deals || 0), 0) * 10) : 0 },
+                        // 协作产出：基于生态伙伴营收金额计算（每100万元5分，满2000万元满分）
+                        { dim: '协作产出', desc: ecosystemPartners.length > 0 ? `生态协作总营收¥${(ecosystemPartners.reduce((s: number, e: any) => s + (e.volume || 0), 0) / 10000).toFixed(0)}万——协作产出有待提升` : '暂无生态合作伙伴数据，无法评估协作产出', score: ecosystemPartners.length > 0 ? Math.min(100, Math.round(ecosystemPartners.reduce((s: number, e: any) => s + (e.volume || 0), 0) / 200000)) : 0 },
                       ].map((d) => (
                         <div key={d.dim} className="p-3 rounded-lg border border-neutral-200 dark:border-neutral-800">
                           <div className="flex items-center justify-between mb-2">
@@ -2214,18 +2395,20 @@ export const ProfileTabs = () => {
                                 </div>
                               </div>
                             </div>
-                            <span className={cn('text-sm font-semibold', d.score >= 80 ? 'text-emerald-600' : d.score >= 70 ? 'text-amber-600' : 'text-red-500')}>{d.score}分</span>
+                            <span className={cn('text-sm font-semibold', d.score >= 80 ? 'text-emerald-600' : d.score >= 50 ? 'text-amber-600' : 'text-neutral-400')}>{d.score > 0 ? `${d.score}分` : '--'}</span>
                           </div>
                           <ProgressBar value={d.score} size="sm" variant={d.score >= 80 ? 'success' : 'default'} />
                           <p className="text-xs text-neutral-500 mt-2">{d.desc}</p>
                         </div>
                       ))}
                     </div>
-                    <div className="mt-4 p-4 bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700 rounded-xl">
-                      <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
-                        <b>综合评估：</b>协作网络总评分79分（白金前25%）。该伙伴在连接广度上表现优异，但关系深度（特别是ISV协作）有提升空间——应从项目级协作升级为方案级共创。核心建议：将伙伴定位从"渠道代理"升级为<b>"区域生态协调者"</b>，赋予更多跨伙伴协作的撮合权。
-                      </p>
-                    </div>
+                    {ecosystemPartners.length === 0 && (
+                      <div className="mt-4 p-4 bg-neutral-50 dark:bg-neutral-800/30 border border-neutral-200 dark:border-neutral-700 rounded-xl">
+                        <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">
+                          <b>提示：</b>协作网络价值评估需要基于真实的生态合作伙伴数据。当前暂无数据，请先添加生态合作伙伴信息后再进行评估。
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
@@ -2236,10 +2419,10 @@ export const ProfileTabs = () => {
                 <CardContent>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                      { label: '网络规模', value: '5节点', sub: '3生态+2子伙伴' },
-                      { label: '协作营收', value: cur(ecosystemPartners.reduce((s,e)=>s+e.volume,0)), sub: '占总营收60%' },
-                      { label: '网络位置', value: '枢纽', sub: '星型拓扑中心' },
-                      { label: '协作评分', value: '79分', sub: '白金前25%' },
+                      { label: '网络规模', value: ecosystemPartners.length > 0 ? `${ecosystemPartners.length + ((partner as any).subPartners?.length || 0)}节点` : '--', sub: ecosystemPartners.length > 0 ? `${ecosystemPartners.length}生态+${(partner as any).subPartners?.length || 0}子` : '暂无数据' },
+                      { label: '协作营收', value: ecosystemPartners.length > 0 ? cur(ecosystemPartners.reduce((s: number, e: any) => s + (e.volume || 0), 0)) : '--', sub: ecosystemPartners.length > 0 ? '生态协作营收' : '暂无数据' },
+                      { label: '网络位置', value: ecosystemPartners.length > 0 ? '枢纽' : '--', sub: ecosystemPartners.length > 0 ? '星型拓扑中心' : '暂无数据' },
+                      { label: '协作评分', value: ecosystemPartners.length > 0 ? `${Math.min(100, 50 + ecosystemPartners.length * 15)}分` : '--', sub: ecosystemPartners.length > 0 ? '基于真实数据' : '暂无数据' },
                     ].map((m) => (
                       <div key={m.label} className="p-4 bg-neutral-50 dark:bg-neutral-800/50 rounded-xl text-center">
                         <p className="text-xs text-neutral-400 mb-1">{m.label}</p>

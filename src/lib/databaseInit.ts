@@ -21,9 +21,10 @@ import { supabase } from './supabase';
 export const initializeExecutionTables = async () => {
   const sqlStatements = [
     // 创建阶段日志表
+    // 注意：marketing_plan 是主活动表
     `CREATE TABLE IF NOT EXISTS marketing_phase_logs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      activity_id UUID NOT NULL REFERENCES marketing_activities(id) ON DELETE CASCADE,
+      activity_id UUID NOT NULL REFERENCES marketing_plan(id) ON DELETE CASCADE,
       phase_id UUID REFERENCES marketing_execution_phases(id) ON DELETE CASCADE,
       action TEXT NOT NULL,
       description TEXT,
@@ -34,7 +35,7 @@ export const initializeExecutionTables = async () => {
     `CREATE TABLE IF NOT EXISTS marketing_phase_attachments (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       phase_id UUID NOT NULL REFERENCES marketing_execution_phases(id) ON DELETE CASCADE,
-      activity_id UUID NOT NULL REFERENCES marketing_activities(id) ON DELETE CASCADE,
+      activity_id UUID NOT NULL REFERENCES marketing_plan(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       type TEXT DEFAULT 'file',
       url TEXT,

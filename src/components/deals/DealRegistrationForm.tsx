@@ -6,7 +6,7 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { partnerService } from '../../services/partner-service';
 import { dealService } from '../../services/deal-service';
-import type { Partner } from '../../types';
+import type { Partner, DealLifecycleStage } from '../../types';
 import { Button } from '../ui/Button';
 import { Badge } from '../ui/Badge';
 
@@ -59,7 +59,7 @@ export const DealRegistrationForm = () => {
   const [formData, setFormData] = useState({
     partnerId: '', partnerName: '', customerId: '', customerName: '', customerIndustry: '', projectTitle: '',
     dealValue: '', closeDate: '', description: '',
-    region: '华东', salesStage: config.salesStages[0] || '', salesName: '', salesTeam: '',
+    region: '华东', salesStage: config.salesStages[0] || 'Registered', salesName: '', salesTeam: '',
   });
   const [products, setProducts] = useState<{ name: string; qty: number }[]>([]);
 
@@ -162,24 +162,26 @@ export const DealRegistrationForm = () => {
         });
       } else {
         // 新建模式：创建新商机
+        const initialStage = (formData.salesStage || 'Registered') as DealLifecycleStage;
         await dealService.create({
           partnerId: formData.partnerId,
           partnerName: formData.partnerName,
           partnerType: partners.find(p => p.id === formData.partnerId)?.type || 'Reseller',
           title: formData.projectTitle,
           customerName: formData.customerName,
+          customerIndustry: formData.customerIndustry || '',
           value: Number(formData.dealValue),
           region: formData.region,
           productType: productSummary,
           salesName: formData.salesName,
           salesTeam: formData.salesTeam,
-          description: formData.description || `阶段: ${formData.salesStage}${productSummary ? ' | 产品: ' + productSummary : ''}`,
+          description: formData.description || '',
           expectedCloseDate: formData.closeDate,
-          stage: 'Registered',
+          stage: initialStage,
           status: 'Pending',
           createdDate: new Date().toISOString().split('T')[0],
           lastActivityDate: new Date().toISOString().split('T')[0],
-          lifecycle: [{ stage: 'Registered', date: new Date().toISOString().split('T')[0], description: '合作伙伴提交报备', actor: formData.salesName || '系统' }],
+          lifecycle: [{ stage: initialStage, date: new Date().toISOString().split('T')[0], description: '合作伙伴提交报备', actor: formData.salesName || formData.partnerName || '系统' }],
         });
       }
       setStep(4); // success
@@ -200,7 +202,7 @@ export const DealRegistrationForm = () => {
         <p className="text-neutral-500 max-w-md mx-auto">{t('deals.successDesc')}</p>
         <div className="flex gap-3 justify-center pt-4">
           <Button variant="secondary" onClick={() => navigate('/deals')}>返回商机列表</Button>
-          <Button variant="brand" onClick={() => { setStep(1); setProducts([]); setFormData({ partnerId:'',partnerName:'',customerId:'',customerName:'',customerIndustry:'',projectTitle:'',dealValue:'',closeDate:'',description:'',salesStage:config.salesStages[0]||'',region:'华东',salesName:'',salesTeam:''}); }}>继续报备</Button>
+          <Button variant="brand" onClick={() => { setStep(1); setProducts([]); setFormData({ partnerId:'',partnerName:'',customerId:'',customerName:'',customerIndustry:'',projectTitle:'',dealValue:'',closeDate:'',description:'',salesStage:config.salesStages[0]||'Registered',region:config.regions[0]||'华东',salesName:'',salesTeam:''}); }}>继续报备</Button>
         </div>
       </div>
     );
@@ -281,6 +283,14 @@ export const DealRegistrationForm = () => {
                     <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10" placeholder="例如：广东省人民医院" value={formData.customerName} onChange={e => update('customerName', e.target.value)} />
                   </div>
                   <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-neutral-500">客户行业</label>
+                    <select value={formData.customerIndustry} onChange={e => update('customerIndustry', e.target.value)}
+                      className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10">
+                      <option value="">请选择行业</option>
+                      {(config.industries || ['金融', '医疗', '政务', '制造', '教育', '互联网', '能源']).map(ind => <option key={ind} value={ind}>{ind}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-neutral-500">项目名称 <span className="text-red-500">*</span></label>
                     <input className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10" placeholder="项目名称" value={formData.projectTitle} onChange={e => update('projectTitle', e.target.value)} />
                   </div>
@@ -288,14 +298,14 @@ export const DealRegistrationForm = () => {
                     <label className="text-xs font-semibold text-neutral-500">区域</label>
                     <select value={formData.region} onChange={e => update('region', e.target.value)}
                       className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10">
-                      {config.regions.map(r => <option key={r} value={r}>{r}</option>)}
+                      {(config.regions || ['华东', '华南', '华北', '华中', '西南', '西北', '东北']).map(r => <option key={r} value={r}>{r}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-neutral-500">当前阶段</label>
                     <select value={formData.salesStage} onChange={e => update('salesStage', e.target.value)}
                       className="w-full h-10 px-3 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10">
-                      {config.salesStages.map(s => <option key={s} value={s}>{s}</option>)}
+                      {(config.salesStages || ['Registered', 'UnderReview', 'Approved', 'Solution', 'Commercial', 'Negotiation', 'ClosedWon', 'ClosedLost']).map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
                   <div className="space-y-1.5">
@@ -311,14 +321,14 @@ export const DealRegistrationForm = () => {
                 <div className="space-y-2 pt-2 border-t border-neutral-200 dark:border-neutral-800">
                   <div className="flex items-center justify-between">
                     <label className="text-xs font-semibold text-neutral-500">产品清单</label>
-                    <button type="button" onClick={() => setProducts([...products, { name: config.productTypes[0] || '', qty: 1 }])} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600"><Plus className="w-3 h-3" />添加产品</button>
+                    <button type="button" onClick={() => setProducts([...products, { name: (config.productTypes && config.productTypes[0]) || '软件', qty: 1 }])} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-600"><Plus className="w-3 h-3" />添加产品</button>
                   </div>
                   {products.length === 0 && <p className="text-xs text-neutral-400">暂未添加产品，可选填</p>}
                   {products.map((p, i) => (
                     <div key={i} className="flex gap-2 items-center">
                       <select value={p.name} onChange={e => { const n = [...products]; n[i] = { ...n[i], name: e.target.value }; setProducts(n); }}
                         className="flex-1 h-9 px-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10">
-                        {config.productTypes.map(pt => <option key={pt} value={pt}>{pt}</option>)}
+                        {(config.productTypes || ['软件', '硬件', '服务', '集成']).map(pt => <option key={pt} value={pt}>{pt}</option>)}
                       </select>
                       <input type="number" min="1" value={p.qty} onChange={e => { const n = [...products]; n[i] = { ...n[i], qty: Number(e.target.value) || 1 }; setProducts(n); }}
                         className="w-20 h-9 px-2 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/10 text-center" placeholder="数量" />

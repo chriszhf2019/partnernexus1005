@@ -34,7 +34,8 @@ test.describe('核心页面加载', () => {
 
     // 导航到合作伙伴页
     await page.goto('/partners');
-    await expect(page.locator('h1, .page-title')).toBeVisible({ timeout: 10000 });
+    await page.waitForLoadState('networkidle');
+    await expect(page.getByText('生态健康度')).toBeVisible({ timeout: 10000 });
   });
 
   test('商机管理页', async ({ page }) => {

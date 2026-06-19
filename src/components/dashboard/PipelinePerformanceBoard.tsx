@@ -1,27 +1,134 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  TrendingUp, 
-  TrendingDown, 
-  ChevronRight, 
-  Target, 
-  Zap, 
-  PieChart, 
-  Layers, 
+  TrendingUp,
+  TrendingDown,
+  ChevronRight,
+  Target,
+  Zap,
+  PieChart,
+  Layers,
   ArrowRight,
   Info
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { supabase } from '../../lib/supabase';
+
+type DealRow = {
+  stage: string | null;
+  value: number | null;
+  status: string | null;
+  created_at: string | null;
+};
+
+type FunnelStage = {
+  name: string;
+  amount: string;
+  inflow: string;
+  outflow: string;
+};
+
+const STAGE_LABELS: Record<string, string> = {
+  Registered: '发现与报备',
+  UnderReview: '方案与报价',
+  Approved: 'POC测试',
+  Solution: '商务谈判',
+  Commercial: '商务推进',
+  ClosedWon: '成功赢单',
+  ClosedLost: '已流失',
+};
+
+const FUNNEL_STAGE_KEYS = [
+  'Registered',
+  'UnderReview',
+  'Approved',
+  'Solution',
+  'Commercial',
+  'ClosedWon',
+];
+
+const TARGET = 100000000;
+
+function formatMillions(value: number): string {
+  return `¥${Math.round((value / 1000000) * 10) / 10}M`;
+}
 
 export const PipelinePerformanceBoard: React.FC = () => {
   const navigate = useNavigate();
-  const funnelStages = [
-    { name: '发现与报备', amount: '¥12.5M', inflow: '+2.1M', outflow: '-0.4M' },
-    { name: '方案与报价', amount: '¥10.2M', inflow: '+1.8M', outflow: '-1.2M' },
-    { name: 'POC测试', amount: '¥8.4M', inflow: '+3.5M', outflow: '-0.8M' },
-    { name: '商务谈判', amount: '¥7.1M', inflow: '+1.2M', outflow: '-2.1M' },
-    { name: '成功赢单', amount: '¥7.0M', inflow: '+4.2M', outflow: '-0.0M' },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [openPipeline, setOpenPipeline] = useState(0);
+  const [monthNew, setMonthNew] = useState(0);
+  const [stageMap, setStageMap] = useState<Record<string, number>>({});
+  const [funnelStages, setFunnelStages] = useState<FunnelStage[]>([
+    { name: STAGE_LABELS.Registered, amount: '¥0M', inflow: '+0M', outflow: '-0M' },
+    { name: STAGE_LABELS.UnderReview, amount: '¥0M', inflow: '+0M', outflow: '-0M' },
+    { name: STAGE_LABELS.Approved, amount: '¥0M', inflow: '+0M', outflow: '-0M' },
+    { name: STAGE_LABELS.Solution, amount: '¥0M', inflow: '+0M', outflow: '-0M' },
+    { name: STAGE_LABELS.ClosedWon, amount: '¥0M', inflow: '+0M', outflow: '-0M' },
+  ]);
+
+  useEffect(() => {
+    const fetchDeals = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('deals')
+          .select('stage, value, status, created_at')
+          .limit(500);
+
+        if (error) {
+          console.error('Failed to fetch deals:', error);
+          return;
+        }
+
+        const rows = (data as DealRow[]) || [];
+
+        const newStageMap: Record<string, number> = {};
+        let openTotal = 0;
+        let monthTotal = 0;
+
+        const now = new Date();
+        const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+
+        for (const row of rows) {
+          const value = Number(row.value) || 0;
+          const stage = row.stage || '';
+          const createdAt = row.created_at ? new Date(row.created_at) : null;
+
+          newStageMap[stage] = (newStageMap[stage] || 0) + value;
+
+          if (stage !== 'ClosedWon' && stage !== 'ClosedLost') {
+            openTotal += value;
+          }
+
+          if (createdAt && createdAt >= currentMonthStart) {
+            monthTotal += value;
+          }
+        }
+
+        const stages: FunnelStage[] = FUNNEL_STAGE_KEYS.filter(
+          (key) => key !== 'Commercial' && key !== 'ClosedLost'
+        ).map((key) => ({
+          name: STAGE_LABELS[key] || key,
+          amount: formatMillions(newStageMap[key] || 0),
+          inflow: `+${Math.round(((newStageMap[key] || 0) / 1000000) * 10) / 10}M`,
+          outflow: `-0M`,
+        }));
+
+        setStageMap(newStageMap);
+        setOpenPipeline(openTotal);
+        setMonthNew(monthTotal);
+        setFunnelStages(stages);
+      } catch (err) {
+        console.error('Unexpected error fetching deals:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchDeals();
+  }, []);
+
+  const achievementRate = Math.min(100, Math.round((openPipeline / TARGET) * 100));
 
   return (
     <div className="w-full bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden flex flex-col md:flex-row divide-y md:divide-y-0 md:divide-x divide-slate-100">
@@ -32,11 +139,13 @@ export const PipelinePerformanceBoard: React.FC = () => {
             <Layers className="w-4 h-4 text-blue-600" />
             <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">本季度 Open Pipeline</h4>
           </div>
-          <h3 className="text-3xl font-black text-blue-900 tracking-tight">¥45.2M</h3>
+          <h3 className="text-3xl font-black text-blue-900 tracking-tight">
+            {formatMillions(openPipeline)}
+          </h3>
           <div className="flex items-center gap-1 mt-1">
             <span className="text-[10px] font-bold text-slate-400">本月新增商机</span>
             <span className="text-[10px] font-bold text-emerald-600 flex items-center">
-              <TrendingUp className="w-3 h-3 mr-0.5" /> +¥8.5M
+              <TrendingUp className="w-3 h-3 mr-0.5" /> +{formatMillions(monthNew).replace('¥', '')}
             </span>
           </div>
         </div>
@@ -97,7 +206,7 @@ export const PipelinePerformanceBoard: React.FC = () => {
                 </div>
                 {/* Visual indicator for stage */}
                 <div className="absolute bottom-0 left-0 w-full h-0.5 bg-[#f5f5f7] rounded-b-lg overflow-hidden">
-                  <div className={cn("h-full bg-[#f5f5f7]0", idx === 4 ? "bg-green-500" : "")} style={{ width: `${100 - idx * 15}%` }}></div>
+                  <div className={cn("h-full bg-[#f5f5f7]0", idx === funnelStages.length - 1 ? "bg-green-500" : "")} style={{ width: `${100 - idx * 15}%` }}></div>
                 </div>
               </div>
               {idx < funnelStages.length - 1 && (
@@ -120,11 +229,13 @@ export const PipelinePerformanceBoard: React.FC = () => {
             <Info className="w-3 h-3 text-slate-300 cursor-help" />
           </div>
           <div className="flex items-baseline justify-between mb-2">
-            <h3 className="text-xl font-black text-slate-900">¥78M <span className="text-slate-300 font-medium">/ ¥100M</span></h3>
-            <span className="text-xs font-black text-orange-600">78%</span>
+            <h3 className="text-xl font-black text-slate-900">
+              {formatMillions(openPipeline)} <span className="text-slate-300 font-medium">/ {formatMillions(TARGET)}</span>
+            </h3>
+            <span className="text-xs font-black text-orange-600">{achievementRate}%</span>
           </div>
           <div className="w-full bg-[#f5f5f7] h-1.5 rounded-full overflow-hidden">
-            <div className="bg-orange-500 h-full rounded-full shadow-sm" style={{ width: '78%' }}></div>
+            <div className="bg-orange-500 h-full rounded-full shadow-sm" style={{ width: `${achievementRate}%` }}></div>
           </div>
         </div>
 

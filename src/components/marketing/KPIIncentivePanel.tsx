@@ -7,15 +7,29 @@ import { Badge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { ProgressBar } from '../ui/ProgressBar';
 
-interface KPIIncentivePanelProps { open: boolean; onClose: () => void; }
+interface KPIIncentivePanelProps {
+  open: boolean;
+  onClose: () => void;
+  bets?: Array<{
+    id: string;
+    name: string;
+    desc: string;
+    target: string;
+    reward: string;
+    progress: number;
+    status: string;
+    extraReward: string;
+  }>;
+}
 
-export const KPIIncentivePanel: React.FC<KPIIncentivePanelProps> = ({ open, onClose }) => {
-  const [bets] = useState([
+export const KPIIncentivePanel: React.FC<KPIIncentivePanelProps> = ({ open, onClose, bets: propBets }) => {
+  const [defaultBets] = useState([
     { id: 'b1', name: '高决策者到场对赌', desc: '到场客户中决策者（总监级+）占比超50%', target: '决策者≥50%', reward: '核销比例从80%提升至100%', progress: 60, status: 'active', extraReward: '+¥10,000 MDF额度' },
     { id: 'b2', name: '线索转化对赌', desc: '活动产生合格线索(MQL)超30条', target: 'MQL≥30条', reward: '额外奖励¥5,000 MDF额度', progress: 28, status: 'active', extraReward: '+¥5,000 MDF额度' },
     { id: 'b3', name: '商机成交对赌', desc: '活动直接转化商机金额超200万', target: '成交金额≥¥200万', reward: '下季度预算额度提升20%', progress: 150, status: 'active', extraReward: '下季+20%预算' },
     { id: 'b4', name: '满员到场对赌', desc: '实际到场率达到85%以上', target: '到场率≥85%', reward: '全额核销 + 优先专家预约权', progress: 72, status: 'active', extraReward: '优先预约专家' },
   ]);
+  const bets = propBets && propBets.length > 0 ? propBets : defaultBets;
 
   if (!open) return null;
   return (

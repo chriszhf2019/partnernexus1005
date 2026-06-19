@@ -12,7 +12,8 @@ import { cn, formatCurrency } from '../../lib/utils';
 import { motion } from 'motion/react';
 import { useConfig } from '../../contexts/ConfigContext';
 import { supabase } from '../../lib/supabase';
-import { isDealWon, isDealLost } from '../../types';
+import { Deal, isDealWon, isDealLost } from '../../types';
+import { enrichDealsWithMetrics, calculateAvgSalesCycle } from '../../lib/dealMetrics';
 
 interface PipelineBoardProps {
   onNavigate?: (view: string) => void;
@@ -111,8 +112,9 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({ onNavigate }) => {
           ? (wonDeals.length / totalClosedDeals) * 100 
           : 0;
 
-        // Calculate avg cycle days (simplified)
-        const avgCycleDays = deals.length > 0 ? 85 : 0;
+        // 计算平均销售周期 - 从真实数据计算, 不再硬编码 85
+        const enrichedDeals = enrichDealsWithMetrics(deals);
+        const avgCycleDays = calculateAvgSalesCycle(enrichedDeals);
 
         // Calculate source breakdown
         const selfReported = deals.filter(d => d.source === 'PartnerInitiated' || !d.source).length;
@@ -124,7 +126,7 @@ export const PipelineBoard: React.FC<PipelineBoardProps> = ({ onNavigate }) => {
           totalPipeline,
           monthlyNew,
           revenueAchievement: wonValue,
-          revenueTarget: revenueTarget || totalPipeline * 0.5,
+          revenueTarget: revenueTarget || wonValue * 2 || totalPipeline * 0.3,
           winRate,
           avgCycleDays,
           sourceBreakdown: {

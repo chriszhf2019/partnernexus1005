@@ -17,6 +17,10 @@ import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
 import { debug } from '../../lib/debug';
 import { partnerService } from '../../services/partner-service';
+import { partnerScoring } from '../../services/partner-scoring-service';
+import { partnerLifecycleService, partnerMaturityService, calculatePartnerMaturityHealth, getPartnerMaturityEvents } from '../../services/lifecycle-service';
+import { PartnerLifecycleTracker, PartnerMaturityTracker } from '../LifecycleTracker';
+import { PartnerMaturityHealth, PartnerMaturityEvent } from '../../types';
 import { supabase } from '../../lib/supabase';
 import { StaffManagementTab } from './StaffManagementTab';
 import { JBPMeetingForm } from './JBPMeetingForm';
@@ -82,11 +86,15 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
   const [realActivities, setRealActivities] = useState<any[]>([]);
   const [realIncentives, setRealIncentives] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [maturityHealth, setMaturityHealth] = useState<PartnerMaturityHealth | null>(null);
+  const [maturityEvents, setMaturityEvents] = useState<PartnerMaturityEvent[]>([]);
+  const [maturityLoading, setMaturityLoading] = useState(false);
 
   // 获取真实数据
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setMaturityLoading(true);
       try {
         // 获取商机数据
         const dealsResult = await dealService.list({ partnerId: partner.id });
@@ -119,8 +127,12 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
           location: '线上',
           expectedLeads: a.leadsGenerated,
           actualLeads: a.leadsGenerated,
-          relatedDeals: a.budget * 3,
-          roi: a.budget > 0 ? Math.round((a.leadsGenerated || 0) * 85000 / a.budget * 100) / 100 : 0,
+          // 关联商机数：需要真实活动关联商机数据（数据库：activity_deal_link 表）
+          // 当前基于赢单率保守估计，不使用硬编码倍数
+          relatedDeals: Math.round((a.leadsGenerated || 0) * (partner.pipeline.won / Math.max(partner.pipeline.registered, 1) || 0.1)),
+          // ROI 计算：需要真实转化率和客单价数据
+          // 当前使用保守估计，建议从数据库获取真实转化数据
+          roi: a.budget > 0 ? Math.round((a.leadsGenerated || 0) * (partner.pipeline.won / Math.max(partner.pipeline.registered, 1) || 0.1) / a.budget * 100) / 100 : 0,
         }));
         setRealActivities(mappedActivities);
 
@@ -142,8 +154,25 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
           reward: (i.currentMonthPerformance?.rate || i.conversionRate || 0) >= 50 ? Math.round((i.totalBudget || 0) * 0.1) : undefined,
         }));
         setRealIncentives(mappedIncentives);
+
+        // 获取关系深度评估（与其他数据并行加载，不阻塞主流程）
+        try {
+          const [health, events] = await Promise.all([
+            calculatePartnerMaturityHealth(partner.id, partner),
+            getPartnerMaturityEvents(partner.id),
+          ]);
+          setMaturityHealth(health);
+          setMaturityEvents(events);
+        } catch (err) {
+          debug.warn('[PartnerProfile] Failed to load maturity data:', err);
+          setMaturityHealth(null);
+          setMaturityEvents([]);
+        } finally {
+          setMaturityLoading(false);
+        }
       } catch (error) {
         console.error('Failed to fetch real data:', error);
+        setMaturityLoading(false);
       } finally {
         setLoading(false);
       }
@@ -337,49 +366,105 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
   // ═══════════════════════════════════════════════════════
   // COMPREHENSIVE SCORING ENGINE
   // ═══════════════════════════════════════════════════════
+  // 评分参数集中配置（便于后续从数据库 config 表动态加载）
+  // 权重来自业务经验评估，建议后续通过后台配置页面调整
+  const SCORE_CONFIG = {
+    // 活跃度维度权重
+    activity: {
+      pipelineWeight: 30,           // 有商机报备：30 分
+      certBonusThreshold: 5,        // 认证工程师 >5 给满分
+      certBonusMax: 25,             // 认证工程师 最高 25 分
+      winRateThreshold: 50,         // 赢单率 >50% 给满分
+      winRateMax: 25,               // 赢单率 最高 25 分
+      mdfWeight: 20,                // 有 MDF 使用：20 分
+    },
+    // 能力值维度权重
+    capability: {
+      certifiedEngineerUnit: 3,     // 每位认证工程师 3 分
+      specialistUnit: 8,            // 每位专家认证 8 分
+      winRatePerPoint: 0.3,         // 每 1% 赢单率 0.3 分
+    },
+    // 忠诚度维度权重
+    loyalty: {
+      yearBonus: 10,                // 每年合作 10 分
+      tierBonus: {                  // 等级额外加分
+        Platinum: 40,
+        Diamond: 35,
+        Gold: 25,
+        default: 10,
+      } as Record<string, number>,
+    },
+    // 综合评分权重（各维度在 overall 中的占比）
+    overall: {
+      activity: 0.25,
+      capability: 0.25,
+      loyalty: 0.15,
+      pipelineHealth: 0.2,
+    },
+    // 流失风险阈值
+    churn: {
+      notCooperating: 35,           // 非合作中状态
+      expiryThreshold: 2,           // 认证过期数量阈值
+      expiryBonus: 20,
+      pipelineThreshold: 1000000,   // Pipeline 金额阈值（元）
+      pipelineLow: 20,
+      winRateThreshold: 40,         // 赢单率阈值
+      winRateLow: 15,
+      mdfThreshold: 30,             // MDF 使用率阈值
+      mdfLow: 10,
+    },
+    // 分类引擎权重
+    categorization: {
+      orderAmount: 40,
+      pipeline: 30,
+      marketing: 20,
+      engagement: 10,
+    },
+    // 等级基准分（用于同级均值对比）
+    tierBenchmark: {
+      Platinum: 78,
+      Diamond: 72,
+      Gold: 65,
+      default: 50,
+    } as Record<string, number>,
+    // 流失风险等级阈值
+    churnLevel: {
+      high: 50,    // >=50 为高风险
+      medium: 25,  // >=25 为中风险
+    },
+  };
+
   const scores = useMemo(() => {
-    const activity = Math.min(100, Math.round(
-      (partner.pipeline.registered > 0 ? 30 : 0) +
-      (partner.enablement.certifiedEngineers > 5 ? 25 : partner.enablement.certifiedEngineers * 5) +
-      (partner.winRate > 50 ? 25 : partner.winRate * 0.5) +
-      (partner.mdf.used > 0 ? 20 : 0)
-    ));
-    const capability = Math.min(100, Math.round(
-      (partner.enablement.certifiedEngineers * 3) +
-      (partner.enablement.specialists * 8) +
-      (partner.winRate * 0.3)
-    ));
-    const loyalty = Math.min(100, Math.round(
-      partner.years * 10 + (partner.tier === 'Platinum' ? 40 : partner.tier === 'Diamond' ? 35 : partner.tier === 'Gold' ? 25 : 10)
-    ));
-    const pipelineHealth = partner.pipeline.registered > 0 ? Math.round((partner.pipeline.won / partner.pipeline.registered) * 100) : 0;
-    // NOTE: growth formula uses estimated prior period (70% of current). Replace with actual previous-period data when available.
-    const growth = Math.round(((partner.pipeline.registered - (partner.pipeline.registered * 0.7)) / (partner.pipeline.registered * 0.7 || 1)) * 100);
-    const overall = Math.round((activity * 0.25 + capability * 0.25 + loyalty * 0.15 + pipelineHealth * 0.2 + Math.max(0, growth) * 0.15));
-    const churnRisk = Math.min(100, Math.round(
-      (partner.status !== 'Cooperating' ? 35 : 0) +
-      (partner.enablement.expiryRiskCount > 2 ? 20 : 0) +
-      (partner.pipeline.registered < 1000000 ? 20 : 0) +
-      (partner.winRate < 40 ? 15 : 0) +
-      (mdfPct < 30 ? 10 : 0)
-    ));
-    return { activity, capability, loyalty, pipelineHealth, growth, overall, churnRisk,
-      churnLevel: churnRisk >= 50 ? '高' as const : churnRisk >= 25 ? '中' as const : '低' as const,
-      churnColor: churnRisk >= 50 ? 'danger' as const : churnRisk >= 25 ? 'warning' as const : 'success' as const,
-      tierBenchmark: partner.tier === 'Platinum' ? 78 : partner.tier === 'Diamond' ? 72 : partner.tier === 'Gold' ? 65 : 50 };
-  }, [partner, mdfPct]);
+    // 使用集中式评分服务计算健康度评分（含负反馈扣分和 tier 基线校准）
+    const health = partnerScoring.calculatePartnerHealthScores(partner);
+    return {
+      activity: health.activity,
+      capability: health.capability,
+      loyalty: health.loyalty,
+      pipelineHealth: health.pipelineHealth,
+      growth: health.growth,
+      overall: health.overall,
+      churnRisk: health.churnRisk,
+      churnLevel: health.churnLevel,
+      churnColor: health.churnColor,
+      tierBenchmark: health.tierBenchmark,
+    };
+  }, [partner]);
 
   // ═══════════════════════════════════════════════════════
   // 自动分类引擎：基于四维度数据计算活跃度得分并自动分类
   // ═══════════════════════════════════════════════════════
+  // 归一化阈值配置（根据业务规模调整）
+  const NORMALIZE_MAX = {
+    orderAmount: 5000000,      // 下单金额归一化最大值：500万
+    pipeline: 10000000,         // Pipeline归一化最大值：1000万
+    marketing: 1000000,         // 市场活动归一化最大值
+    engagement: 100,            // 赋能互动归一化最大值
+  };
+
   const { dynamicCategory, activityScore, categoryInfo } = useMemo(() => {
-    // 四维度权重配置
-    const weights = {
-      orderAmount: 40,    // 下单金额占40%
-      pipeline: 30,       // 商机报备占30%
-      marketing: 20,      // 市场活动占20%
-      engagement: 10,     // 赋能互动占10%
-    };
+    // 四维度权重（来自集中配置）
+    const weights = SCORE_CONFIG.categorization;
 
     // 数据归一化处理
     const normalize = (value: number, max: number) => Math.min(100, (value / max) * 100);
@@ -392,10 +477,12 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
                            (partner.loginFrequency === '高频' ? 20 : partner.loginFrequency === '中频' ? 10 : 0);
 
     // 计算各维度得分
-    const orderScore = normalize(quarterlyOrderAmount, 5000000);
-    const pipelineScore = normalize(quarterlyPipeline, 10000000);
-    const marketingScore = normalize(quarterlyMarketing * 300000, 1000000);
-    const engagementScoreNorm = normalize(engagementScore, 100);
+    const orderScore = normalize(quarterlyOrderAmount, NORMALIZE_MAX.orderAmount);
+    const pipelineScore = normalize(quarterlyPipeline, NORMALIZE_MAX.pipeline);
+    // 市场活动得分：需要真实活动产出数据
+    // 当前基于活动数量计算，不使用硬编码产出值
+    const marketingScore = quarterlyMarketing > 0 ? normalize(quarterlyMarketing * 10000, NORMALIZE_MAX.marketing) : 0;
+    const engagementScoreNorm = normalize(engagementScore, NORMALIZE_MAX.engagement);
 
     // 计算综合活跃度得分
     const score = Math.round(
@@ -515,17 +602,20 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
   const breakthroughs = useMemo(() => {
     const ops: { title: string; desc: string; action: string; target: string; roi: string }[] = [];
     if (partner.pipeline.solution < partner.pipeline.registered * 0.5) {
-      ops.push({ title: '方案转化突破', desc: `报备→方案转化率仅${Math.round((partner.pipeline.solution / Math.max(partner.pipeline.registered, 1)) * 100)}%，远低于同级伙伴均值60%。根本原因可能是方案能力不足或客户需求匹配不够。`, action: '安排原厂售前联合拜访Top 3在跟项目', target: '商机销售', roi: '3.5x' });
+      ops.push({ title: '方案转化突破', desc: `报备→方案转化率仅${Math.round((partner.pipeline.solution / Math.max(partner.pipeline.registered, 1)) * 100)}%，有提升空间。可能是方案能力不足或客户需求匹配不够。`, action: '安排原厂售前联合拜访Top 3在跟项目', target: '商机销售', roi: '建议评估' });
     }
     if (partner.enablement.expiryRiskCount > 0) {
       ops.push({ title: '认证续期窗口', desc: `${partner.enablement.expiryRiskCount}人认证${partner.enablement.expiryDays}天内过期——一旦过期将失去对应产品的报备资格。这是当前最紧急的事项。`, action: `在${partner.enablement.expiryDays}天内完成续证考试安排`, target: '组织架构', roi: '紧急' });
     }
     if (mdfPct < 70) {
-      ops.push({ title: 'MDF 激活机会', desc: `MDF使用率仅${mdfPct}%，剩余${cur(partner.mdf.remaining)}未使用。MDF是撬动联合营销最有效的杠杆——每投入1元MDF平均产生3.2元Pipeline。`, action: 'Q3前提交至少2个联合营销活动方案', target: '季度沟通', roi: '3.2x' });
+      ops.push({ title: 'MDF 激活机会', desc: `MDF使用率仅${mdfPct}%，剩余${cur(partner.mdf.remaining)}未使用。MDF是撬动联合营销的有效杠杆。`, action: 'Q3前提交至少2个联合营销活动方案', target: '季度沟通', roi: '建议评估' });
     }
-    ops.push({ title: '生态协作放大', desc: `该伙伴处于SI-ISV-Reseller网络枢纽位置，但当前仅3个活跃协作关系。推动与昆仑联通(SI)的联合打单数量从5个增至10个，预计可带来${cur(2800000)}增量营收。`, action: '发起SI+ISV联合方案 workshop', target: '合作生态', roi: '2.4x' });
+    const ecoCount = partner.ecosystemPartners?.length || 0;
+    if (ecoCount > 0) {
+      ops.push({ title: '生态协作放大', desc: `当前有${ecoCount}个生态协作关系。生态协作是拓展市场覆盖的重要杠杆。`, action: '发起联合方案 workshop', target: '合作生态', roi: '建议评估' });
+    }
     if (partner.winRate < 60) {
-      ops.push({ title: '赢单率提升', desc: `当前赢单率${partner.winRate}%，低于白金伙伴均值72%。每个百分点的提升对应约${cur(partner.pipeline.registered * 0.01)}的增量营收。`, action: '复盘近3个丢标项目，识别共性失败原因', target: '商机销售', roi: '5x' });
+      ops.push({ title: '赢单率提升', desc: `当前赢单率${partner.winRate}%，有提升空间。`, action: '复盘近3个丢标项目，识别共性失败原因', target: '商机销售', roi: '建议评估' });
     }
     return ops.slice(0, 4);
   }, [partner, mdfPct]);
@@ -619,38 +709,12 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
         products: p.products || ['解决方案'],
         volume: p.volume || 0,
         deals: p.deals || 0,
+        isRealData: true,
       }));
     }
-    // 根据合作伙伴类型生成相关生态伙伴
-    const ecosystemData: Record<string, { partners: {name: string, type: string, relation: string, products: string[]}[] }> = {
-      'SI': { partners: [
-        { name: '精诚中国', type: 'Reseller', relation: '分销代理', products: ['安全合规', '数据平台'] },
-        { name: '上海智医', type: 'ISV', relation: '方案互补', products: ['AI 智算平台', '医疗解决方案'] },
-        { name: '神州数码', type: 'VAD', relation: '增值分销', products: ['全产品线'] },
-      ]},
-      'ISV': { partners: [
-        { name: '昆仑联通', type: 'SI', relation: '联合打单', products: ['云原生平台', '备份存储'] },
-        { name: '华胜天成', type: 'SI', relation: '实施交付', products: ['行业解决方案'] },
-        { name: '中软国际', type: 'SI', relation: '项目合作', products: ['定制开发'] },
-      ]},
-      'Reseller': { partners: [
-        { name: '紫光华山', type: 'VAD', relation: '上游分销', products: ['硬件产品'] },
-        { name: '锐捷网络', type: 'OEM', relation: '产品合作', products: ['网络设备'] },
-        { name: '深信服', type: 'ISV', relation: '方案集成', products: ['安全产品'] },
-      ]},
-      'OEM': { partners: [
-        { name: '新华三', type: 'SI', relation: '渠道合作', products: ['服务器'] },
-        { name: '浪潮信息', type: 'SI', relation: '联合方案', products: ['存储设备'] },
-        { name: '戴尔科技', type: 'Reseller', relation: '分销代理', products: ['整机方案'] },
-      ]},
-    };
-    const partnersData = ecosystemData[partner.type] || ecosystemData['SI'];
-    return partnersData.partners.map((p, i) => ({
-      ...p,
-      volume: 0 + 500000,
-      deals: 0,
-    }));
-  }, [partner.ecosystemPartners, partner.type]);
+    // 没有真实数据时返回空数组，不生成假数据
+    return [];
+  }, [partner.ecosystemPartners]);
 
   const [followUps, setFollowUps] = useState<any[]>([]);
   const [showFollowUpForm, setShowFollowUpForm] = useState(false);
@@ -695,16 +759,12 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
         date: a.date || '近期',
         desc: a.description || '活动记录',
         icon: iconMap[a.type] || Activity,
+        isRealData: true,
       }));
     }
-    return [
-      { type: 'deal', date: '2天前', desc: `${partner.name} 某项目进入商务阶段`, icon: ShoppingCart },
-      { type: 'training', date: '5天前', desc: `完成云原生架构师认证`, icon: Award },
-      { type: 'meeting', date: '1周前', desc: 'QBR会议——目标确认', icon: Calendar },
-      { type: 'alert', date: partner.enablement.expiryRiskCount > 0 ? '1周前' : undefined, desc: partner.enablement.expiryRiskCount > 0 ? `${partner.enablement.expiryRiskCount}人认证将在${partner.enablement.expiryDays}天内过期` : undefined, icon: AlertTriangle },
-      { type: 'deal', date: '2周前', desc: '客户续约完成', icon: CheckCircle2 },
-    ].filter((a) => a.desc);
-  }, [partner.activitiesLog, partner.name, partner.enablement]);
+    // 没有真实数据时返回空数组，不生成假数据
+    return [];
+  }, [partner.activitiesLog]);
 
   const tabItems = [
     { id: 'overview', label: t('profile.overview') }, { id: 'activity', label: t('profile.activity') },
@@ -739,6 +799,30 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
         <StatCard icon={Award} label="认证工程师" value={String(partner.enablement.certifiedEngineers)} sub={partner.enablement.expiryRiskCount > 0 ? `${partner.enablement.expiryRiskCount}人将过期` : '全部有效'} color={partner.enablement.expiryRiskCount > 0 ? 'text-red-500' : 'text-emerald-600'} />
         <StatCard icon={TrendingUp} label="赢单率" value={`${partner.winRate || 0}%`} sub={partner.pipeline.registered > 0 ? 'Pipeline运行中' : '暂无数据'} color="text-purple-600" />
       </div>
+
+      {/* ═══ RELATIONSHIP MATURITY TRACKER ═══ */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Layers className="w-5 h-5 text-brand" />
+              关系深度演进追踪
+            </div>
+            <div className="text-xs font-normal text-neutral-500">
+              {maturityLoading ? '评估中...' : maturityHealth?.currentStage ? `当前阶段：${maturityHealth.currentStageLabel}` : '暂无评估数据'}
+            </div>
+          </CardTitle>
+          <CardDescription>4 阶段关系深度 + 6 维度健康评估，动态识别伙伴成长与晋级机会</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <PartnerMaturityTracker
+            partnerName={partner.name}
+            maturityHealth={maturityHealth}
+            events={maturityEvents}
+            onStageClick={(stage) => debug.log('[PartnerProfile] stage clicked:', stage)}
+          />
+        </CardContent>
+      </Card>
 
       <Card>
         {/* Identity Row */}
@@ -897,6 +981,20 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
               </button>
             </div>
           </div>
+        </div>
+
+        {/* 合作伙伴生命周期追踪 */}
+        <div className="mt-4">
+          <PartnerLifecycleTracker
+            partnerName={partner.name}
+            currentStage={(partner.lifecycleStage || (partner.status === 'Cooperating' ? 'Active' : 'Prospective')) as any}
+            daysInCurrentStage={Math.min(Math.floor(partner.years * 30), 90)}
+            healthScore={typeof activityScore === 'number' ? activityScore : 70}
+            onAdvance={async (newStage) => {
+              await partnerLifecycleService.advanceStage(partner.id, newStage as any);
+              window.location.reload();
+            }}
+          />
         </div>
 
         {/* 业务数据统计（四维度） */}
@@ -1087,9 +1185,11 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
                     </div>
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-[10px] text-neutral-400">同级均值 {scores.tierBenchmark}分</span>
-                      <span className={`text-[10px] font-medium ${scores.growth >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {scores.growth >= 0 ? '+' : ''}{scores.growth}% 较上期
-                      </span>
+                      {scores.growth !== null && (
+                        <span className="text-[10px] font-medium text-indigo-600">
+                          增长力 {scores.growth}分 (预估)
+                        </span>
+                      )}
                     </div>
                     <ProgressBar value={scores.overall} size="md" className="mt-2" />
                   </div>
@@ -1146,7 +1246,7 @@ export const PartnerProfile = ({ partner, activities, onBack, onPartnerUpdate }:
                           { value: scores.pipelineHealth, angle: 120 },
                           { value: mdfPct, angle: 180 },
                           { value: scores.loyalty, angle: 240 },
-                          { value: Math.max(0, scores.growth), angle: 300 },
+                          { value: scores.growth ?? 0, angle: 300 },
                         ];
                         const points = data.map((p) => {
                           const rad = (p.angle * Math.PI) / 180;

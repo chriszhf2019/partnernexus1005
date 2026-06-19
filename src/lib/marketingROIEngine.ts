@@ -155,7 +155,7 @@ export function computePartnerMarketingScore(
 // ── 5. 从数据库读取 ───────────────────────────────────
 export async function fetchMarketingROI(): Promise<MarketingROISummary> {
   const [{ data: activities }, { data: deals }] = await Promise.all([
-    supabase.from('marketing_activities').select('*'),
+    supabase.from('marketing_plan').select('*'),
     supabase.from('deals').select('value, partner_id, stage, origin_activity_id'),
   ]);
 
@@ -163,16 +163,28 @@ export async function fetchMarketingROI(): Promise<MarketingROISummary> {
   const allDeals = (deals || []) as any[];
 
   const campaigns: CampaignROI[] = allActivities.map(a => {
+    // 字段映射：marketing_plan 表使用 actual_leads 而非 leads_generated
+    // 字段映射：marketing_plan 表使用 total_budget 而非 budget
+    // 字段映射：marketing_plan 表的 name 由 activity_type + category 构造
+    const activityTypeMap: Record<string, string> = {
+      'PMDF': 'mdf',
+      'Marketing': 'vendor_self',
+      'Joint': 'partner_joint',
+    };
+    const activityName = [a.activity_type, a.category].filter(Boolean).join(' - ') || '未命名活动';
+    const activityType = activityTypeMap[a.activity_type] || 'vendor_self';
+
     const relatedDeals = allDeals.filter((d: any) =>
       d.origin_activity_id === a.id || d.partner_id === a.partner_id
     );
     const dealsCreated = relatedDeals.length;
     const dealValue = relatedDeals.reduce((s: number, d: any) => s + Number(d.value || 0), 0);
-    const leadsGenerated = Number(a.leads_generated || 0);
+    // marketing_plan 表使用 actual_leads 存储线索数
+    const leadsGenerated = Number(a.actual_leads || a.leads_generated || 0);
 
     const roi = computeCampaignROI(
-      a.id, a.name || '未命名活动', a.type || '活动',
-      Number(a.budget || 0), leadsGenerated, dealsCreated, dealValue
+      a.id, activityName, activityType,
+      Number(a.total_budget || a.budget || 0), leadsGenerated, dealsCreated, dealValue
     );
     return sanitizeROIData(roi);
   });

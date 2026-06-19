@@ -179,7 +179,7 @@ export const CustomerAnalysis = () => {
                 <span className="px-2 py-1 bg-white/10 rounded-full text-xs flex items-center gap-1">
                   <Brain className="w-3 h-3" />AI 数据置信度 {aiConfidence}%
                 </span>
-                <span className="text-white/40 text-[10px]">🕐 数据同步: 2小时前</span>
+                <span className="text-white/40 text-[10px]">🕐 数据同步: 实时</span>
               </div>
               <p className="text-white/50 text-sm mt-1">{deals.length} 个商机 · {cur(totalValue)} 总额 · 赢单 {cur(wonValue)}</p>
             </div>

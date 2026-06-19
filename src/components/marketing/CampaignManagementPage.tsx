@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -9,6 +9,7 @@ import { Modal } from '../ui/Modal';
 import { Input } from '../ui/Input';
 import { Select } from '../ui/Select';
 import { formatCurrency } from '../../lib/utils';
+import { enrichCampaignPlans, CampaignPlanRow } from '../../lib/campaignMetrics';
 import { campaignService } from '../../services/campaign-service';
 import type {
   MarketingCampaign,
@@ -61,6 +62,7 @@ const PHASE_CONFIG: Record<CampaignPhase, { label: string; color: string; icon: 
   executing: { label: '执行', color: 'text-green-600', icon: '🚀' },
   follow_up: { label: '跟进', color: 'text-purple-600', icon: '📈' },
   evaluating: { label: '评估', color: 'text-indigo-600', icon: '📊' },
+  closed: { label: '已结束', color: 'text-gray-600', icon: '✅' },
 };
 
 // 活动类型配置
@@ -145,6 +147,9 @@ export const CampaignManagementPage: React.FC = () => {
   
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
   
+  // 使用 enrichCampaignPlans 增强活动数据
+  const enrichedCampaigns = useMemo(() => enrichCampaignPlans(campaigns as unknown as CampaignPlanRow[]), [campaigns]);
+  
   // 加载数据
   useEffect(() => {
     loadData();
@@ -169,35 +174,38 @@ export const CampaignManagementPage: React.FC = () => {
   
   // 过滤活动
   useEffect(() => {
-    let filtered = campaigns;
+    let filtered = enrichedCampaigns;
     
     if (statusFilter !== 'all') {
-      filtered = filtered.filter(c => c.status === statusFilter);
+      filtered = filtered.filter(c => c.campaignStatus === statusFilter);
     }
     
     if (typeFilter !== 'all') {
-      filtered = filtered.filter(c => c.type === typeFilter);
+      filtered = filtered.filter(c => c.activity_type === typeFilter);
     }
     
-    if (goalFilter !== 'all') {
-      filtered = filtered.filter(c => 
-        c.goals?.some(g => g.goal === goalFilter) ||
-        c.primaryGoal === goalFilter
-      );
-    }
+    // goalFilter 暂不支持 EnrichedCampaignPlan，跳过
+    // if (goalFilter !== 'all') {
+    //   filtered = filtered.filter(c => 
+    //     c.goals?.some(g => g.goal === goalFilter) ||
+    //     c.primaryGoal === goalFilter
+    //   );
+    // }
     
-    setFilteredCampaigns(filtered);
-  }, [campaigns, statusFilter, typeFilter, goalFilter]);
+    setFilteredCampaigns(filtered as unknown as MarketingCampaign[]);
+  }, [enrichedCampaigns, statusFilter, typeFilter, goalFilter]);
   
   // 创建活动
   const handleCreateCampaign = async () => {
-    if (!newCampaign.name) {
-      alert('请输入活动名称');
+    // marketing_plan 表没有 name 字段，name 由 activity_type + category 构造
+    // 改为验证 type 和 category
+    if (!newCampaign.type) {
+      alert('请选择活动类型');
       return;
     }
     
-    if (selectedGoals.length === 0) {
-      alert('请选择至少一个活动目标');
+    if (!newCampaign.category) {
+      alert('请输入活动类别');
       return;
     }
     

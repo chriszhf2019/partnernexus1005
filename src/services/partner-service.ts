@@ -17,12 +17,14 @@ const SNAKE_KEYS: Record<string, string> = {
   mdf_total: 'mdf_total', mdf_used: 'mdf_used',
   certified_engineers: 'certified_engineers', specialists_count: 'specialists_count',
   expiry_risk_count: 'expiry_risk_count', expiry_days: 'expiry_days',
-  org_structure: 'org_structure', milestones: 'milestones',
-  qbr_records: 'qbr_records', cooperation_plans: 'cooperation_plans',
-  activities_log: 'activities_log', top_projects: 'top_projects',
-  tier_history: 'tier_history', customer_portfolio: 'customer_portfolio',
-  ecosystem_partners: 'ecosystem_partners', sub_partners: 'sub_partners',
-  strategy_recommendations: 'strategy_recommendations',
+  orgStructure: 'org_structure', milestones: 'milestones',
+  qbrRecords: 'qbr_records', cooperationPlans: 'cooperation_plans',
+  activitiesLog: 'activities_log', topProjects: 'top_projects',
+  tierHistory: 'tier_history', customerPortfolio: 'customer_portfolio',
+  vendorQualifications: 'vendor_qualifications',
+  ecosystemPartners: 'ecosystem_partners', subPartners: 'sub_partners',
+  strategyRecommendations: 'strategy_recommendations',
+  industries: 'industries',
 };
 const toSnake = (camel: Record<string, unknown>): Record<string, unknown> => {
   const out: Record<string, unknown> = {};
@@ -48,18 +50,41 @@ function normalizeContacts(contacts: any[]): any[] {
 
 const normalizePartner = (p: Record<string, any>): Partner => {
   let startDate = p.startDate || p.start_date || '';
-  // Normalize status to ensure consistent casing
   const status = (p.status || 'Prospective').trim();
-  // Auto-calculate years from DB startDate only — never generate fake dates
   let years = p.years || 0;
   if (!years && startDate) {
     const d = new Date(startDate);
     if (!isNaN(d.getTime())) years = new Date().getFullYear() - d.getFullYear();
   }
-  // Auto-generate winRate: from DB, 0 if not set (no fake defaults)
   const winRate = p.winRate ?? p.win_rate ?? 0;
-  
   const contacts = normalizeContacts(p.contacts);
+
+  // ── industries 双向兼容：数组优先，从字符串解析降级 ──
+  let industries: string[] = p.industries && Array.isArray(p.industries) && p.industries.length > 0
+    ? p.industries
+    : (typeof p.industry === 'string' && p.industry
+      ? p.industry.split(/[、,\/]/).map(s => s.trim()).filter(Boolean)
+      : []);
+
+  // industry 字符串始终与 industries 保持一致（老代码兼容）
+  const industry = industries.length > 0 ? industries.join('、') : (p.industry || '');
+
+  // ── vendorQualifications 双向兼容 ──
+  let vendorQualifications: Record<string, string> = {};
+  if (p.vendorQualifications && typeof p.vendorQualifications === 'object' && !Array.isArray(p.vendorQualifications)) {
+    vendorQualifications = p.vendorQualifications;
+  } else if (p.vendor_qualifications && typeof p.vendor_qualifications === 'object' && !Array.isArray(p.vendor_qualifications)) {
+    vendorQualifications = p.vendor_qualifications;
+  }
+  // 从 tags 中推断厂商名（降级兼容：旧数据只有厂商名标签，没有资质等级）
+  const knownVendors = ['华为', '浪潮', '联想', 'Oracle', 'AWS', '阿里云', 'Microsoft', 'IBM', 'SAP', '新华三', '其他'];
+  if (Object.keys(vendorQualifications).length === 0 && Array.isArray(p.tags)) {
+    p.tags.forEach((tag: string) => {
+      if (knownVendors.includes(tag)) {
+        vendorQualifications[tag] = '合作中';
+      }
+    });
+  }
 
   return {
     ...p,
@@ -76,6 +101,10 @@ const normalizePartner = (p: Record<string, any>): Partner => {
     englishName: p.englishName || p.english_name || '',
     website: p.website || '',
     applicationDate: p.applicationDate || p.application_date || (startDate || ''),
+    industry,
+    industries,
+    vendorQualifications,
+    customerPortfolio: p.customerPortfolio || p.customer_portfolio || [],
   } as Partner;
 };
 
@@ -116,6 +145,7 @@ export const partnerService = {
 
   // ── Create ───────────────────────────────────────────
   create: async (input: Record<string, unknown>): Promise<Partner> => {
+    const today = new Date().toISOString().split('T')[0];
     const dbFields: Record<string, unknown> = {
       id: crypto.randomUUID(),
       name: input.name,
@@ -136,22 +166,33 @@ export const partnerService = {
       win_rate: input.winRate || input.win_rate || 0,
       unified_social_credit_code: input.unifiedSocialCreditCode || input.unified_social_credit_code || '',
       industry: input.industry || '',
+      industries: input.industries || input.industry ? [input.industry as string].filter(Boolean) : [],
       cooperation_scope: input.cooperationScope || input.cooperation_scope || '',
       is_core_partner: input.isCorePartner ?? input.is_core_partner ?? false,
+      application_date: input.applicationDate || input.application_date || today,
+      registered_address: input.registeredAddress || input.registered_address || input.location || '',
     };
     if (input.englishName || input.english_name) dbFields.english_name = input.englishName || input.english_name;
     if (input.website) dbFields.website = input.website;
-    if (input.applicationDate || input.application_date) dbFields.application_date = input.applicationDate || input.application_date;
-    if (input.registeredAddress || input.registered_address) dbFields.registered_address = input.registeredAddress || input.registered_address;
+
+    // JSONB fields
+    if (input.vendorQualifications || input.vendor_qualifications) {
+      dbFields.vendor_qualifications = input.vendorQualifications || input.vendor_qualifications;
+    }
+    if (input.customerPortfolio || input.customer_portfolio) {
+      dbFields.customer_portfolio = input.customerPortfolio || input.customer_portfolio;
+    }
 
     try {
       const { data, error } = await db.partners().insert(dbFields).select().single();
       if (error) throw new Error(error.message);
 
+      const partnerId = (data as any).id;
+
       const contacts: any[] = (input.contacts as any) || [];
       if (contacts.length > 0) {
         await db.contacts().insert(contacts.map((c: Record<string, any>) => ({
-          partner_id: (data as any).id,
+          partner_id: partnerId,
           salutation: c.salutation || '',
           first_name: c.firstName || c.first_name || '',
           last_name: c.lastName || c.last_name || '',
@@ -162,7 +203,50 @@ export const partnerService = {
         })));
       }
 
-      await logOp(String((data as any)?.id || ''), 'create', String((input as any)._operator || 'system'), { name: dbFields.name, status: dbFields.status });
+      // Save opportunities as Deal records (Fix #1: 商机不丢失)
+      const opportunities: any[] = (input.opportunities as any) || [];
+      if (opportunities.length > 0) {
+        const nowDate = new Date().toISOString().split('T')[0];
+        const expDate = new Date();
+        expDate.setMonth(expDate.getMonth() + 6);
+        await db.deals().insert(
+          opportunities
+            .filter((o: any) => o.name || o.customer)
+            .map((o: any, idx: number) => ({
+              id: crypto.randomUUID(),
+              title: o.name || o.title || '商机',
+              customer_name: o.customer || '待补充',
+              customer_industry: o.industry || '',
+              value: typeof o.amount === 'number'
+                ? o.amount
+                : parseFloat(String(o.amount).replace(/[^0-9.]/g, '')) || 0,
+              partner_id: partnerId,
+              partner_name: dbFields.name,
+              partner_type: dbFields.type,
+              stage: 'Registered',
+              status: 'Pending',
+              region: dbFields.region,
+              province: dbFields.province || '',
+              city: dbFields.city || '',
+              product_type: '待补充',
+              created_date: nowDate,
+              last_activity_date: nowDate,
+              expected_close_date: expDate.toISOString().split('T')[0],
+              source: 'PartnerCreation',
+              description: '新建伙伴时登记商机',
+              conversion_probability: 30,
+              health_score: 50,
+              data_source: 'real',
+            }))
+        );
+      }
+
+      await logOp(String(partnerId || ''), 'create', String((input as any)._operator || 'system'), {
+        name: dbFields.name,
+        status: dbFields.status,
+        deals_count: opportunities.length,
+        contacts_count: contacts.length,
+      });
       return normalizePartner(data);
     } catch (err: any) {
       throw new Error('创建合作伙伴失败: ' + (err.message || '未知错误'));
@@ -241,5 +325,71 @@ export const partnerService = {
       const { data } = await db.operationLogs().select('*').eq('partner_id', partnerId).order('created_at', { ascending: false });
       return (data || []) as any[];
     } catch (e) { debug.warn('[partnerService] getOperationLogs failed:', e); return []; }
+  },
+
+  // ── Partner-related data ─────────────────────────────
+  /**
+   * Get contacts for a partner
+   */
+  getContacts: async (partnerId: string): Promise<any[]> => {
+    try {
+      const { data } = await db.contacts().select('*').eq('partner_id', partnerId);
+      if (!data) return [];
+      return data.map((c: any) => ({
+        salutation: c.salutation || '',
+        firstName: c.first_name || c.firstName || '',
+        lastName: c.last_name || c.lastName || '',
+        title: c.title || '',
+        department: c.department || '',
+        phone: c.phone || '',
+        mobile: c.mobile || '',
+        email: c.email || '',
+        isPrimary: c.is_primary ?? c.isPrimary ?? false,
+      }));
+    } catch (e) { debug.warn('[partnerService] getContacts failed:', e); return []; }
+  },
+
+  /**
+   * Get deals for a partner (normalized to camelCase)
+   */
+  getDeals: async (partnerId: string): Promise<any[]> => {
+    try {
+      const { data } = await supabase
+        .from('deals')
+        .select('*')
+        .eq('partner_id', partnerId)
+        .order('created_date', { ascending: false });
+      return data || [];
+    } catch (e) { debug.warn('[partnerService] getDeals failed:', e); return []; }
+  },
+
+  /**
+   * Get marketing plans (PMDF) for a partner
+   */
+  getMarketingPlans: async (partnerId: string): Promise<any[]> => {
+    try {
+      const { data } = await supabase
+        .from('marketing_plan')
+        .select('*')
+        .eq('partner_id', partnerId)
+        .eq('activity_type', 'PMDF');
+      return data || [];
+    } catch (e) { debug.warn('[partnerService] getMarketingPlans failed:', e); return []; }
+  },
+
+  /**
+   * Get all related data for a partner in one call
+   */
+  getPartnerRelatedData: async (partnerId: string): Promise<{
+    contacts: any[];
+    deals: any[];
+    marketingPlans: any[];
+  }> => {
+    const [contacts, deals, marketingPlans] = await Promise.all([
+      partnerService.getContacts(partnerId),
+      partnerService.getDeals(partnerId),
+      partnerService.getMarketingPlans(partnerId),
+    ]);
+    return { contacts, deals, marketingPlans };
   },
 };

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { BarChart3, FileText, Download, Share2, MoreHorizontal } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToast } from '../ui/Toast';
+import { supabase } from '../../lib/supabase';
 
 export const DataStatusIndicator = ({ updated }: { updated: boolean }) => (
   <div className="flex items-center gap-2 px-4 py-2 bg-slate-900 rounded-full shadow-2xl border border-slate-800 transition-all hover:scale-105 select-none">
@@ -14,19 +15,63 @@ export const DataStatusIndicator = ({ updated }: { updated: boolean }) => (
   </div>
 );
 
-export const ActionDropdown = () => {
+interface ExportData {
+  date: string;
+  revenue: string;
+  partners: number;
+  deals: number;
+}
+
+export const ActionDropdown = ({ exportData }: { exportData?: ExportData[] }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
 
-  const handleExport = () => {
-    const dummyData = [
-      { date: '2024-01', revenue: '¥120万', partners: 15, deals: 45 },
-      { date: '2024-02', revenue: '¥150万', partners: 18, deals: 52 },
-      { date: '2024-03', revenue: '¥135万', partners: 20, deals: 48 },
-      { date: '2024-04', revenue: '¥180万', partners: 22, deals: 61 },
-    ];
+  const handleExport = async () => {
+    let data: ExportData[];
+    
+    if (exportData && exportData.length > 0) {
+      data = exportData;
+    } else {
+      try {
+        const { data: dealsData, error } = await supabase
+          .from('deals')
+          .select('created_at, value, partner_id')
+          .order('created_at', { ascending: false })
+          .limit(100);
+        
+        if (error || !dealsData) {
+          data = [
+            { date: '2024-01', revenue: '¥0', partners: 0, deals: 0 },
+          ];
+        } else {
+          const monthlyData: Record<string, { revenue: number; deals: number; partners: Set<string> }> = {};
+          dealsData.forEach((d: any) => {
+            const month = String(d.created_at).slice(0, 7);
+            if (!monthlyData[month]) {
+              monthlyData[month] = { revenue: 0, deals: 0, partners: new Set() };
+            }
+            monthlyData[month].revenue += Number(d.value || 0);
+            monthlyData[month].deals += 1;
+            monthlyData[month].partners.add(String(d.partner_id));
+          });
+          
+          data = Object.entries(monthlyData).map(([date, values]) => ({
+            date,
+            revenue: `¥${(values.revenue / 10000).toFixed(1)}万`,
+            partners: values.partners.size,
+            deals: values.deals,
+          }));
+        }
+      } catch (e) {
+        console.warn('[ActionDropdown] fetch for export failed:', e);
+        data = [
+          { date: '2024-01', revenue: '¥0', partners: 0, deals: 0 },
+        ];
+      }
+    }
+
     const headers = ['日期', '营收', '活跃伙伴', '商机数'];
-    const rows = dummyData.map(row => [row.date, row.revenue, row.partners, row.deals].join(','));
+    const rows = data.map(row => [row.date, row.revenue, row.partners, row.deals].join(','));
     const csv = '﻿' + headers.join(',') + '\n' + rows.join('\n');
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
     const url = URL.createObjectURL(blob);

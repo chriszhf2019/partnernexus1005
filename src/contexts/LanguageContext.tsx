@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo, ReactNode } from 'react';
 
 type Language = 'zh' | 'en';
 
@@ -18,7 +18,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.dashboard': '工作台',
     'nav.partners': '合作伙伴',
     'nav.deals': '商机管理',
-    'nav.marketing': '营销赋能',
+    'nav.marketing': '市场营销',
     'nav.incentives': '激励政策',
     'nav.enablement': '赋能培训',
     'nav.analytics': '数据分析',
@@ -163,8 +163,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'graph.playbook': '规模化策略执行',
     'graph.execute': '确认并执行 Playbook',
     
-    'marketing.title': '营销赋能',
-    'marketing.subtitle': 'MDF 基金、联合活动与市场资源管理。',
+    'marketing.title': '市场营销',
+    'marketing.subtitle': '营销活动规划、MDF 预算管理与伙伴联合营销。',
     'marketing.mdfTab': 'MDF 市场基金',
     'marketing.incentiveTab': '联合激励计划',
     'marketing.essence': '营销本质',
@@ -1346,8 +1346,13 @@ export const LanguageProvider: React.FC<{ children: ReactNode }> = ({ children }
     return new Intl.NumberFormat(locale).format(num);
   }, [language]);
 
+  // useMemo: prevent value object recreation on every render
+  const value = useMemo(() => ({
+    language, setLanguage: setLanguagePersisted, t, formatDate, formatNumber,
+  }), [language, setLanguagePersisted, t, formatDate, formatNumber]);
+
   return (
-    <LanguageContext.Provider value={{ language, setLanguage: setLanguagePersisted, t, formatDate, formatNumber }}>
+    <LanguageContext.Provider value={value}>
       {children}
     </LanguageContext.Provider>
   );

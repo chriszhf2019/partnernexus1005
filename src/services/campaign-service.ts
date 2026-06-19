@@ -19,11 +19,33 @@ import type {
 
 // 辅助函数：映射数据库行到 MarketingCampaign
 function mapCampaign(row: any): MarketingCampaign {
+  // 映射 type: activity_type → CampaignType
+  const typeMap: Record<string, string> = {
+    'PMDF': 'mdf',
+    'Marketing': 'vendor_self',
+    'Joint': 'partner_joint',
+  };
+  
+  // 映射状态: plan_status → CampaignStatus
+  const statusMap: Record<string, MarketingCampaign['status']> = {
+    'draft': 'draft',
+    'submitted': 'pending',
+    'approved': 'approved',
+  };
+  
+  // 映射阶段: execution_status → CampaignPhase
+  const phaseMap: Record<string, MarketingCampaign['currentPhase']> = {
+    'draft': 'planning',
+    'approved': 'executing',
+    'executed': 'closed',
+  };
+  
   return {
     id: row.id,
-    name: row.name || '',
-    type: row.type || 'vendor_self',
-    hostType: row.host_type || 'vendor',
+    // name 由 activity_type + category 构造
+    name: [row.activity_type, row.category].filter(Boolean).join(' - ') || '',
+    type: (typeMap[row.activity_type] || 'vendor_self') as MarketingCampaign['type'],
+    hostType: row.partner_id ? 'partner' : 'vendor',
     year: row.year || new Date().getFullYear(),
     quarter: row.quarter || 'Q1',
     category: row.category,
@@ -31,26 +53,26 @@ function mapCampaign(row: any): MarketingCampaign {
     city: row.city,
     
     // 预算信息
-    budget: Number(row.budget || 0),
+    budget: Number(row.total_budget || row.budget || 0),
     actualSpend: Number(row.actual_spend || 0),
     approvedAmount: Number(row.approved_amount || 0),
     
     // 时间信息
-    plannedStartDate: row.planned_start_date,
-    plannedEndDate: row.planned_end_date,
-    actualStartDate: row.actual_start_date,
-    actualEndDate: row.actual_end_date,
+    plannedStartDate: row.expected_date,
+    plannedEndDate: null,
+    actualStartDate: null,
+    actualEndDate: null,
     
     // 参会者信息
     expectedAttendees: Number(row.expected_attendees || 0),
-    actualAttendees: Number(row.actual_attendees || 0),
-    registeredCount: Number(row.registered_count || 0),
-    checkedInCount: Number(row.checked_in_count || 0),
+    actualAttendees: 0, // 不在 marketing_plan 表中
+    registeredCount: 0, // 不在 marketing_plan 表中
+    checkedInCount: 0, // 不在 marketing_plan 表中
     
     // 状态和阶段
-    status: row.status || 'draft',
-    currentPhase: row.current_phase || 'planning',
-    phaseRecords: row.phase_records,
+    status: statusMap[row.plan_status] || 'draft',
+    currentPhase: phaseMap[row.execution_status] || 'planning',
+    phaseRecords: undefined,
     
     // 关联信息
     partnerId: row.partner_id,
@@ -58,20 +80,20 @@ function mapCampaign(row: any): MarketingCampaign {
     responsiblePerson: row.responsible_person,
     
     // 描述和目标
-    description: row.description,
-    goals: row.goals || [],
-    expectedOutputs: row.expected_outputs,
+    description: row.business_objective || row.expected_output,
+    goals: [],
+    expectedOutputs: row.expected_output,
     
     // 商机转化
-    leadsGenerated: Number(row.leads_generated || 0),
-    dealsCreated: Number(row.deals_created || 0),
-    dealsValue: Number(row.deals_value || 0),
+    leadsGenerated: Number(row.actual_leads || 0),
+    dealsCreated: Number(row.actual_opps || 0),
+    dealsValue: Number(row.forecast_pipeline || 0),
     
     // 时间戳
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    createdBy: row.created_by,
-    hasEvaluation: row.has_evaluation || false,
+    createdBy: undefined,
+    hasEvaluation: false, // 不在 marketing_plan 表中
   };
 }
 
@@ -260,13 +282,13 @@ async function refreshCache(year?: number, quarter?: string) {
   if (Date.now() - cacheTimestamp < CACHE_TTL && cachedCampaigns) return;
   
   try {
-    let query = supabase.from('marketing_campaigns').select('*');
+    let query = supabase.from('marketing_plan').select('*');
     
     if (year) {
       query = query.eq('year', year);
     }
     
-    const { data, error } = await query.order('planned_start_date', { ascending: false });
+    const { data, error } = await query.order('expected_date', { ascending: false });
     
     if (error) throw error;
     
@@ -309,7 +331,7 @@ export const campaignService = {
   async getById(id: string): Promise<MarketingCampaign | undefined> {
     try {
       const { data, error } = await supabase
-        .from('marketing_campaigns')
+        .from('marketing_plan')
         .select('*')
         .eq('id', id)
         .single();
@@ -325,34 +347,37 @@ export const campaignService = {
   // 创建活动
   async create(campaign: Partial<MarketingCampaign>): Promise<MarketingCampaign | undefined> {
     try {
+      // 根据 type 映射到 activity_type
+      const activityTypeMap: Record<string, string> = {
+        'mdf': 'PMDF',
+        'vendor_self': 'Marketing',
+        'partner_joint': 'Joint',
+      };
+      
       const insertData: any = {
-        name: campaign.name,
-        type: campaign.type || 'vendor_self',
-        host_type: campaign.hostType || 'vendor',
         year: campaign.year || new Date().getFullYear(),
         quarter: campaign.quarter || 'Q1',
-        category: campaign.category,
+        activity_type: activityTypeMap[campaign.type || 'vendor_self'] || 'Marketing',
+        category: campaign.category || '线下峰会',
         region: campaign.region,
         city: campaign.city,
-        budget: campaign.budget || 0,
-        actual_spend: campaign.actualSpend || 0,
+        total_budget: campaign.budget || 0,
         approved_amount: campaign.approvedAmount,
-        planned_start_date: campaign.plannedStartDate,
-        planned_end_date: campaign.plannedEndDate,
         expected_attendees: campaign.expectedAttendees || 0,
-        status: campaign.status || 'draft',
-        current_phase: campaign.currentPhase || 'planning',
+        expected_output: campaign.expectedOutputs,
+        responsible_person: campaign.responsiblePerson,
+        goal: campaign.primaryGoal,
+        execution_status: 'draft',
+        plan_status: 'draft',
         partner_id: campaign.partnerId,
         partner_name: campaign.partnerName,
-        responsible_person: campaign.responsiblePerson,
-        description: campaign.description,
-        goals: campaign.goals || [],
-        expected_outputs: campaign.expectedOutputs,
-        created_by: campaign.createdBy,
+        budget: campaign.budget || 0,
+        target_leads: 0,
+        target_opps: 0,
       };
       
       const { data, error } = await supabase
-        .from('marketing_campaigns')
+        .from('marketing_plan')
         .insert(insertData)
         .select()
         .single();
@@ -372,40 +397,53 @@ export const campaignService = {
     try {
       const updateData: any = {};
       
-      if (updates.name !== undefined) updateData.name = updates.name;
-      if (updates.type !== undefined) updateData.type = updates.type;
-      if (updates.hostType !== undefined) updateData.host_type = updates.hostType;
+      // type → activity_type 映射
+      const activityTypeMap: Record<string, string> = {
+        'mdf': 'PMDF',
+        'vendor_self': 'Marketing',
+        'partner_joint': 'Joint',
+      };
+      
+      // status → plan_status 映射
+      const planStatusMap: Record<string, string> = {
+        'draft': 'draft',
+        'pending': 'submitted',
+        'approved': 'approved',
+      };
+      
+      // currentPhase → execution_status 映射
+      const executionStatusMap: Record<string, string> = {
+        'planning': 'draft',
+        'executing': 'approved',
+        'closed': 'executed',
+      };
+      
+      if (updates.name !== undefined) {
+        // name 由 activity_type + category 构造，不需要单独存储
+      }
+      if (updates.type !== undefined) updateData.activity_type = activityTypeMap[updates.type] || updates.type;
       if (updates.year !== undefined) updateData.year = updates.year;
       if (updates.quarter !== undefined) updateData.quarter = updates.quarter;
       if (updates.category !== undefined) updateData.category = updates.category;
       if (updates.region !== undefined) updateData.region = updates.region;
       if (updates.city !== undefined) updateData.city = updates.city;
-      if (updates.budget !== undefined) updateData.budget = updates.budget;
+      if (updates.budget !== undefined) updateData.total_budget = updates.budget;
       if (updates.actualSpend !== undefined) updateData.actual_spend = updates.actualSpend;
       if (updates.approvedAmount !== undefined) updateData.approved_amount = updates.approvedAmount;
-      if (updates.plannedStartDate !== undefined) updateData.planned_start_date = updates.plannedStartDate;
-      if (updates.plannedEndDate !== undefined) updateData.planned_end_date = updates.plannedEndDate;
-      if (updates.actualStartDate !== undefined) updateData.actual_start_date = updates.actualStartDate;
-      if (updates.actualEndDate !== undefined) updateData.actual_end_date = updates.actualEndDate;
+      if (updates.plannedStartDate !== undefined) updateData.expected_date = updates.plannedStartDate;
       if (updates.expectedAttendees !== undefined) updateData.expected_attendees = updates.expectedAttendees;
-      if (updates.actualAttendees !== undefined) updateData.actual_attendees = updates.actualAttendees;
-      if (updates.registeredCount !== undefined) updateData.registered_count = updates.registeredCount;
-      if (updates.checkedInCount !== undefined) updateData.checked_in_count = updates.checkedInCount;
-      if (updates.status !== undefined) updateData.status = updates.status;
-      if (updates.currentPhase !== undefined) updateData.current_phase = updates.currentPhase;
+      if (updates.status !== undefined) updateData.plan_status = planStatusMap[updates.status] || updates.status;
+      if (updates.currentPhase !== undefined) updateData.execution_status = executionStatusMap[updates.currentPhase] || updates.currentPhase;
       if (updates.partnerId !== undefined) updateData.partner_id = updates.partnerId;
       if (updates.partnerName !== undefined) updateData.partner_name = updates.partnerName;
       if (updates.responsiblePerson !== undefined) updateData.responsible_person = updates.responsiblePerson;
-      if (updates.description !== undefined) updateData.description = updates.description;
-      if (updates.goals !== undefined) updateData.goals = updates.goals;
-      if (updates.expectedOutputs !== undefined) updateData.expected_outputs = updates.expectedOutputs;
-      if (updates.leadsGenerated !== undefined) updateData.leads_generated = updates.leadsGenerated;
-      if (updates.dealsCreated !== undefined) updateData.deals_created = updates.dealsCreated;
-      if (updates.dealsValue !== undefined) updateData.deals_value = updates.dealsValue;
-      if (updates.hasEvaluation !== undefined) updateData.has_evaluation = updates.hasEvaluation;
+      if (updates.expectedOutputs !== undefined) updateData.expected_output = updates.expectedOutputs;
+      if (updates.leadsGenerated !== undefined) updateData.actual_leads = updates.leadsGenerated;
+      if (updates.dealsCreated !== undefined) updateData.actual_opps = updates.dealsCreated;
+      if (updates.dealsValue !== undefined) updateData.forecast_pipeline = updates.dealsValue;
       
       const { error } = await supabase
-        .from('marketing_campaigns')
+        .from('marketing_plan')
         .update(updateData)
         .eq('id', id);
       
@@ -423,7 +461,7 @@ export const campaignService = {
   async delete(id: string): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('marketing_campaigns')
+        .from('marketing_plan')
         .delete()
         .eq('id', id);
       
@@ -440,9 +478,15 @@ export const campaignService = {
   // 更新活动阶段
   async updatePhase(id: string, phase: CampaignPhase): Promise<boolean> {
     try {
+      // currentPhase → execution_status 映射
+      const executionStatusMap: Record<string, string> = {
+        'planning': 'draft',
+        'executing': 'approved',
+        'closed': 'executed',
+      };
       const { error } = await supabase
-        .from('marketing_campaigns')
-        .update({ current_phase: phase })
+        .from('marketing_plan')
+        .update({ execution_status: executionStatusMap[phase] || phase })
         .eq('id', id);
       
       if (error) throw error;
@@ -454,13 +498,19 @@ export const campaignService = {
       return false;
     }
   },
-  
+
   // 更新活动状态
   async updateStatus(id: string, status: CampaignStatus): Promise<boolean> {
     try {
+      // status → plan_status 映射
+      const planStatusMap: Record<string, string> = {
+        'draft': 'draft',
+        'pending': 'submitted',
+        'approved': 'approved',
+      };
       const { error } = await supabase
-        .from('marketing_campaigns')
-        .update({ status })
+        .from('marketing_plan')
+        .update({ plan_status: planStatusMap[status] || status })
         .eq('id', id);
       
       if (error) throw error;
@@ -565,10 +615,8 @@ export const campaignService = {
         .eq('campaign_id', campaignId)
         .neq('status', 'cancelled');
       
-      await supabase
-        .from('marketing_campaigns')
-        .update({ registered_count: count || 0 })
-        .eq('id', campaignId);
+      // marketing_plan 表没有 registered_count 列，跳过更新
+      console.log('Attendee count:', count);
     } catch (e) {
       console.error('Failed to update attendee count:', e);
     }
@@ -583,15 +631,13 @@ export const campaignService = {
         .eq('campaign_id', campaignId)
         .eq('checked_in', true);
       
-      await supabase
-        .from('marketing_campaigns')
-        .update({ checked_in_count: count || 0, actual_attendees: count || 0 })
-        .eq('id', campaignId);
+      // marketing_plan 表没有 checked_in_count 和 actual_attendees 列，跳过更新
+      console.log('Checked in count:', count);
     } catch (e) {
       console.error('Failed to update checked in count:', e);
     }
   },
-  
+
   // ── 报名管理 ────────────────────────
   
   // 获取活动报名列表
@@ -741,16 +787,16 @@ export const campaignService = {
   async incrementDealsCreated(campaignId: string): Promise<void> {
     try {
       const { data } = await supabase
-        .from('marketing_campaigns')
-        .select('deals_created')
+        .from('marketing_plan')
+        .select('actual_opps')
         .eq('id', campaignId)
         .single();
       
-      const currentCount = data?.deals_created || 0;
+      const currentCount = data?.actual_opps || 0;
       
       await supabase
-        .from('marketing_campaigns')
-        .update({ deals_created: currentCount + 1 })
+        .from('marketing_plan')
+        .update({ actual_opps: currentCount + 1 })
         .eq('id', campaignId);
     } catch (e) {
       console.error('Failed to increment deals created:', e);
@@ -1025,11 +1071,7 @@ export const campaignService = {
 
       if (error) throw error;
 
-      // 更新活动评估标记
-      await supabase
-        .from('marketing_campaigns')
-        .update({ has_evaluation: true })
-        .eq('id', evaluation.campaignId!);
+      // marketing_plan 表没有 has_evaluation 列，跳过更新
 
       return true;
     } catch (e) {
@@ -1394,8 +1436,8 @@ export const campaignService = {
         .eq('campaign_id', campaignId);
       
       await supabase
-        .from('marketing_campaigns')
-        .update({ deals_created: data?.length || 0 })
+        .from('marketing_plan')
+        .update({ actual_opps: data?.length || 0 })
         .eq('id', campaignId);
       
       return true;
