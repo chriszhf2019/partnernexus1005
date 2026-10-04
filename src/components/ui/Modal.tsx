@@ -33,7 +33,7 @@ export const Modal = ({ open, onClose, children, title, description, size = 'md'
         const last = focusable[focusable.length - 1];
         if (!first) return;
         if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
-        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
       }
     },
     [onClose],
@@ -55,29 +55,37 @@ export const Modal = ({ open, onClose, children, title, description, size = 'md'
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-hidden="true"
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true"
       />
       <div
         ref={contentRef}
         role="dialog" aria-modal="true" aria-label={title}
         className={cn(
-          'relative bg-white dark:bg-neutral-900 rounded-xl shadow-2xl w-full p-6 overflow-auto max-h-[85vh] border border-neutral-200 dark:border-neutral-800 animate-in fade-in zoom-in-95 duration-150',
+          'relative bg-white dark:bg-neutral-900 rounded-2xl shadow-elevated w-full p-6 overflow-auto max-h-[85vh] border border-neutral-200/60 dark:border-neutral-800/60 backdrop-blur-2xl',
           sizeClasses[size], className,
         )}
       >
         {title ? (
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-5 pb-4 border-b border-neutral-100 dark:border-neutral-800/50">
             <div>
-              <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">{title}</h2>
+              <h2 className="text-lg font-bold text-neutral-900 dark:text-white">{title}</h2>
               {description && <p className="text-sm text-neutral-500 mt-1">{description}</p>}
             </div>
-            <button onClick={onClose} className="p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Close">
-              <X className="w-4 h-4 text-neutral-400" />
+            <button
+              onClick={onClose}
+              className="p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-400 hover:text-neutral-600"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4" />
             </button>
           </div>
         ) : (
-          <button onClick={onClose} className="absolute top-4 right-4 p-2 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors" aria-label="Close">
-            <X className="w-4 h-4 text-neutral-400" />
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 rounded-xl hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors text-neutral-400"
+            aria-label="Close"
+          >
+            <X className="w-4 h-4" />
           </button>
         )}
         {children}

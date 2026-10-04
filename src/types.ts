@@ -1892,6 +1892,25 @@ export interface TimeSeriesMetric {
     quarterly: AchievementData;
     yearly: AchievementData;
   };
+  team_achievements?: {
+    name: string;
+    current: number;
+    target: number;
+    rate: number;
+    yoy?: number;
+    qoq?: number;
+  }[];
+  product_achievements?: {
+    name: string;
+    product_name?: string;
+    product?: string;
+    value?: number;
+    current: number;
+    target: number;
+    rate: number;
+    yoy?: number;
+    qoq?: number;
+  }[];
   active_split?: {
     order_placing: { value: number; target: number; rate: number; yoy: number; qoq: number };
     leads_reporting: { value: number; target: number; rate: number; yoy: number; qoq: number };
@@ -2116,6 +2135,24 @@ export interface GlobalConfig {
   aiVisionApiKey?: string;
   aiVisionModel?: string;
   timelineEvents?: string[];
+  // 目标配置
+  yearlyTarget?: number;
+  q1Target?: number;
+  q2Target?: number;
+  q3Target?: number;
+  q4Target?: number;
+  q1M1?: number;
+  q1M2?: number;
+  q1M3?: number;
+  q2M1?: number;
+  q2M2?: number;
+  q2M3?: number;
+  q3M1?: number;
+  q3M2?: number;
+  q3M3?: number;
+  q4M1?: number;
+  q4M2?: number;
+  q4M3?: number;
 }
 
 // ── Partner Staff Types ──────────────────────────────

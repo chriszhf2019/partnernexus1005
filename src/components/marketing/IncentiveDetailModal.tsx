@@ -72,8 +72,8 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
       setLoading(true);
       try {
         const [partnersRes, oppsRes] = await Promise.all([
-          supabase.from('program_participants').select('*').eq('program_id', program.id),
-          supabase.from('program_opportunities').select('*').eq('program_id', program.id)
+          supabase.from('incentive_applications').select('*').eq('program_id', program.id),
+          supabase.from('deals').select('id, title, value, stage, is_eligible, eligible_reason, created_at').eq('program_id', program.id)
         ]);
         
         if (partnersRes.data) {
@@ -90,10 +90,10 @@ export const IncentiveDetailModal: React.FC<IncentiveDetailModalProps> = ({ isOp
         if (oppsRes.data) {
           setOpportunities(oppsRes.data.map((row: any) => ({
             id: row.id,
-            title: row.opportunity_title || row.title || '未命名商机',
+            title: row.title || row.opportunity_title || '未命名商机',
             value: row.value ? `¥${(row.value / 10000).toFixed(1)}M` : '¥0',
             status: row.is_eligible ? 'Eligible' : 'Ineligible',
-            reason: row.eligible_reason || row.reason || (row.is_eligible ? '符合激励规则' : '不符合激励规则'),
+            reason: row.eligible_reason || (row.is_eligible ? '符合激励规则' : '不符合激励规则'),
             date: row.created_at ? new Date(row.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]
           })));
         }

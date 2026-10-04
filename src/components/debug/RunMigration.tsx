@@ -24,6 +24,13 @@ export const RunMigration = () => {
       if (e2) add('  RPC不可用: ' + e2.message.slice(0, 60) + ', 尝试直接INSERT...');
       else add('  OK');
 
+      add('正在创建 market_news 表...');
+      const { error: e2b } = await supabase.rpc('exec_sql', {
+        query: `CREATE TABLE IF NOT EXISTS market_news (id SERIAL PRIMARY KEY, title VARCHAR(500) NOT NULL, source VARCHAR(100) NOT NULL, source_url VARCHAR(500), url VARCHAR(1000) NOT NULL UNIQUE, published_at TIMESTAMPTZ, category VARCHAR(100), summary TEXT, image_url VARCHAR(1000), fetch_date TIMESTAMPTZ DEFAULT NOW(), created_at TIMESTAMPTZ DEFAULT NOW());`
+      });
+      if (e2b) add('  market_news 表: ' + e2b.message.slice(0, 80));
+      else add('  OK');
+
       add('插入基准数据...');
       const { error: e3 } = await supabase.from('market_benchmarks').upsert([
         { region: '华东', industry: '金融', target_revenue: 100000000, required_partners: 10 },

@@ -31,7 +31,7 @@ const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
 const TEST_USERS = [
   {
     email: 'admin@partnernxus.com',
-    password: 'YOUR_PASSWORD',
+    password: 'Demo@123456',
     display_name: '系统管理员',
     role: 'admin',
     confirm: true,
@@ -182,7 +182,7 @@ async function main() {
     console.log(`  ${u.role.padEnd(20)} | ${u.email.padEnd(30)} | ${u.password}`);
   }
   console.log('─'.repeat(50));
-  console.log('\n🌐 App URL: https://partner-management-1-main.vercel.app');
+  console.log('\n🌐 App URL: https://partner.velolabs.top');
   console.log('💡 All users have email_confirmed = true (no email check needed)\n');
 }
 

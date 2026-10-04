@@ -61,6 +61,7 @@ export const db = {
   courseFeedback: () => supabase.from('course_feedback'),
   partnerActivityLogs: () => supabase.from('partner_activity_logs'),
   marketBenchmarks: () => supabase.from('market_benchmarks'),
+  marketNews: () => supabase.from('market_news'),
   dealConflicts: () => supabase.from('deal_conflicts'),
   incentiveTemplates: () => supabase.from('incentive_templates'),
   incentiveBudgetAlerts: () => supabase.from('incentive_budget_alerts'),
@@ -73,4 +74,10 @@ export const db = {
   marketingLifecycleEvents: () => supabase.from('marketing_lifecycle_events'),
   // ── 关系深度生命周期 v3.0 新增表 ──
   partnerMaturityEvents: () => supabase.from('partner_maturity_events'),
+  // ── 缺失表补齐 ──
+  marketingExecutionPhases: () => supabase.from('marketing_execution_phases'),
+  marketingMaterials: () => supabase.from('marketing_materials'),
+  budgetChangeLog: () => supabase.from('budget_change_log'),
+  planBaselines: () => supabase.from('plan_baselines'),
+  planAuditLogs: () => supabase.from('plan_audit_logs'),
 };

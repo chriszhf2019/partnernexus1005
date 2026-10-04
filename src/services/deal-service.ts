@@ -3,13 +3,14 @@ import type { Deal, DealLifecycleEvent, DealLifecycleStage, DealRegistrationStat
 
 import type { PaginatedResponse, DealFilters } from './types';
 import { debug } from '../lib/debug';
+import { computeDealHealth } from '../lib/dealHealthEngine';
 
 // ── DB ↔ TS normalization ────────────────────────────
 // The Supabase deals table has a legacy schema. This normalizes old columns
 // to the new TypeScript Deal type and vice versa.
 
 function normalizeDeal(row: any): Deal {
-  return {
+  const baseDeal: Deal = {
     id: row.id,
     title: row.title || '',
     customerId: row.customer_id || row.customerId || '',
@@ -62,6 +63,16 @@ function normalizeDeal(row: any): Deal {
       keyFactors: Array.isArray(row.win_loss_key_factors) ? row.win_loss_key_factors : undefined,
     } : undefined,
   };
+  
+  try {
+    const healthResult = computeDealHealth(baseDeal);
+    baseDeal.healthScore = healthResult.score;
+    baseDeal.isStagnant = healthResult.isStagnant;
+  } catch (e) {
+    // If health calculation fails, use default
+  }
+  
+  return baseDeal;
 }
 
 function toSnakeDeal(deal: Partial<Deal>): Record<string, any> {

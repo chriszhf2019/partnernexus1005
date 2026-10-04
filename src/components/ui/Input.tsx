@@ -14,7 +14,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="space-y-1.5">
         {label && (
-          <label htmlFor={inputId} className="block text-sm font-medium text-neutral-700 dark:text-neutral-300">
+          <label htmlFor={inputId} className="block text-sm font-semibold text-neutral-700 dark:text-neutral-300">
             {label}
           </label>
         )}
@@ -22,8 +22,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           ref={ref}
           id={inputId}
           className={cn(
-            'w-full h-10 px-3 bg-white dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand dark:focus:border-brand-light transition-all disabled:bg-neutral-50 dark:disabled:bg-neutral-800/50 disabled:text-neutral-400',
-            error && 'border-red-300 dark:border-red-500 focus:ring-red-200',
+            'w-full h-10 px-3.5 bg-white dark:bg-neutral-800/80 border border-neutral-200/80 dark:border-neutral-700/50 rounded-xl text-sm text-neutral-900 dark:text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-brand/20 focus:border-brand/40 dark:focus:border-brand/50 transition-all duration-200 disabled:bg-neutral-50 dark:disabled:bg-neutral-800/30 disabled:text-neutral-400 backdrop-blur-sm',
+            error && 'border-red-300 dark:border-red-500/50 focus:ring-red-200/50 focus:border-red-400',
             className,
           )}
           aria-invalid={!!error}
@@ -31,12 +31,12 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {error && (
-          <p id={`${inputId}-error`} className="text-xs text-red-600 font-medium" role="alert">
+          <p id={`${inputId}-error`} className="text-xs text-red-600 dark:text-red-400 font-medium" role="alert">
             {error}
           </p>
         )}
         {helperText && !error && (
-          <p id={`${inputId}-helper`} className="text-xs text-neutral-500">
+          <p id={`${inputId}-helper`} className="text-xs text-neutral-400">
             {helperText}
           </p>
         )}

@@ -17,7 +17,7 @@ import {
   QrCode, Share2, Copy, Eye, Image, Tag, MessageSquare, CalendarDays, Info, Receipt,
   Package, UserCheck, Wrench, Clock, Lightbulb, ArrowRight, AlertTriangle, Bell,
   Send, CheckCircle2, Download, ArrowUpRight, TrendingDown, Minus, RefreshCw,
-  Megaphone, ListChecks, ClipboardCheck, AlertCircle, ArrowDownRight
+  Megaphone, ListChecks, ClipboardCheck, AlertCircle, ArrowDownRight, Shield, Globe, ClipboardList
 } from 'lucide-react';
 import { MDFClaimsPanel } from './MDFClaimsPanel';
 import { CampaignROIPanel } from './CampaignROIPanel';
@@ -131,6 +131,10 @@ export const MarketingIncentivePage = () => {
   const [showKPIIncentive, setShowKPIIncentive] = useState(false);
   const [expandedActionCard, setExpandedActionCard] = useState<string | null>(null);
 
+  // 时间周期选择器：'half' = 上半年(1-6月) | 'full' = 全年
+  const [timePeriod, setTimePeriod] = useState<'half' | 'full'>('half');
+  const [actionCardStates, setActionCardStates] = useState<Record<string, 'pending' | 'handled' | 'ignored'>>({});
+
   const cur = (v: number) => formatCurrency(v, config?.currency || 'CNY');
 
   const [currentYear, setCurrentYear] = useState(2026);
@@ -162,6 +166,13 @@ export const MarketingIncentivePage = () => {
 
   const filteredActivities = qActivities.filter((a: any) => {
     if (statusFilter === 'all') return true;
+    if (statusFilter === 'over-budget') return safeNum(a.budget) > 0 && safeNum(a.actualSpend) > safeNum(a.budget);
+    if (statusFilter === 'no-leads') return safeNum(a.leadsGenerated) === 0 && a.status === 'Completed';
+    if (statusFilter === 'in-progress') return a.status === 'In Progress';
+    if (statusFilter === 'normal') {
+      const isNormal = safeNum(a.budget) > 0 && safeNum(a.actualSpend) <= safeNum(a.budget) && safeNum(a.leadsGenerated) > 0;
+      return isNormal;
+    }
     return a.status === statusFilter;
   });
 
@@ -176,7 +187,12 @@ export const MarketingIncentivePage = () => {
 
   // 1. 执行进度看板 - 钱与事的进度
   const executionProgressData = useMemo(() => {
-    const execRate = totalBudget > 0 ? safePercent((totalSpend / totalBudget) * 100) : 0;
+    // 当无正式批复预算但有实际支出时，使用实际支出作为参考基数，并标记为"规划中"
+    const effectiveBudget = totalBudget > 0 ? totalBudget : (totalSpend > 0 ? totalSpend : 1);
+    const execRate = totalBudget > 0
+      ? safePercent((totalSpend / totalBudget) * 100)
+      : (totalSpend > 0 ? 100 : 0); // 有支出无预算 → 视为已按规划执行
+    const hasBudgetPending = totalBudget === 0 && totalSpend > 0;
     const now = new Date();
     const monthIndex = now.getMonth();
     const quarterNum = parseInt(currentQuarter.replace('Q', ''));
@@ -288,6 +304,7 @@ export const MarketingIncentivePage = () => {
       isLagging,
       hasReconciliationLag, // 新字段：核销滞后
       zeroSpendCompletedCount: zeroSpendCompleted.length, // 新字段：已完成0支出活动数
+      hasBudgetPending, // 新字段：无预算但有支出标记
       regionDistribution,
       provinceData,
       mdfBudget,
@@ -406,6 +423,28 @@ export const MarketingIncentivePage = () => {
       newLogoAmount: newLogoOrderAmount,
     };
   }, [qActivities, totalBudget, totalLeads]);
+
+  // 趋势箭头数据（基于历史数据推算同比/环比）
+  const trendData = useMemo(() => {
+    // 模拟趋势数据（实际应从历史 marketing_plan / mdfActivities 中计算）
+    const getTrend = (current: number, direction: 'up' | 'down' | 'stable') => {
+      const delta = direction === 'up' ? Math.round(current * 0.05) : direction === 'down' ? -Math.round(current * 0.05) : 0;
+      return { current, delta: Math.abs(delta), direction, display: `${direction === 'up' ? '↑' : direction === 'down' ? '↓' : '→'} ${Math.abs(delta)}` };
+    };
+    const currentMonth = new Date().getMonth();
+    // 转化周期：环比上月（如果 Q1 则对比去年 Q4）
+    const conversionTrend = getTrend(conversionData.avgConversionDays, conversionData.avgConversionDays > 35 ? 'up' : conversionData.avgConversionDays < 30 ? 'down' : 'stable');
+    // 跟进率：环比上月
+    const followUpTrend = getTrend(conversionData.followUpRate || 60, conversionData.followUpRate >= 65 ? 'up' : conversionData.followUpRate < 55 ? 'down' : 'stable');
+    // 新客户占比：环比上月
+    const newLogoTrend = getTrend(conversionData.newLogoPercentage || 20, conversionData.newLogoPercentage >= 25 ? 'up' : conversionData.newLogoPercentage < 15 ? 'down' : 'stable');
+    // 线索质量（A+B类）：环比上月
+    const qualityTrend = getTrend(
+      totalLeads > 0 ? Math.round(((conversionData.gradeA + conversionData.gradeB) / totalLeads) * 100) : 0,
+      totalLeads > 50 ? 'up' : totalLeads < 20 ? 'down' : 'stable'
+    );
+    return { conversionTrend, followUpTrend, newLogoTrend, qualityTrend };
+  }, [conversionData, totalLeads]);
 
   // ========== 第二部分：诊断层计算 ==========
 
@@ -717,6 +756,7 @@ export const MarketingIncentivePage = () => {
 
   const actionCards = useMemo(() => {
     const cards = [];
+    const now = new Date();
 
     // === 行动1：催办未完成活动 ===
     const notCompleted = qActivities.filter((a: any) => a.status !== 'Completed');
@@ -731,6 +771,7 @@ export const MarketingIncentivePage = () => {
 
       cards.push({
         type: 'supervision',
+        actionId: `supervision-${now.getTime()}-0`,
         icon: AlertTriangle,
         color: executionProgressData.isLagging ? 'orange' : 'blue',
         title: `${notCompleted.length}场活动待推进`,
@@ -757,6 +798,7 @@ export const MarketingIncentivePage = () => {
       const totalApprovedAmount = completedZeroSpend.reduce((s: number, a: any) => s + safeNum(a.budget), 0);
       cards.push({
         type: 'reconciliation',
+        actionId: `reconciliation-${now.getTime()}-0`,
         icon: Receipt,
         color: 'purple',
         title: `${completedZeroSpend.length}场活动待核销`,
@@ -788,6 +830,7 @@ export const MarketingIncentivePage = () => {
       const potentialValue = staleTotal * estimatedDealValue;
       cards.push({
         type: 'activation',
+        actionId: `activation-${now.getTime()}-0`,
         icon: RefreshCw,
         color: 'blue',
         title: `${staleTotal}条线索待跟进激活`,
@@ -811,6 +854,7 @@ export const MarketingIncentivePage = () => {
     if (bestType && bestType.newLogo > 0) {
       cards.push({
         type: 'empowerment',
+        actionId: `empowerment-${now.getTime()}-0`,
         icon: Lightbulb,
         color: 'green',
         title: `复制"${bestType.type}"的成功经验`,
@@ -834,6 +878,7 @@ export const MarketingIncentivePage = () => {
     if (missingRegions.length > 0 && cards.length < 5) {
       cards.push({
         type: 'regional-planning',
+        actionId: `regional-planning-${now.getTime()}-0`,
         icon: MapPin,
         color: 'orange',
         title: `${missingRegions.length}个大区尚未覆盖`,
@@ -852,7 +897,7 @@ export const MarketingIncentivePage = () => {
     }
 
     return cards;
-  }, [executionProgressData, diagnosticData, qActivities, cur, totalLeads, conversionData]);
+  }, [executionProgressData, diagnosticData, qActivities, cur, totalLeads, conversionData, actionCardStates, timePeriod]);
 
   // ========== 活动类型分布图 ==========
 
@@ -1035,1390 +1080,650 @@ export const MarketingIncentivePage = () => {
         </div>
       </div>
 
-      {/* ========== 第一部分：核心看板（进度 / 效果 / 价值） ========== */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="w-5 h-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">核心看板</h2>
-          <Badge variant="info" size="sm">活动数据动态统计</Badge>
+      {/* 时间周期选择器 */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2 text-sm text-neutral-500">
+          <span>统计周期：</span>
+          <div className="flex items-center bg-neutral-100 dark:bg-neutral-800 rounded-lg p-0.5">
+            <button
+              onClick={() => setTimePeriod('half')}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                timePeriod === 'half'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+              }`}
+            >
+              上半年（1-6月）
+            </button>
+            <button
+              onClick={() => setTimePeriod('full')}
+              className={`px-3 py-1 rounded-md text-xs font-medium transition-all ${
+                timePeriod === 'full'
+                  ? 'bg-white dark:bg-neutral-700 text-neutral-900 dark:text-white shadow-sm'
+                  : 'text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300'
+              }`}
+            >
+              全年（1-12月）
+            </button>
+          </div>
         </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* 1. 执行进度看板 - 结果 → 诊断 → 行动 */}
-          <Card className="relative overflow-hidden border-t-4 border-t-blue-500">
-            {/* ============== Header ============== */}
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                  <Activity className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-neutral-500">执行进度</span>
-                  <p className="text-xs text-neutral-400">活动完成率 · 预算执行</p>
-                </div>
-              </div>
-              <Badge className={getStatusColor(executionProgressData.completionRate)} size="sm">
-                {executionProgressData.isLagging ? '进度滞后' : executionProgressData.completionRate >= 80 ? '执行良好' : '正常推进'}
-              </Badge>
-            </div>
-
-            {/* ============== 第一层：核心 KPI（点击可展开） ============== */}
-            <div className="grid grid-cols-2 gap-4 mb-5">
-              {/* 活动完成率 - 点击展开详情 */}
-              <div
-                className="cursor-pointer transition-colors hover:bg-blue-50/50 dark:hover:bg-blue-900/10 rounded-lg p-2 -mx-2"
-                onClick={() => setShowKpiDetail(showKpiDetail === 'completion' ? null : 'completion')}
-              >
-                <div className="flex items-center gap-1">
-                  <p className={cn(
-                    "text-3xl font-bold",
-                    executionProgressData.isLagging && executionProgressData.completionRate < executionProgressData.timeProgress - 10
-                      ? "text-orange-600"
-                      : "text-neutral-900 dark:text-white"
-                  )}>
-                    {executionProgressData.completionRate}%
-                  </p>
-                  <span className="text-xs text-neutral-400">
-                    ({completedCount}/{executionProgressData.totalActivities})
-                  </span>
-                </div>
-                <p className="text-xs text-neutral-500 mt-1">活动完成率</p>
-              </div>
-
-              {/* 预算执行率 + 核销滞后标签 */}
-              <div
-                className="cursor-pointer transition-colors hover:bg-emerald-50/50 dark:hover:bg-emerald-900/10 rounded-lg p-2 -mx-2"
-                onClick={() => setShowKpiDetail(showKpiDetail === 'budget' ? null : 'budget')}
-              >
-                <div className="flex items-center gap-1">
-                  <p className={cn(
-                    "text-3xl font-bold",
-                    executionProgressData.execRate < 20 ? "text-red-600" : "text-neutral-900 dark:text-white"
-                  )}>
-                    {executionProgressData.execRate}%
-                  </p>
-                  <span className={cn("w-2 h-2 rounded-full", getStatusDot(executionProgressData.execRate))} />
-                </div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <p className="text-xs text-neutral-500">预算执行</p>
-                  {executionProgressData.hasReconciliationLag && (
-                    <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-700 bg-amber-100 dark:text-amber-400 dark:bg-amber-900/30 px-1.5 py-0.5 rounded-full">
-                      <Receipt className="w-2.5 h-2.5" />
-                      核销滞后
-                    </span>
-                  )}
-                </div>
-                <p className="text-[10px] text-neutral-400">{cur(totalSpend)} / {cur(totalBudget)}</p>
-              </div>
-            </div>
-
-            {/* ============== 第二层：双环对比 - 活动完成率 vs 时间进度 ============== */}
-            <div className="mb-5">
-              <div className="flex items-center justify-between text-xs mb-3">
-                <span className="text-neutral-600 dark:text-neutral-400 font-medium">执行节奏对比</span>
-                <span className="text-[11px] text-neutral-500">
-                  <span className="text-orange-500">●</span> 时间进度
-                  <span className="ml-2 text-blue-600">●</span> 活动完成率
-                </span>
-              </div>
-              {/* 双环可视化 + 关键数据 */}
-              <div className="flex items-center gap-3">
-                <div className="flex-shrink-0 relative">
-                  {/* 外环 - 时间进度 */}
-                  <svg width="92" height="92" viewBox="0 0 92 92" className="-rotate-90">
-                    <circle cx="46" cy="46" r="36" className="text-neutral-200 dark:text-neutral-700" strokeWidth="7" stroke="currentColor" fill="none" />
-                    <circle cx="46" cy="46" r="36" stroke="#f97316" strokeWidth="7" fill="none" strokeDasharray={`${(executionProgressData.timeProgress / 100) * 226.2} 226.2`} strokeLinecap="round" />
-                    {/* 内环 - 活动完成率 */}
-                    <circle cx="46" cy="46" r="24" className="text-neutral-100 dark:text-neutral-800" strokeWidth="7" stroke="currentColor" fill="none" />
-                    <circle cx="46" cy="46" r="24" stroke={executionProgressData.isLagging ? '#ea580c' : '#2563eb'} strokeWidth="7" fill="none" strokeDasharray={`${(executionProgressData.completionRate / 100) * 150.8} 150.8`} strokeLinecap="round" />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className="text-[10px] text-neutral-400">完成率</span>
-                    <span className={cn("text-lg font-bold", executionProgressData.isLagging ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{executionProgressData.completionRate}%</span>
-                  </div>
-                </div>
-                <div className="flex-1 space-y-1.5 text-[11px]">
-                  <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-orange-500"></span>
-                      <span className="text-neutral-600 dark:text-neutral-400">时间进度</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className="font-semibold text-neutral-900 dark:text-white">{executionProgressData.timeProgress}%</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
-                    <div className="flex items-center gap-1.5">
-                      <span className={cn("w-2 h-2 rounded-full", executionProgressData.isLagging ? "bg-orange-600" : "bg-blue-600")}></span>
-                      <span className="text-neutral-600 dark:text-neutral-400">活动完成率</span>
-                    </div>
-                    <div className="flex items-baseline gap-1">
-                      <span className={cn("font-semibold", executionProgressData.isLagging ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{executionProgressData.completionRate}%</span>
-                    </div>
-                  </div>
-                  {executionProgressData.isLagging && (
-                    <div className="flex items-center justify-between p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg border border-orange-200 dark:border-orange-800">
-                      <div className="flex items-center gap-1.5">
-                        <AlertTriangle className="w-3 h-3 text-orange-600" />
-                        <span className="text-orange-700 dark:text-orange-300 font-medium">差距</span>
-                      </div>
-                      <span className="font-bold text-orange-600">落后 {executionProgressData.timeProgress - executionProgressData.completionRate}%</span>
-                    </div>
-                  )}
-                  {!executionProgressData.isLagging && (
-                    <div className="flex items-center justify-between p-2 bg-emerald-50 dark:bg-emerald-900/20 rounded-lg">
-                      <div className="flex items-center gap-1.5">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                        <span className="text-emerald-700 dark:text-emerald-300 font-medium">节奏正常</span>
-                      </div>
-                      <span className="font-bold text-emerald-600">领先 {executionProgressData.completionRate - executionProgressData.timeProgress}%</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 text-[11px] text-neutral-500 flex items-center gap-1">
-                {executionProgressData.isLagging ? (
-                  <>
-                    <AlertTriangle className="w-3 h-3 text-orange-500" />
-                    活动进度落后时间进度 <span className="font-semibold text-orange-600">{executionProgressData.timeProgress - executionProgressData.completionRate}%</span>
-                  </>
-                ) : (
-                  <>
-                    <CheckCircle2 className="w-3 h-3 text-emerald-500" />
-                    进度匹配，执行节奏正常
-                  </>
-                )}
-              </div>
-            </div>
-
-            {/* ============== 第三层：诊断 - 区域覆盖情况 ============== */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-neutral-500">区域覆盖情况</p>
-                <button
-                  className="text-[10px] text-blue-600 hover:underline"
-                  onClick={() => setShowKpiDetail(showKpiDetail === 'region' ? null : 'region')}
-                >
-                  {showKpiDetail === 'region' ? '收起' : '查看详情'}
-                </button>
-              </div>
-              <div className="space-y-1.5">
-                {executionProgressData.regionDistribution.slice(0, 5).map((r: any) => (
-                  <div key={r.region} className={cn(
-                    "flex items-center gap-2 rounded px-1.5 py-1 -mx-1.5",
-                    r.isMissing ? "bg-red-50/80 dark:bg-red-900/10" : "hover:bg-neutral-50 dark:hover:bg-neutral-800/50"
-                  )}>
-                    {/* 区域名 */}
-                    <span className={cn(
-                      "text-xs w-14 truncate flex-shrink-0",
-                      r.isMissing ? "font-medium text-red-700 dark:text-red-400" : "text-neutral-600 dark:text-neutral-400"
-                    )}>
-                      {r.region}
-                      {r.isMissing && ' · 0场'}
-                    </span>
-                    {/* 水平进度条 */}
-                    <div className="flex-1 bg-neutral-100 dark:bg-neutral-800 rounded-full h-2 min-w-[40px]">
-                      <div
-                        className={cn(
-                          "h-full rounded-full",
-                          r.isMissing ? "bg-transparent border border-dashed border-red-300 dark:border-red-800" : "bg-blue-500"
-                        )}
-                        style={{ width: `${Math.max(r.percentage, r.isMissing ? 3 : 0)}%` }}
-                      />
-                    </div>
-                    {/* 数字 */}
-                    <span className={cn(
-                      "text-xs w-10 text-right",
-                      r.isMissing ? "text-red-600 dark:text-red-400 font-medium" : "text-neutral-500"
-                    )}>
-                      {r.isMissing ? "缺失" : `${r.count}场`}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {/* 缺失区域提醒 */}
-              {executionProgressData.regionDistribution.filter((r: any) => r.isMissing).length > 0 && (
-                <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5 flex items-start gap-1.5">
-                  <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                  <span>
-                    {executionProgressData.regionDistribution.filter((r: any) => r.isMissing).length} 个大区尚未布局活动，建议优先规划【缺失区域】的活动补充
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* ============== 第四层：诊断 - 资金构成（MDF vs 自办） ============== */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-neutral-500">资金构成 · 执行分析</p>
-                <button
-                  className="text-[10px] text-blue-600 hover:underline"
-                  onClick={() => setShowKpiDetail(showKpiDetail === 'fund' ? null : 'fund')}
-                >
-                  {showKpiDetail === 'fund' ? '收起' : '查看详情'}
-                </button>
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {/* MDF卡片 */}
-                <div className={cn(
-                  "p-2.5 rounded-lg border",
-                  executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40
-                    ? "bg-amber-50/50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800"
-                    : "bg-emerald-50/50 dark:bg-emerald-900/10 border-emerald-200 dark:border-emerald-800"
-                )}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-emerald-700 dark:text-emerald-300 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                      MDF伙伴领用
-                    </span>
-                    <span className="text-[10px] text-neutral-400">¥{Math.round(executionProgressData.mdfBudget / 10000)}万</span>
-                  </div>
-                  <div className="flex items-end justify-between">
-                    <span className={cn(
-                      "text-xl font-bold",
-                      executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40
-                        ? "text-amber-600"
-                        : "text-emerald-700 dark:text-emerald-400"
-                    )}>{executionProgressData.mdfExecRate}%</span>
-                    <span className="text-[10px] text-neutral-500">执行率</span>
-                  </div>
-                  {/* 迷你进度条 */}
-                  <div className="mt-1.5 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-emerald-500" style={{ width: `${executionProgressData.mdfExecRate}%` }}></div>
-                  </div>
-                </div>
-                {/* 自办卡片 */}
-                <div className="p-2.5 rounded-lg border bg-blue-50/50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-800">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[10px] font-medium text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
-                      厂商自办
-                    </span>
-                    <span className="text-[10px] text-neutral-400">¥{Math.round(executionProgressData.selfBudget / 10000)}万</span>
-                  </div>
-                  <div className="flex items-end justify-between">
-                    <span className="text-xl font-bold text-blue-700 dark:text-blue-400">{executionProgressData.selfExecRate}%</span>
-                    <span className="text-[10px] text-neutral-500">执行率</span>
-                  </div>
-                  {/* 迷你进度条 */}
-                  <div className="mt-1.5 h-1 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
-                    <div className="h-full bg-blue-500" style={{ width: `${executionProgressData.selfExecRate}%` }}></div>
-                  </div>
-                </div>
-              </div>
-              {/* 资金诊断提示 */}
-              {executionProgressData.mdfBudget > 0 && executionProgressData.mdfExecRate < 40 && (
-                <div className="mt-2 text-[10px] text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded px-2 py-1.5 flex items-start gap-1.5">
-                  <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                  <span>伙伴 MDF 领用积极性偏低（仅 {executionProgressData.mdfExecRate}%），建议加强伙伴沟通或调整补贴规则，推动预算落地</span>
-                </div>
-              )}
-            </div>
-
-            {/* ============== 第五层：诊断 - 活动类型分布 + 状态胶囊 ============== */}
-            <div className="mb-5">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-neutral-500">活动类型分布</p>
-                <button
-                  className="text-[10px] text-blue-600 hover:underline"
-                  onClick={() => setShowKpiDetail(showKpiDetail === 'type' ? null : 'type')}
-                >
-                  {showKpiDetail === 'type' ? '收起' : '查看详情'}
-                </button>
-              </div>
-              <div className="space-y-2">
-                {Object.entries(executionProgressData.activityTypesDetailed).slice(0, 4).map(([type, info]: any) => {
-                  const pct = safePercent((info.total / executionProgressData.totalActivities) * 100);
-                  return (
-                    <div key={type} className="space-y-1">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-neutral-600 dark:text-neutral-400 truncate flex-1">{type}</span>
-                        <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {/* 状态胶囊 */}
-                          {info.inProgress > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-700 bg-blue-100 dark:text-blue-400 dark:bg-blue-900/30 px-1.5 py-0.5 rounded-full">
-                              <Clock className="w-2 h-2" /> 进行{info.inProgress}
-                            </span>
-                          )}
-                          {info.completed > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-emerald-700 bg-emerald-100 dark:text-emerald-400 dark:bg-emerald-900/30 px-1.5 py-0.5 rounded-full">
-                              <CheckCircle2 className="w-2 h-2" /> 完成{info.completed}
-                            </span>
-                          )}
-                          {info.abnormal > 0 && (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30 px-1.5 py-0.5 rounded-full">
-                              <AlertTriangle className="w-2 h-2" /> 异常{info.abnormal}
-                            </span>
-                          )}
-                          <span className="text-[10px] text-neutral-400 w-10 text-right">{info.total}场</span>
-                        </div>
-                      </div>
-                      {/* 进度条 */}
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full flex overflow-hidden">
-                          {/* 已完成部分 */}
-                          {info.completed > 0 && (
-                            <div
-                              className="h-full bg-emerald-500"
-                              style={{ width: `${safePercent((info.completed / info.total) * pct)}%` }}
-                            />
-                          )}
-                          {/* 进行中部分 */}
-                          {info.inProgress > 0 && (
-                            <div
-                              className="h-full bg-blue-400"
-                              style={{ width: `${safePercent((info.inProgress / info.total) * pct)}%` }}
-                            />
-                          )}
-                          {/* 规划中部分 */}
-                          {info.planning > 0 && (
-                            <div
-                              className="h-full bg-neutral-300 dark:bg-neutral-600"
-                              style={{ width: `${safePercent((info.planning / info.total) * pct)}%` }}
-                            />
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* ============== 第六层：行动入口 ============== */}
-            <div className="border-t border-neutral-100 dark:border-neutral-800 pt-3">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-neutral-600 dark:text-neutral-400 flex items-center gap-1">
-                  <Lightbulb className="w-3.5 h-3.5 text-amber-500" />
-                  立即行动
-                </p>
-                {(executionProgressData.notCompletedActivities.length > 0 || executionProgressData.hasReconciliationLag) && (
-                  <button className="text-[10px] text-orange-600 hover:underline flex items-center gap-0.5">
-                    <Bell className="w-3 h-3" />
-                    一键批量催办
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                {/* 行动1：查看未完成 */}
-                {executionProgressData.notCompletedActivities.length > 0 && (
-                  <button
-                    className={cn(
-                      "flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border transition-colors text-left",
-                      executionProgressData.isLagging
-                        ? "border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/20 dark:text-orange-400"
-                        : "border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-400"
-                    )}
-                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-pending' ? null : 'action-pending')}
-                  >
-                    <Clock className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate font-medium">
-                      {executionProgressData.notCompletedActivities.length}场待推进
-                    </span>
-                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-pending' && "rotate-90")} />
-                  </button>
-                )}
-                {/* 行动2：催办核销 */}
-                {executionProgressData.hasReconciliationLag && (
-                  <button
-                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-left dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
-                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-recon' ? null : 'action-recon')}
-                  >
-                    <Receipt className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate font-medium">催办 {executionProgressData.zeroSpendCompletedCount}场核销</span>
-                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-recon' && "rotate-90")} />
-                  </button>
-                )}
-                {/* 行动3：缺失区域补充（fallback 显示） */}
-                {!executionProgressData.hasReconciliationLag && executionProgressData.regionDistribution.some((r: any) => r.isMissing) && (
-                  <button
-                    className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors text-left dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-400"
-                    onClick={() => setShowKpiDetail(showKpiDetail === 'action-region' ? null : 'action-region')}
-                  >
-                    <MapPin className="w-3 h-3 flex-shrink-0" />
-                    <span className="truncate font-medium">补充缺失区域</span>
-                    <ChevronRight className={cn("w-3 h-3 ml-auto flex-shrink-0 transition-transform", showKpiDetail === 'action-region' && "rotate-90")} />
-                  </button>
-                )}
-                {/* 行动4：快速规划（始终显示，做拓展入口） */}
-                <button
-                  className="flex items-center gap-1.5 text-[11px] px-2.5 py-2 rounded-md border border-neutral-200 bg-neutral-50 text-neutral-700 hover:bg-neutral-100 transition-colors text-left dark:border-neutral-700 dark:bg-neutral-800/50 dark:text-neutral-300"
-                >
-                  <Plus className="w-3 h-3 flex-shrink-0" />
-                  <span className="truncate font-medium">快速规划活动</span>
-                  <ChevronRight className="w-3 h-3 ml-auto flex-shrink-0" />
-                </button>
-              </div>
-            </div>
-
-            {/* ============== KPI 详情展开区（可折叠） ============== */}
-            {showKpiDetail === 'action-pending' && executionProgressData.notCompletedActivities.length > 0 && (
-              <div className="mt-3 border border-blue-200 dark:border-blue-800 rounded-lg p-3 bg-blue-50/30 dark:bg-blue-900/10">
-                <p className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                  ⚠️ 未完成活动列表（{executionProgressData.notCompletedActivities.length}场）
-                </p>
-                <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                  {executionProgressData.notCompletedActivities.slice(0, 15).map((a: any) => (
-                    <div key={a.id} className="flex items-center justify-between text-xs bg-white dark:bg-neutral-900/50 rounded px-2 py-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className={cn(
-                          "px-1.5 py-0.5 rounded-full text-[10px] flex-shrink-0",
-                          a.status === 'In Progress'
-                            ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                            : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-                        )}>
-                          {a.status === 'In Progress' ? '进行中' : '规划中'}
-                        </span>
-                        <span className="truncate text-neutral-700 dark:text-neutral-300">{a.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] text-neutral-500">{a.event_date || '--'}</span>
-                        <button className="text-[10px] text-blue-600 hover:underline">催办</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-            {showKpiDetail === 'action-recon' && executionProgressData.hasReconciliationLag && (
-              <div className="mt-3 border border-amber-200 dark:border-amber-800 rounded-lg p-3 bg-amber-50/30 dark:bg-amber-900/10">
-                <p className="text-xs font-medium text-neutral-700 dark:text-neutral-300 mb-2">
-                  🧾 需核销活动（{executionProgressData.zeroSpendCompletedCount}场已完成但0支出）
-                </p>
-                <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                  {qActivities.filter((a: any) => a.status === 'Completed' && safeNum(a.actualSpend) === 0).slice(0, 10).map((a: any) => (
-                    <div key={a.id} className="flex items-center justify-between text-xs bg-white dark:bg-neutral-900/50 rounded px-2 py-1.5">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <AlertCircle className="w-3 h-3 text-amber-500 flex-shrink-0" />
-                        <span className="truncate text-neutral-700 dark:text-neutral-300">{a.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <span className="text-[10px] text-neutral-400">预算 ¥{Math.round((a.budget || 0) / 10000)}万</span>
-                        <button className="text-[10px] text-amber-700 hover:underline dark:text-amber-400">前往核销</button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </Card>
-
-          {/* 2. 执行效果看板 - 参与人数 & 获客数量 */}
-          <Card className="relative overflow-hidden border-t-4 border-t-emerald-500">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 flex items-center justify-center">
-                  <Flame className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-neutral-500">执行效果</span>
-                  <p className="text-xs text-neutral-400">参与人数 · 获客数量</p>
-                </div>
-              </div>
-              <Badge className={getStatusColor(executionQualityData.avgLeadsPerActivity)} size="sm">
-                {executionQualityData.avgLeadsPerActivity >= 30 ? '获客优秀' : executionQualityData.avgLeadsPerActivity >= 15 ? '获客良好' : '待提升'}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 mb-4">
-              <div>
-                <p className="text-2xl font-bold text-neutral-900 dark:text-white">
-                  {safeNum(executionQualityData.cumulativeParticipants).toLocaleString()}
-                </p>
-                <p className="text-xs text-neutral-500">计划参与人数</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-cyan-700 dark:text-cyan-500">{totalLeads}</p>
-                <p className="text-xs text-neutral-500">总线索数</p>
-              </div>
-              <div>
-                <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-500">{executionQualityData.avgLeadsPerActivity}</p>
-                <p className="text-xs text-neutral-500">场均获客</p>
-              </div>
-            </div>
-
-            {/* 流量走势 - 14天参与人数走势 */}
-            <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">近14天参与人数走势</p>
-              <div className="flex items-end justify-between h-12 gap-0.5">
-                {executionQualityData.last30Days.slice(-14).map((d: any, i: number) => {
-                  const maxVal = Math.max(...executionQualityData.last30Days.map((x: any) => x.participants || 0), 1);
-                  const height = Math.max(2, (d.participants / maxVal) * 48);
-                  return (
-                    <div
-                      key={d.day || i}
-                      className="flex-1 bg-emerald-400 rounded-t transition-all hover:bg-emerald-500"
-                      style={{ height: `${height}px` }}
-                      title={`${d.date}: ${d.participants}人`}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex justify-between text-[10px] text-neutral-400 mt-1">
-                <span>2周前</span>
-                <span>今天</span>
-              </div>
-            </div>
-
-            {/* 热门活动排行 */}
-            <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">
-                热门活动排行 {topActivities.length > 0 && <span className="text-neutral-400">Top {Math.min(5, topActivities.length)}</span>}
-              </p>
-              <div className="space-y-2">
-                {topActivities.map((a: any, i: number) => (
-                  <div
-                    key={a.id}
-                    className={cn(
-                      "flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors",
-                      selectedActivityId === a.id
-                        ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800"
-                        : "bg-neutral-50/50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800"
-                    )}
-                    onClick={() => setSelectedActivityId(selectedActivityId === a.id ? null : a.id)}
-                  >
-                    <div className={cn(
-                      "w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold",
-                      i === 0 ? "bg-amber-500 text-white" : i === 1 ? "bg-neutral-400 text-white" : "bg-amber-700 text-white"
-                    )}>
-                      {i + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium truncate">{a.name}</p>
-                      <p className="text-[10px] text-neutral-400">
-                        {a.participants}人 · {a.leads}线索 · {a.deals}商机
-                      </p>
-                    </div>
-                    {selectedActivityId === a.id && <ChevronRight className="w-3 h-3 text-emerald-500" />}
-                  </div>
-                ))}
-                {topActivities.length === 0 && (
-                  <p className="text-xs text-neutral-400 text-center py-2">暂无数据</p>
-                )}
-              </div>
-            </div>
-
-            {/* 热力分布 */}
-            <div>
-              <p className="text-xs font-medium text-neutral-500 mb-2">活动类型热度</p>
-              <div className="flex flex-wrap gap-1">
-                {executionQualityData.activityHeatmap.slice(0, 4).map((h: any) => (
-                  <span
-                    key={h.type}
-                    className={cn(
-                      "text-[10px] px-2 py-0.5 rounded-full",
-                      h.avgLeads > 10 ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
-                      h.avgLeads > 5 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" :
-                      "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-                    )}
-                  >
-                    {h.type} ({h.avgLeads})
-                  </span>
-                ))}
-              </div>
-            </div>
-          </Card>
-
-          {/* 3. 转化价值看板 - 投入产出比 & 新客户价值 */}
-          <Card className="relative overflow-hidden border-t-4 border-t-purple-500">
-            <div className="flex items-start justify-between mb-4">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-lg bg-purple-50 dark:bg-purple-900/20 flex items-center justify-center">
-                  <Trophy className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <span className="text-xs font-medium text-neutral-500">转化价值</span>
-                  <p className="text-xs text-neutral-400">投入产出比 · 新客户</p>
-                </div>
-              </div>
-              <Badge className={getStatusColor(conversionData.avgConversionRate)} size="sm">
-                {conversionData.avgConversionRate >= 30 ? '转化优秀' : conversionData.avgConversionRate >= 15 ? '转化良好' : '待突破'}
-              </Badge>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2 mb-4">
-              <div>
-                <p className="text-xl font-bold text-neutral-900 dark:text-white">{conversionData.avgConversionRate}%</p>
-                <p className="text-[10px] text-neutral-500">线索转化率</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-cyan-700 dark:text-cyan-500">{Number(conversionData.totalDeals).toLocaleString()}</p>
-                <p className="text-[10px] text-neutral-500">商机数</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-cyan-500">{cur(Number(conversionData.totalDealsAmount))}</p>
-                <p className="text-[10px] text-neutral-500">商机金额</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-emerald-600">{Number(conversionData.newLogoCount).toLocaleString()}</p>
-                <p className="text-[10px] text-neutral-500">新客户数</p>
-              </div>
-              <div>
-                <p className="text-xl font-bold text-purple-600">{cur(Number(conversionData.newLogoOrderAmount))}</p>
-                <p className="text-[10px] text-neutral-500">新客户订单</p>
-              </div>
-            </div>
-
-            {/* 线索质量分布 - 漏斗图 */}
-            <div className="mb-4">
-              <p className="text-xs font-medium text-neutral-500 mb-2">线索质量分布</p>
-              <div className="space-y-1.5">
-                {[
-                  { label: 'A类(优质)', value: conversionData.gradeA, color: 'bg-emerald-500' },
-                  { label: 'B类(中等)', value: conversionData.gradeB, color: 'bg-amber-500' },
-                  { label: 'C类(潜在线索)', value: conversionData.gradeC, color: 'bg-blue-500' },
-                ].map((item) => {
-                  const maxVal = Math.max(conversionData.gradeA, conversionData.gradeB, conversionData.gradeC, 1);
-                  const width = Math.max(4, (item.value / maxVal) * 100);
-                  return (
-                    <div key={item.label} className="flex items-center gap-2">
-                      <span className="text-[10px] text-neutral-500 w-16">{item.label}</span>
-                      <div className="flex-1 bg-neutral-100 dark:bg-neutral-800 rounded-full h-3">
-                        <div
-                          className={cn("h-full rounded-full flex items-center justify-end pr-1", item.color)}
-                          style={{ width: `${width}%` }}
-                        >
-                          <span className="text-[9px] text-white font-medium leading-none">{item.value}</span>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* 效率指标 */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <Clock className="w-3 h-3 text-neutral-400" />
-                    <span className="text-[10px] text-neutral-500">转化周期</span>
-                  </div>
-                  {conversionData.avgConversionDays > 0 && conversionData.avgConversionDays < 45 && (
-                    <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
-                      <ArrowDownRight className="w-2.5 h-2.5" /> 优于基准
-                    </span>
-                  )}
-                </div>
-                <p className="text-sm font-semibold">{safeNum(conversionData.avgConversionDays)}天</p>
-                <p className="text-[9px] text-neutral-400">行业基准: 45天</p>
-              </div>
-              <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2">
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <UserCheck className="w-3 h-3 text-neutral-400" />
-                    <span className="text-[10px] text-neutral-500">线索跟进率</span>
-                  </div>
-                  {conversionData.followUpRate >= 80 && (
-                    <span className="text-[10px] text-emerald-600 flex items-center gap-0.5">
-                      <ArrowUpRight className="w-2.5 h-2.5" /> 优秀
-                    </span>
-                  )}
-                </div>
-                <p className={cn(
-                  "text-sm font-semibold",
-                  getStatusColor(conversionData.followUpRate).split(' ')[0]
-                )}>
-                  {safeNum(conversionData.followUpRate)}%
-                </p>
-                <div className="flex items-center gap-1 mt-1">
-                  <div className={cn("w-2 h-2 rounded-full", getStatusDot(conversionData.followUpRate))} />
-                  <span className="text-[9px] text-neutral-400">{qActivities.length}个活动平均</span>
-                </div>
-              </div>
-            </div>
-
-            {/* 价值沉淀 */}
-            <div>
-              <p className="text-xs font-medium text-neutral-500 mb-2">价值沉淀</p>
-              <div className="bg-gradient-to-r from-purple-50 to-indigo-50 dark:from-purple-900/20 dark:to-indigo-900/20 rounded-lg p-3">
-                <p className="text-xs text-neutral-500">活动获取新客户订单总额</p>
-                <p className="text-lg font-bold text-purple-700 dark:text-purple-300">{cur(safeNum(conversionData.newLogoOrderAmount))}</p>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </section>
-
-      {/* ========== 第二部分：诊断层（智能诊断层） ========== */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <AlertCircle className="w-5 h-5 text-amber-600" />
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">智能诊断层</h2>
-          <Badge variant="secondary" size="sm">瓶颈深挖</Badge>
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* 诊断A：执行与预算错配 */}
-          <Card className={cn(
-            "transition-all",
-            diagnosticData.diagnosisA.hasIssue
-              ? "border-2 border-orange-200 dark:border-orange-800 bg-gradient-to-br from-orange-50/40 to-transparent"
-              : "border border-neutral-200 dark:border-neutral-700"
-          )}>
-            <div className="flex items-start gap-2 mb-3">
-              <div className={cn(
-                "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
-                diagnosticData.diagnosisA.hasIssue ? "bg-orange-100 dark:bg-orange-900/30" : "bg-neutral-100 dark:bg-neutral-800"
-              )}>
-                <DollarSign className={cn("w-4 h-4", diagnosticData.diagnosisA.hasIssue ? "text-orange-600" : "text-neutral-500")} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-sm">执行与预算错配</CardTitle>
-                  {diagnosticData.diagnosisA.hasIssue && (
-                    <Badge variant="danger" size="sm">异常</Badge>
-                  )}
-                </div>
-                <p className="text-[10px] text-neutral-500 mt-0.5">活动完成率 · 预算执行率 · MDF领用</p>
-              </div>
-            </div>
-
-            {/* 三大核心指标 —— 横向对比 */}
-            <div className="grid grid-cols-3 gap-1.5 mb-3">
-              <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/60 text-center">
-                <p className="text-base font-bold text-neutral-900 dark:text-white">{diagnosticData.diagnosisA.metrics.completionRate}%</p>
-                <p className="text-[10px] text-neutral-500">活动完成率</p>
-              </div>
-              <div className={cn(
-                "p-2 rounded-lg text-center",
-                diagnosticData.diagnosisA.isGlobalMismatch ? "bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800" : "bg-neutral-50 dark:bg-neutral-800/60"
-              )}>
-                <p className={cn("text-base font-bold", diagnosticData.diagnosisA.isGlobalMismatch ? "text-orange-600" : "text-neutral-900 dark:text-white")}>{diagnosticData.diagnosisA.metrics.execRate}%</p>
-                <p className="text-[10px] text-neutral-500">预算执行率</p>
-              </div>
-              <div className={cn(
-                "p-2 rounded-lg text-center",
-                diagnosticData.diagnosisA.mdfProblem ? "bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800" : "bg-neutral-50 dark:bg-neutral-800/60"
-              )}>
-                <p className={cn("text-base font-bold", diagnosticData.diagnosisA.mdfProblem ? "text-purple-600" : "text-neutral-900 dark:text-white")}>{diagnosticData.diagnosisA.metrics.mdfExec}%</p>
-                <p className="text-[10px] text-neutral-500">MDF执行率</p>
-              </div>
-            </div>
-
-            {/* 诊断结论 —— 强调语义 */}
-            <div className={cn(
-              "p-2.5 rounded-lg mb-3",
-              diagnosticData.diagnosisA.hasIssue
-                ? "bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800"
-                : "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800"
-            )}>
-              <p className="text-[11px] font-medium text-neutral-800 dark:text-neutral-200 leading-relaxed">
-                {diagnosticData.diagnosisA.hasIssue ? '⚠️ ' : '✅ '}{diagnosticData.diagnosisA.summary}
-              </p>
-            </div>
-
-            {/* 问题区域/子问题清单 */}
-            {diagnosticData.diagnosisA.regions.length > 0 && (
-              <div className="space-y-1 mb-3">
-                <p className="text-[10px] font-medium text-neutral-500">问题区域 TOP</p>
-                {diagnosticData.diagnosisA.regions.slice(0, 3).map((r: any) => (
-                  <div key={r.region} className="flex items-center justify-between p-2 bg-red-50/40 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
-                    <div className="min-w-0">
-                      <p className="text-xs font-medium text-red-700 dark:text-red-300">{r.region}</p>
-                      <p className="text-[10px] text-neutral-500">预算 {r.budgetShare}% · 完成 {r.completion}% · 执行 {r.execRate}%</p>
-                    </div>
-                    <ArrowDownRight className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 核销滞后 —— 突出显示 */}
-            {diagnosticData.diagnosisA.reconciliationIssue && (
-              <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800 mb-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <Receipt className="w-3.5 h-3.5 text-amber-600 flex-shrink-0" />
-                  <span className="text-[11px] font-medium text-amber-800 dark:text-amber-300">核销流程滞后</span>
-                </div>
-                <p className="text-[10px] text-neutral-600 dark:text-neutral-400">
-                  {diagnosticData.diagnosisA.zeroSpendActivities?.length || 0}场活动已完成但预算支出为0，需催办伙伴核销
-                </p>
-              </div>
-            )}
-
-            {/* 底部行动按钮 */}
-            <div className="flex items-center gap-1.5">
-              {diagnosticData.diagnosisA.hasIssue ? (
-                <>
-                  <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-orange-600 hover:bg-orange-700 text-white font-medium transition-colors">
-                    <Send className="w-3 h-3" />立即处理
-                  </button>
-                  <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
-                    查看详情
-                  </button>
-                </>
-              ) : (
-                <div className="flex-1 text-center text-[11px] text-emerald-700 dark:text-emerald-400 py-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md">
-                  ✓ 预算与执行健康
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* 诊断B：线索"肠梗阻"分析 */}
-          <Card className={cn(
-            "transition-all",
-            diagnosticData.diagnosisB.hasIssue
-              ? "border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/40 to-transparent"
-              : "border border-neutral-200 dark:border-neutral-700"
-          )}>
-            <div className="flex items-start gap-2 mb-3">
-              <div className={cn(
-                "w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0",
-                diagnosticData.diagnosisB.hasIssue ? "bg-blue-100 dark:bg-blue-900/30" : "bg-neutral-100 dark:bg-neutral-800"
-              )}>
-                <BarChart3 className={cn("w-4 h-4", diagnosticData.diagnosisB.hasIssue ? "text-blue-600" : "text-neutral-500")} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-sm">线索"肠梗阻"分析</CardTitle>
-                  {diagnosticData.diagnosisB.hasIssue && (
-                    <Badge variant="info" size="sm">待优化</Badge>
-                  )}
-                </div>
-                <p className="text-[10px] text-neutral-500 mt-0.5">线索质量 · 跟进效率 · 转化周期</p>
-              </div>
-            </div>
-
-            {/* 质量分布 —— 视觉强化 */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between text-[10px] text-neutral-500 mb-1.5">
-                <span>总线索 {safeNum(diagnosticData.diagnosisB.metrics.totalLeads)}</span>
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">高质量 {diagnosticData.diagnosisB.metrics.highQualityRate}%</span>
-              </div>
-              <div className="flex h-2.5 rounded-full overflow-hidden bg-neutral-100 dark:bg-neutral-800">
-                <div className="bg-emerald-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeA) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
-                <div className="bg-amber-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeB) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
-                <div className="bg-blue-500" style={{ width: `${Math.round(safeNum(diagnosticData.diagnosisB.metrics.gradeC) / Math.max(diagnosticData.diagnosisB.metrics.totalLeads, 1) * 100)}%` }}></div>
-              </div>
-              <div className="flex justify-between text-[10px] text-neutral-500 mt-1">
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>A优质</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span>B中等</span>
-                <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>C潜在</span>
-              </div>
-            </div>
-
-            {/* 分类统计指标 */}
-            <div className="grid grid-cols-3 gap-1.5 mb-3">
-              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
-                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.lowConversionCount)}</p>
-                <p className="text-[9px] text-neutral-500">低转化率</p>
-              </div>
-              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
-                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.lowFollowUpCount)}</p>
-                <p className="text-[9px] text-neutral-500">低跟进率</p>
-              </div>
-              <div className="p-1.5 rounded-md bg-neutral-50 dark:bg-neutral-800/60 text-center">
-                <p className="text-sm font-bold text-neutral-800 dark:text-neutral-200">{safeNum(diagnosticData.diagnosisB.metrics.longCycleCount)}</p>
-                <p className="text-[9px] text-neutral-500">长周期</p>
-              </div>
-            </div>
-
-            {/* 诊断结论 */}
-            <div className={cn(
-              "p-2.5 rounded-lg mb-3",
-              diagnosticData.diagnosisB.hasIssue
-                ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800"
-                : "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-100 dark:border-emerald-800"
-            )}>
-              <p className="text-[11px] font-medium text-neutral-800 dark:text-neutral-200 leading-relaxed">
-                {diagnosticData.diagnosisB.hasIssue ? '🔍 ' : '✅ '}{diagnosticData.diagnosisB.summary}
-              </p>
-            </div>
-
-            {/* 问题活动 */}
-            {diagnosticData.diagnosisB.activities.length > 0 && (
-              <div className="space-y-1 mb-3">
-                <p className="text-[10px] font-medium text-neutral-500">重点关注活动</p>
-                {diagnosticData.diagnosisB.activities.slice(0, 3).map((a: any) => (
-                  <div key={a.id} className="p-2 bg-red-50/40 dark:bg-red-900/10 rounded-lg border border-red-100 dark:border-red-900/30">
-                    <div className="flex items-center justify-between mb-1">
-                      <p className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 truncate flex-1">{a.name}</p>
-                      <span className="text-[10px] px-1 py-0.5 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 flex-shrink-0 ml-1.5">
-                        {safeNum(a.conversionRatio) || safeNum(a.followUpRate)}%
-                      </span>
-                    </div>
-                    <p className="text-[9px] text-neutral-500">
-                      {safeNum(a.leadsGenerated || a.leads || 0)}线索 · {safeNum(a.expected_attendees || a.expectedAttendees || 0)}人 · {safeNum(a.conversionDays || 30)}天
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* 底部行动 */}
-            <div className="flex items-center gap-1.5">
-              {diagnosticData.diagnosisB.hasIssue ? (
-                <>
-                  <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white font-medium transition-colors">
-                    <RefreshCw className="w-3 h-3" />优化跟进策略
-                  </button>
-                  <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
-                    查看漏斗
-                  </button>
-                </>
-              ) : (
-                <div className="flex-1 text-center text-[11px] text-emerald-700 dark:text-emerald-400 py-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md">
-                  ✓ 线索流转健康
-                </div>
-              )}
-            </div>
-          </Card>
-
-          {/* 诊断C：高产出活动复刻分析（多维度对比） */}
-          <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/40 to-transparent">
-            <div className="flex items-start gap-2 mb-3">
-              <div className="w-9 h-9 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
-                <Award className="w-4 h-4 text-emerald-600" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <CardTitle className="text-sm">高产出活动复刻</CardTitle>
-                  <Badge variant="success" size="sm">最佳实践</Badge>
-                </div>
-                <p className="text-[10px] text-neutral-500 mt-0.5">多维度类型对比 · ROI分析</p>
-              </div>
-            </div>
-
-            {/* 最佳活动类型卡片 —— 视觉升级 */}
-            {diagnosticData.diagnosisC.bestType && (
-              <div className="bg-gradient-to-br from-emerald-50 to-green-50 dark:from-emerald-900/30 dark:to-green-900/20 rounded-lg p-3 mb-3 border border-emerald-200 dark:border-emerald-800">
-                <div className="flex items-center gap-1.5 mb-2">
-                  <Trophy className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="text-[10px] font-semibold text-emerald-700 dark:text-emerald-300 uppercase tracking-wide">最佳活动类型</span>
-                </div>
-                <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300 mb-2">
-                  {diagnosticData.diagnosisC.bestType.type}
-                </p>
-                <div className="grid grid-cols-3 gap-1">
-                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
-                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.leadsPerActivity}</p>
-                    <p className="text-[9px] text-neutral-500">场均线索</p>
-                  </div>
-                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
-                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.conversionRate}%</p>
-                    <p className="text-[9px] text-neutral-500">商机转化</p>
-                  </div>
-                  <div className="text-center p-1.5 bg-white/60 dark:bg-neutral-900/40 rounded-md">
-                    <p className="text-sm font-bold text-emerald-700 dark:text-emerald-400">{diagnosticData.diagnosisC.bestType.newLogo}</p>
-                    <p className="text-[9px] text-neutral-500">新客户</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* 活动类型排行榜 —— 可视化 */}
-            {diagnosticData.diagnosisC.topTypes && diagnosticData.diagnosisC.topTypes.length > 0 && (
-              <div className="mb-3">
-                <p className="text-[10px] font-medium text-neutral-500 mb-1.5">类型产出对比 TOP</p>
-                <div className="space-y-1">
-                  {diagnosticData.diagnosisC.topTypes.slice(0, 3).map((t: any, i: number) => (
-                    <div key={t.type} className="flex items-center justify-between p-1.5 bg-emerald-50/60 dark:bg-emerald-900/10 rounded-md border border-emerald-100 dark:border-emerald-800/50">
-                      <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <span className={cn(
-                          "text-[10px] font-bold w-4 flex-shrink-0",
-                          i === 0 ? "text-amber-600" : i === 1 ? "text-neutral-500" : "text-orange-800"
-                        )}>{i + 1}.</span>
-                        <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-300 truncate">{t.type}</span>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-[10px] text-neutral-500">{t.leadsPerActivity}线索</span>
-                        <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold">{t.newLogo}·新客</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* SOP下载量 —— 小信息点 */}
-            <div className="flex items-center justify-between p-2 bg-neutral-50 dark:bg-neutral-800/60 rounded-lg mb-3">
-              <div className="flex items-center gap-1.5">
-                <Download className="w-3 h-3 text-blue-500" />
-                <span className="text-[11px] text-neutral-600 dark:text-neutral-400">SOP标准文档下载</span>
-              </div>
-              <p className="text-xs font-bold text-neutral-900 dark:text-white">
-                {diagnosticData.diagnosisC.sopDownloadCount}<span className="text-[9px] font-normal text-neutral-400 ml-0.5">次</span>
-              </p>
-            </div>
-
-            {/* 底部行动按钮 */}
-            <div className="flex items-center gap-1.5">
-              <button className="flex-1 flex items-center justify-center gap-1 text-[11px] px-2 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
-                <TrendingUp className="w-3 h-3" />复制推广
-              </button>
-              <button className="text-[11px] px-2 py-1.5 rounded-md border border-neutral-200 dark:border-neutral-700 text-neutral-600 dark:text-neutral-400 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors">
-                查看SOP
-              </button>
-            </div>
-          </Card>
-        </div>
-
-        {/* 选中活动的漏斗详情 */}
-        {selectedActivityFunnel && (
-          <Card className="mt-6 border-2 border-blue-200 dark:border-blue-800">
-            <CardHeader>
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-                  <BarChart3 className="w-4 h-4 text-blue-600" />
-                </div>
-                <CardTitle className="text-sm">
-                  活动漏斗详情：{selectedActivityFunnel.activityName}
-                </CardTitle>
-                <Badge variant="info" size="sm">{selectedActivityFunnel.type}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-6 gap-2">
-                {selectedActivityFunnel.stages.map((stage, i) => {
-                  const maxVal = selectedActivityFunnel.stages[0].value || 1;
-                  const width = Math.max(8, (stage.value / maxVal) * 100);
-                  return (
-                    <div key={stage.label} className="text-center">
-                      <div className="relative">
-                        <div className={cn("h-24 rounded-lg flex items-end justify-center p-1", stage.color)}>
-                          <span className="text-white font-bold text-sm">{stage.value}</span>
-                        </div>
-                        {i > 0 && (
-                          <div className="absolute -left-2 top-1/2 transform -translate-y-1/2">
-                            <ArrowRight className="w-3 h-3 text-neutral-400" />
-                          </div>
-                        )}
-                      </div>
-                      <p className="text-[10px] text-neutral-500 mt-1">{stage.label}</p>
-                    </div>
-                  );
-                })}
-              </div>
-            </CardContent>
-          </Card>
+        {executionProgressData.hasBudgetPending && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+            <span className="text-[11px] text-amber-700 dark:text-amber-400">
+              当前无正式批复预算，实际支出 ¥{(totalSpend / 10000).toFixed(1)}万暂作参考
+            </span>
+          </div>
         )}
-      </section>
+      </div>
 
-      {/* ========== 第三部分：执行层（行动中心） ========== */}
-      <section>
-        <div className="flex items-center gap-2 mb-4">
-          <Zap className="w-5 h-5 text-purple-600" />
-          <h2 className="text-lg font-semibold text-neutral-900 dark:text-white">行动中心</h2>
-          <Badge variant="info" size="sm">
-            {actionCards.reduce((sum, c) => sum + (safeNum(c.priority === 'high' ? 1 : 0)), 0) > 0 ? `${actionCards.reduce((s, c) => s + (c.priority === 'high' ? 1 : 0), 0)}项紧急` : `${actionCards.length}项建议`}
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          {actionCards.map((card: any) => {
-            const Icon = card.icon;
-            const isExpanded = expandedActionCard === card.type;
-            const colorMap: Record<string, string> = {
-              orange: 'border-orange-200 dark:border-orange-800 bg-orange-50/30 dark:bg-orange-900/10',
-              blue: 'border-blue-200 dark:border-blue-800 bg-blue-50/30 dark:bg-blue-900/10',
-              green: 'border-emerald-200 dark:border-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10',
-              purple: 'border-purple-200 dark:border-purple-800 bg-purple-50/30 dark:bg-purple-900/10',
-            };
-            const iconColorMap: Record<string, string> = {
-              orange: 'text-orange-600',
-              blue: 'text-blue-600',
-              green: 'text-emerald-600',
-              purple: 'text-purple-600',
-            };
-            const hasDetails = card.detailData && (
-              (card.detailData.activities && card.detailData.activities.length > 0) ||
-              (card.detailData.regions && card.detailData.regions.length > 0) ||
-              (card.detailData.topTypes && card.detailData.topTypes.length > 0)
-            );
-
-            return (
-              <Card key={card.type} className={cn("border-2", colorMap[card.color])}>
-                {/* 头部：图标 + 标题 + 优先级 */}
-                <div className="flex items-start gap-3 mb-3">
-                  <div className={cn(
-                    "w-10 h-10 rounded-lg flex items-center justify-center bg-white dark:bg-neutral-800 shadow-sm",
-                    iconColorMap[card.color]
-                  )}>
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <CardTitle className="text-sm mb-1 truncate">{card.title}</CardTitle>
-                    {card.subtitle && <p className="text-[10px] text-neutral-500 truncate">{card.subtitle}</p>}
-                  </div>
-                  <Badge
-                    variant={
-                      card.priority === 'high' ? 'danger' :
-                      card.priority === 'medium' ? 'warning' : 'default'
-                    }
-                    size="sm"
-                  >
-                    {card.priority === 'high' ? '紧急' : card.priority === 'medium' ? '中等' : '建议'}
-                  </Badge>
-                </div>
-
-                {/* 关键指标 */}
-                {card.metrics && card.metrics.length > 0 && (
-                  <div className="grid grid-cols-2 gap-2 mb-3">
-                    {card.metrics.map((m: any, i: number) => (
-                      <div key={i} className="bg-white dark:bg-neutral-800/50 rounded-lg p-2">
-                        <p className="text-sm font-bold text-neutral-900 dark:text-white truncate">{m.value}</p>
-                        <p className="text-[9px] text-neutral-500 truncate">{m.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* 描述 */}
-                <p className="text-xs text-neutral-600 dark:text-neutral-400 mb-3 leading-relaxed">
-                  {card.content}
-                </p>
-
-                {/* 展开/收起按钮 */}
-                {hasDetails && (
-                  <button
-                    onClick={() => setExpandedActionCard(isExpanded ? null : card.type)}
-                    className="w-full flex items-center justify-between text-xs px-2 py-1.5 rounded-lg bg-white dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-700/50 transition-colors"
-                  >
-                    <span className="text-neutral-600 dark:text-neutral-400">{isExpanded ? '收起详情' : card.actionLabel || '查看详情'}</span>
-                    <ChevronRight className={cn("w-3 h-3 text-neutral-500 transition-transform", isExpanded && "rotate-90")} />
-                  </button>
-                )}
-
-                {/* 展开的详情区域 */}
-                {isExpanded && hasDetails && (
-                  <div className="mt-3 p-3 bg-white dark:bg-neutral-800/50 rounded-lg border border-neutral-200 dark:border-neutral-700">
-                    {/* 活动列表 */}
-                    {card.detailData.activities && card.detailData.activities.length > 0 && (
-                      <div className="space-y-1.5 max-h-48 overflow-y-auto">
-                        <p className="text-[10px] font-medium text-neutral-500 mb-2">
-                          相关活动（{card.detailData.activities.length}场）
-                        </p>
-                        {card.detailData.activities.slice(0, 8).map((a: any) => (
-                          <div key={a.id} className="flex items-center justify-between text-xs p-2 bg-neutral-50 dark:bg-neutral-700/50 rounded-lg">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-neutral-700 dark:text-neutral-300 truncate">{a.name}</p>
-                              <p className="text-[9px] text-neutral-500 mt-0.5">
-                                {a.status} · {safeNum(a.leadsGenerated || a.expected_attendees || 0)}人参与 · 预算 {cur(safeNum(a.budget))}
-                              </p>
-                            </div>
-                            <button className="text-[10px] text-blue-600 hover:underline flex-shrink-0 ml-2">
-                              催办
-                            </button>
-                          </div>
-                        ))}
-                        {card.detailData.activities.length > 8 && (
-                          <p className="text-[9px] text-center text-neutral-400 pt-1">...还有 {card.detailData.activities.length - 8} 场活动</p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* 区域列表 */}
-                    {card.detailData.regions && card.detailData.regions.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] font-medium text-neutral-500 mb-2">
-                          待补充区域（{card.detailData.regions.length}个）
-                        </p>
-                        {card.detailData.regions.slice(0, 6).map((r: any) => (
-                          <div key={r.region} className="flex items-center justify-between text-xs p-2 bg-red-50/50 dark:bg-red-900/10 rounded-lg">
-                            <span className="font-medium text-red-700 dark:text-red-300">{r.region}</span>
-                            <button className="text-[10px] text-red-600 hover:underline">规划活动</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* 最佳实践类型列表 */}
-                    {card.detailData.topTypes && card.detailData.topTypes.length > 0 && (
-                      <div className="space-y-1.5">
-                        <p className="text-[10px] font-medium text-neutral-500 mb-2">可推广活动类型</p>
-                        {card.detailData.topTypes.slice(0, 3).map((t: any, i: number) => (
-                          <div key={t.type} className="flex items-center justify-between text-xs p-2 bg-emerald-50/50 dark:bg-emerald-900/10 rounded-lg">
-                            <div>
-                              <span className="font-medium text-emerald-700 dark:text-emerald-300">{i+1}. {t.type}</span>
-                              <span className="text-[10px] text-neutral-500 ml-2">场均{t.leadsPerActivity}线索 · {t.newLogo}个新客</span>
-                            </div>
-                            <button className="text-[10px] text-emerald-600 hover:underline">推广SOP</button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* 快捷操作按钮 */}
-                <div className="flex gap-1.5 mt-3 pt-2 border-t border-neutral-200 dark:border-neutral-700">
-                  {card.type === 'reconciliation' && (
-                    <Button size="sm" variant="brand" className="text-xs flex-1" onClick={() => setShowMDFClaims(true)}>
-                      <Receipt className="w-3 h-3 mr-1" />前往核销
-                    </Button>
-                  )}
-                  {card.type === 'empowerment' && (
-                    <Button size="sm" variant="brand" className="text-xs flex-1" onClick={() => setShowSOP(true)}>
-                      <Lightbulb className="w-3 h-3 mr-1" />查看SOP
-                    </Button>
-                  )}
-                  {card.type === 'supervision' && (
-                    <Button size="sm" variant="secondary" className="text-xs flex-1">
-                      <Send className="w-3 h-3 mr-1" />批量催办
-                    </Button>
-                  )}
-                  {card.type === 'activation' && (
-                    <Button size="sm" variant="secondary" className="text-xs flex-1">
-                      <RefreshCw className="w-3 h-3 mr-1" />激活线索
-                    </Button>
-                  )}
-                  {card.type === 'regional-planning' && (
-                    <Button size="sm" variant="secondary" className="text-xs flex-1">
-                      <MapPin className="w-3 h-3 mr-1" />快速规划
-                    </Button>
-                  )}
-                </div>
-              </Card>
-            );
-          })}
-
-          {/* 无行动项时的占位 */}
-          {actionCards.length === 0 && (
-            <div className="col-span-full flex items-center justify-center py-8 text-neutral-400">
-              <CheckCircle2 className="w-5 h-5 mr-2" />
-              <span className="text-sm">暂无待处理行动项，执行进度良好！</span>
+      {/* ==== 生态健康度仪表盘 ==== */}
+      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-4 border border-slate-700/50">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center">
+                <Shield className="w-3.5 h-3.5 text-amber-400" />
+              </div>
+              <span className="text-xs font-semibold text-slate-300">生态健康度</span>
             </div>
-          )}
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                <Globe className="w-3.5 h-3.5 text-emerald-400" />
+              </div>
+              <span className="text-lg font-bold text-white">{Math.min(100, executionProgressData.completionRate + 10)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+                <Users className="w-3.5 h-3.5 text-cyan-400" />
+              </div>
+              <span className="text-lg font-bold text-white">{Math.min(100, executionProgressData.completionRate)}</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center">
+                <TrendingUp className="w-3.5 h-3.5 text-rose-400" />
+              </div>
+              <span className="text-lg font-bold text-white">{Math.min(100, conversionData.followUpRate || 60)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-[10px] text-slate-400 uppercase tracking-wider">综合评分</div>
+              {(() => {
+                const score = Math.min(100, Math.round((executionProgressData.completionRate + (conversionData.followUpRate || 60) + (executionProgressData.execRate || 50)) / 3));
+                const scoreColor = score >= 70 ? 'text-emerald-400' : score >= 55 ? 'text-amber-400' : 'text-red-400';
+                const scoreBg = score >= 70 ? 'bg-emerald-500/20' : score >= 55 ? 'bg-amber-500/20' : 'bg-red-500/20';
+                return (
+                  <>
+                    <div className={`text-3xl font-black ${scoreColor} tracking-tighter`}>{score}</div>
+                    {score < 55 && (
+                      <div className="mt-1 flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 text-red-400" />
+                        <span className="text-[9px] text-red-400">低于健康阈值</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+              <Share2 className="w-4 h-4 text-white" />
+            </button>
+          </div>
         </div>
-      </section>
-
-      {/* ========== Quick Entry Bar (保留) ========== */}
-      <div className="flex items-center gap-2 flex-wrap">
-        <span className="text-xs font-medium text-neutral-500">{t('gl.marketing.quickEntry')}</span>
-        <div className="flex gap-1">
-          <button onClick={() => setShowMDFClaims(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <Receipt className="w-3 h-3 inline mr-1" />MDF
-          </button>
-          <button onClick={() => setShowROIPanel(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <Target className="w-3 h-3 inline mr-1" />ROI
-          </button>
-          <button onClick={() => setShowAssetLibrary(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <Package className="w-3 h-3 inline mr-1" />{t('gl.marketing.assets')}
-          </button>
-          <button onClick={() => setShowSOP(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <CheckSquare className="w-3 h-3 inline mr-1" />SOP
-          </button>
-          <button onClick={() => setShowBenchmark(true)} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <Trophy className="w-3 h-3 inline mr-1" />{t('gl.marketing.benchmarks')}
-          </button>
-          <button onClick={() => { setShowResourceMarket(true); }} className="text-xs px-2.5 py-1.5 rounded-lg bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-colors">
-            <Wrench className="w-3 h-3 inline mr-1" />{t('gl.marketing.resources')}
-          </button>
+        <div className="my-3 h-px bg-slate-700/50" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3 flex-1">
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-slate-400">覆盖率</span>
+              <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full w-full bg-emerald-500 rounded-full" />
+              </div>
+              <span className="text-[9px] text-emerald-400">{Math.min(100, executionProgressData.completionRate + 10)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-slate-400">活跃</span>
+              <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${Math.min(100, executionProgressData.completionRate)}%` }} />
+              </div>
+              <span className="text-[9px] text-cyan-400">{Math.min(100, executionProgressData.completionRate)}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-[9px] text-slate-400">效率</span>
+              <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+                <div className="h-full bg-rose-500 rounded-full" style={{ width: `${Math.min(100, conversionData.followUpRate || 60)}%` }} />
+              </div>
+              <span className="text-[9px] text-rose-400">{Math.min(100, conversionData.followUpRate || 60)}</span>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-[10px]">
+            <span className="text-slate-400">{qActivities.length} 场活动</span>
+            <span className="text-amber-400 font-medium">{qActivities.filter((a: any) => a.status !== 'Completed').length} 待推进</span>
+            <span className="text-slate-400">{totalLeads} 线索</span>
+            <span className="text-slate-500 font-medium">
+              {timePeriod === 'half' ? '上半年' : '全年'}视角 · 时间进度 {executionProgressData.timeProgress}%
+            </span>
+          </div>
         </div>
       </div>
 
-      {/* ========== Legacy Zone Components (保留原有功能) ========== */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
-          {/* Budget Trend Chart */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-base">{t('gl.marketing.budgetTrend')}</CardTitle>
-              <div className="flex items-center gap-4 text-xs">
-                <div className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-full bg-blue-500"></span>
-                  <span className="text-neutral-500">{t('gl.marketing.budget')}</span>
+      {/* ==== 第一层：结果层 - 4卡片KPI ==== */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* 活动完成率 */}
+        <Card
+          className={cn(
+            "border transition-all cursor-pointer",
+            statusFilter === 'not-completed'
+              ? "border-blue-400 dark:border-blue-600 ring-2 ring-blue-200 dark:ring-blue-800 bg-blue-50/30 dark:bg-blue-900/10"
+              : "border-neutral-200 dark:border-neutral-800 hover:border-blue-300 dark:hover:border-blue-700"
+          )}
+          onClick={() => {
+            const inProgressCount = qActivities.filter((a: any) => a.status !== 'Completed').length;
+            if (inProgressCount === 0) return;
+            setStatusFilter(statusFilter === 'not-completed' ? 'all' : 'not-completed');
+          }}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Activity className="w-4 h-4 text-blue-600" />
                 </div>
-                <div className="flex items-center gap-1">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500"></span>
-                  <span className="text-neutral-500">{t('gl.marketing.actualSpend')}</span>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">活动推进</div>
+                  <div className="text-[10px] text-neutral-400">执行进度</div>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-end justify-between h-40 gap-3 px-2">
-                {[0, 1, 2].map((i) => {
-                  const monthName = ['4月', '5月', '6月'][i];
-                  const budget = totalBudget / 3 || 0;
-                  const spend = totalSpend / 3 || 0;
-                  const maxVal = Math.max(budget, spend, 1);
-                  const budgetHeight = Math.max(1, (budget / maxVal) * 120);
-                  const spendHeight = Math.max(0, (spend / maxVal) * 120);
-                  return (
-                    <div key={i} className="flex-1 flex flex-col items-center gap-2">
-                      <div className="w-full flex flex-col items-center gap-1">
-                        <div className="w-8 bg-blue-100 dark:bg-blue-900/30 rounded-t" style={{ height: `${budgetHeight}px` }} />
-                        <div className="w-8 bg-emerald-500 rounded-t -mt-0.5" style={{ height: `${spendHeight}px` }} />
-                      </div>
-                      <span className="text-xs text-neutral-500">{monthName}</span>
-                    </div>
-                  );
-                })}
+            </div>
+            <div className="text-3xl font-bold text-neutral-900 dark:text-white mb-2">{executionProgressData.completionRate}<span className="text-sm text-neutral-400 ml-1">%</span></div>
+            <div className="text-[11px] text-neutral-500 mb-3">{completedCount} / {executionProgressData.totalActivities} 场已完成</div>
+            <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+              <div className={cn("h-full rounded-full transition-all", executionProgressData.isLagging ? "bg-orange-500" : "bg-blue-500")} style={{ width: `${executionProgressData.completionRate}%` }} />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[10px] text-neutral-400">
+              <span>时间进度 {executionProgressData.timeProgress}%</span>
+              <span className={cn(executionProgressData.isLagging ? "text-orange-600" : "text-emerald-600", "font-medium")}>
+                {executionProgressData.isLagging ? `落后 ${executionProgressData.timeProgress - executionProgressData.completionRate}%` : `正常推进`}
+              </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* 预算执行 */}
+        <Card
+          className={cn(
+            "border transition-all cursor-pointer",
+            statusFilter === 'over-budget'
+              ? "border-emerald-400 dark:border-emerald-600 ring-2 ring-emerald-200 dark:ring-emerald-800 bg-emerald-50/30 dark:bg-emerald-900/10"
+              : "border-neutral-200 dark:border-neutral-800 hover:border-emerald-300 dark:hover:border-emerald-700"
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'over-budget' ? 'all' : 'over-budget')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">预算执行</div>
+                  <div className="text-[10px] text-neutral-400">资金使用</div>
+                </div>
               </div>
-              <div className="flex justify-between mt-4 pt-4 border-t border-neutral-100 dark:border-neutral-800 text-xs">
-                <span className="text-neutral-500">{t('gl.marketing.totalBudget')} {cur(safeNum(totalBudget))}</span>
-                <span className="text-neutral-500">{t('gl.marketing.totalSpend')} {cur(safeNum(totalSpend))}</span>
-                <span className="text-emerald-600 font-medium">
-                  {t('gl.marketing.executionRate')} {safePercent((safeNum(totalSpend) / safeNum(totalBudget)) * 100)}%
+            </div>
+            <div className="text-3xl font-bold text-neutral-900 dark:text-white mb-2">{executionProgressData.execRate}<span className="text-sm text-neutral-400 ml-1">%</span></div>
+            <div className="text-[11px] text-neutral-500 mb-3">{cur(totalSpend)} / {cur(totalBudget)}</div>
+            <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+              <div className={cn("h-full rounded-full transition-all", executionProgressData.hasReconciliationLag ? "bg-amber-500" : "bg-emerald-500")} style={{ width: `${Math.min(executionProgressData.execRate, 100)}%` }} />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[10px] text-neutral-400">
+              <span>MDF {executionProgressData.mdfExecRate}% · 自办 {executionProgressData.selfExecRate}%</span>
+              {executionProgressData.hasReconciliationLag && (
+                <span className="text-amber-600 font-medium flex items-center gap-1">
+                  <Receipt className="w-3 h-3" />核销滞后
                 </span>
-              </div>
-            </CardContent>
-            <div className="px-6 pb-4 pt-0">
-              <button onClick={() => navigate('/detail/marketing-budget')} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
-                查看详情 <ArrowRight className="w-3 h-3" />
-              </button>
+              )}
             </div>
-          </Card>
+          </CardContent>
+        </Card>
 
-          {/* Activity Type Distribution */}
-          <Card>
-            <CardHeader><CardTitle className="text-sm">{t('gl.marketing.activityDistribution')}</CardTitle></CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <PieSVG data={Object.values(activityTypes)} size={70} />
-                <div className="space-y-1 flex-1 text-xs">
-                  {Object.entries(activityTypes).slice(0, 5).map(([type, count]) => {
-                    const pct = safePercent((count / qActivities.length) * 100);
-                    return (
-                      <div key={type} className="flex items-center justify-between">
-                        <span className="text-neutral-500">{type}</span>
-                        <span className="font-medium">{count}场 ({pct}%)</span>
-                      </div>
-                    );
-                  })}
+        {/* 线索产生 */}
+        <Card
+          className={cn(
+            "border transition-all cursor-pointer",
+            statusFilter === 'no-leads'
+              ? "border-cyan-400 dark:border-cyan-600 ring-2 ring-cyan-200 dark:ring-cyan-800 bg-cyan-50/30 dark:bg-cyan-900/10"
+              : "border-neutral-200 dark:border-neutral-800 hover:border-cyan-300 dark:hover:border-cyan-700"
+          )}
+          onClick={() => setStatusFilter(statusFilter === 'no-leads' ? 'all' : 'no-leads')}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-cyan-50 dark:bg-cyan-900/30 flex items-center justify-center">
+                  <Lightbulb className="w-4 h-4 text-cyan-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">线索产出</div>
+                  <div className="text-[10px] text-neutral-400">累计线索</div>
                 </div>
               </div>
-            </CardContent>
-            <div className="px-6 pb-4 pt-0">
-              <button onClick={() => navigate('/detail/activity-types')} className="flex items-center gap-1 text-xs text-blue-500 hover:text-blue-700 font-medium transition-colors">
-                查看详情 <ArrowRight className="w-3 h-3" />
-              </button>
             </div>
-          </Card>
-        </div>
+            <div className="text-3xl font-bold text-neutral-900 dark:text-white mb-2">{totalLeads}</div>
+            <div className="text-[11px] text-neutral-500 mb-3">场均 {qActivities.length > 0 ? Math.round(totalLeads / qActivities.length) : 0} 线索</div>
+            <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden mb-2">
+              <div className="h-full bg-cyan-500 rounded-full transition-all" style={{ width: `${Math.min(100, Math.round((totalLeads / (qActivities.length * 30 || 1)) * 100))}%` }} />
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-neutral-400">
+              <span>MQL {Math.round(totalLeads * 0.6)}</span>
+              <span className="text-cyan-600 font-medium">SQL {Math.round(totalLeads * 0.24)}</span>
+            </div>
+          </CardContent>
+        </Card>
 
-        {/* Legacy Funnel */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm">转化漏斗</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {[
-                { label: '报名参会', value: safeNum(totalParticipants), color: 'bg-blue-500' },
-                { label: '产生线索', value: safeNum(totalLeads), color: 'bg-cyan-500' },
-                { label: 'MQL筛选', value: safePercent(safeNum(totalLeads) * 0.6), color: 'bg-amber-500' },
-                { label: '赢单成交', value: safePercent(safeNum(totalLeads) * 0.15), color: 'bg-emerald-500' },
-              ].map((stage, i) => {
-                const maxVal = Math.max(safeNum(totalParticipants), 1);
-                const pct = safePercent((stage.value / maxVal) * 100);
-                const dropoff = i === 0 ? null : safePercent(100 - (stage.value / (i > 0 ? [safeNum(totalParticipants), safeNum(totalLeads), safePercent(safeNum(totalLeads) * 0.6)][i - 1] : 1)) * 100);
+        {/* 商机转化 */}
+        <Card className="border border-neutral-200 dark:border-neutral-800 hover:border-orange-300 dark:hover:border-orange-700 transition-all">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-50 dark:bg-orange-900/30 flex items-center justify-center">
+                  <TrendingUp className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">商机转化</div>
+                  <div className="text-[10px] text-neutral-400">价值产出</div>
+                </div>
+              </div>
+            </div>
+            <div className="text-3xl font-bold text-neutral-900 dark:text-white mb-2">{conversionData.totalDeals}</div>
+            <div className="text-[11px] text-neutral-500 mb-3">商机 · 价值 {cur(conversionData.totalDealsAmount)}</div>
+            <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+              <div className="h-full bg-gradient-to-r from-orange-400 to-orange-600 rounded-full transition-all" style={{ width: `${Math.min(100, conversionData.avgConversionRate || 50)}%` }} />
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[10px] text-neutral-400">
+              <span>新客户 {conversionData.newLogoCount}</span>
+              <span className="text-orange-600 font-medium">ROI {conversionData.avgConversionRate || 0}%</span>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ==== 第二层：诊断层 - 3卡片问题诊断 ==== */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* 诊断卡片 1: 进度落后 / 核销滞后 */}
+        <Card className="border-2 border-orange-200 dark:border-orange-800 bg-gradient-to-br from-orange-50/40 to-transparent">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4 text-orange-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">进度 / 核销</div>
+                  <div className="text-[10px] text-neutral-400">执行节奏诊断</div>
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-orange-700 dark:text-orange-400">
+                {qActivities.filter((a: any) => a.status !== 'Completed').length || 0}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {qActivities.filter((a: any) => a.status !== 'Completed').slice(0, 4).map((a: any) => {
+                const isHighRisk = a.status === 'In Progress' && safeNum(a.actualSpend) === 0;
+                const daysSinceStart = a.event_date ? Math.round((new Date().getTime() - new Date(a.event_date).getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                const budgetUtilization = safeNum(a.budget) > 0 ? Math.round((safeNum(a.actualSpend) / safeNum(a.budget)) * 100) : 0;
                 return (
-                  <div key={stage.label}>
-                    <div className="flex items-center gap-3 mb-1">
-                      <span className="text-xs text-neutral-500 w-16">{stage.label}</span>
-                      <span className="text-xs font-semibold text-neutral-900 dark:text-white w-12 text-right">{stage.value}</span>
-                      {dropoff !== null && dropoff > 0 && (
-                        <span className="text-[10px] text-red-400">-{dropoff}%</span>
-                      )}
+                  <div
+                    key={a.id || a.name}
+                    title={`点击查看详情 · 预算执行 ${budgetUtilization}% · ${a.leads_generated || 0}条线索`}
+                    onClick={() => {
+                      window.alert(
+                        `📊 活动详情：${a.name}\n\n` +
+                        `状态：${a.status === 'In Progress' ? '进行中' : '规划中'}\n` +
+                        `类型：${a.type || '未分类'}\n` +
+                        `预算：¥${((a.budget || 0) / 10000).toFixed(1)}万\n` +
+                        `实际支出：¥${((a.actualSpend || 0) / 10000).toFixed(1)}万\n` +
+                        `预算执行：${budgetUtilization}%\n` +
+                        `产生线索：${a.leads_generated || 0}条\n` +
+                        `MQL/SQL：${a.mql_count || Math.round((a.leads_generated || 0) * 0.6)} / ${a.sql_count || Math.round((a.leads_generated || 0) * 0.24)}\n` +
+                        `负责人：${a.responsible_person || a.contact_name || '未指定'}\n` +
+                        `${isHighRisk ? '\n⚠️ 风险提示：已启动但0支出，请关注核销流程' : ''}\n` +
+                        `${daysSinceStart > 30 ? '\n⏰ 已启动' + daysSinceStart + '天，请确认进度' : ''}\n\n` +
+                        `[确定] 跳转详情页 · [取消] 留在当前`
+                      );
+                    }}
+                    className={cn("flex items-center justify-between py-1.5 px-2 rounded-lg transition-colors cursor-pointer",
+                      isHighRisk ? "bg-red-50/50 dark:bg-red-900/10 hover:bg-red-100/50 dark:hover:bg-red-900/20" : "bg-white dark:bg-neutral-900/50 hover:bg-orange-50/50 dark:hover:bg-orange-900/20"
+                    )}
+                  >
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <span className="text-[11px] text-neutral-700 dark:text-neutral-300 truncate flex-1">{a.name}</span>
+                      {isHighRisk && <AlertTriangle className="w-3 h-3 text-red-500 flex-shrink-0" />}
                     </div>
-                    <div className="w-full bg-neutral-100 dark:bg-neutral-800 rounded-full h-5 relative overflow-hidden">
-                      <div className={cn("h-full rounded-full flex items-center justify-end pr-1", stage.color)} style={{ width: `${pct}%` }}>
-                        <span className="text-[9px] text-white font-medium leading-none">{pct}%</span>
+                    <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                      <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                        a.status === 'In Progress' ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" :
+                        "bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+                      )}>
+                        {a.status === 'In Progress' ? '进行中' : a.status === 'Planning' ? '规划中' : a.status}
+                      </span>
+                      {budgetUtilization > 100 && <span className="text-[9px] text-red-500">超</span>}
+                      <ChevronRight className="w-3 h-3 text-neutral-300" />
+                    </div>
+                  </div>
+                );
+              })}
+              {qActivities.filter((a: any) => a.status !== 'Completed').length === 0 && (
+                <div className="text-[11px] text-neutral-400 text-center py-2">✅ 全部活动已完成</div>
+              )}
+            </div>
+            {executionProgressData.hasReconciliationLag && (
+              <div className="mt-3 pt-2 border-t border-orange-100 dark:border-orange-900/30 text-[10px] text-amber-600 flex items-center gap-1.5">
+                <Receipt className="w-3 h-3" />
+                <span>{executionProgressData.zeroSpendCompletedCount || 0} 场已完成活动待核销</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 诊断卡片 2: 线索质量/转化问题 */}
+        <Card className="border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/40 to-transparent">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                  <Target className="w-4 h-4 text-blue-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">质量 / 转化</div>
+                  <div className="text-[10px] text-neutral-400">线索质量诊断</div>
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-blue-700 dark:text-blue-400">
+                {Math.round(((conversionData.followUpRate || 60) + (conversionData.avgConversionRate || 50)) / 2)}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {/* 跟进率 */}
+              <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50">
+                <span className="text-[11px] text-neutral-700 dark:text-neutral-300">跟进率</span>
+                <div className="flex items-center gap-2">
+                  <span className={cn("text-[11px] font-medium", (conversionData.followUpRate || 60) < 60 ? "text-red-600" : "text-emerald-600")}>
+                    {conversionData.followUpRate || 60}%
+                  </span>
+                  <span className={cn("text-[10px] font-medium", trendData.followUpTrend.direction === 'up' ? 'text-emerald-500' : trendData.followUpTrend.direction === 'down' ? 'text-red-500' : 'text-neutral-400')}>
+                    {trendData.followUpTrend.display}
+                  </span>
+                </div>
+              </div>
+              {/* 线索→商机转化率 */}
+              <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50">
+                <span className="text-[11px] text-neutral-700 dark:text-neutral-300">线索→商机转化率</span>
+                <div className="flex items-center gap-2">
+                  <span className={cn("text-[11px] font-medium", (conversionData.avgConversionRate || 50) < 30 ? "text-red-600" : "text-emerald-600")}>
+                    {conversionData.avgConversionRate || 50}%
+                  </span>
+                  <span className="text-[10px] text-neutral-400">—</span>
+                </div>
+              </div>
+              {/* 新客户占比 */}
+              <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50">
+                <span className="text-[11px] text-neutral-700 dark:text-neutral-300">新客户占比</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-blue-600">{conversionData.newLogoPercentage || 20}%</span>
+                  <span className={cn("text-[10px] font-medium", trendData.newLogoTrend.direction === 'up' ? 'text-emerald-500' : trendData.newLogoTrend.direction === 'down' ? 'text-red-500' : 'text-neutral-400')}>
+                    {trendData.newLogoTrend.display}
+                  </span>
+                </div>
+              </div>
+              {/* 平均转化周期 */}
+              <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50">
+                <span className="text-[11px] text-neutral-700 dark:text-neutral-300">平均转化周期</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-neutral-600 dark:text-neutral-400">{conversionData.avgConversionDays || 30} 天</span>
+                  <span className={cn("text-[10px] font-medium", trendData.conversionTrend.direction === 'up' ? 'text-red-500' : trendData.conversionTrend.direction === 'down' ? 'text-emerald-500' : 'text-neutral-400')}>
+                    {trendData.conversionTrend.display}
+                  </span>
+                </div>
+              </div>
+              {/* 线索质量（A+B类） */}
+              <div className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50">
+                <span className="text-[11px] text-neutral-700 dark:text-neutral-300">线索质量(A+B类)</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-purple-600">
+                    {totalLeads > 0 ? Math.round(((conversionData.gradeA + conversionData.gradeB) / totalLeads) * 100) : 0}%
+                  </span>
+                  <span className={cn("text-[10px] font-medium", trendData.qualityTrend.direction === 'up' ? 'text-emerald-500' : trendData.qualityTrend.direction === 'down' ? 'text-red-500' : 'text-neutral-400')}>
+                    {trendData.qualityTrend.display}
+                  </span>
+                </div>
+              </div>
+            </div>
+            {/* 线索质量迷你条形图 */}
+            {totalLeads > 0 && (
+              <div className="mt-3 pt-2 border-t border-blue-100 dark:border-blue-900/30">
+                <div className="text-[10px] font-semibold text-neutral-500 mb-1.5">线索质量分布</div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-neutral-400 w-8">A级</span>
+                    <div className="flex-1 h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.round((conversionData.gradeA / totalLeads) * 100)}%` }} />
+                    </div>
+                    <span className="text-[9px] font-medium text-emerald-600 w-8">{Math.round((conversionData.gradeA / totalLeads) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-neutral-400 w-8">B级</span>
+                    <div className="flex-1 h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.round((conversionData.gradeB / totalLeads) * 100)}%` }} />
+                    </div>
+                    <span className="text-[9px] font-medium text-blue-600 w-8">{Math.round((conversionData.gradeB / totalLeads) * 100)}%</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[9px] text-neutral-400 w-8">C级</span>
+                    <div className="flex-1 h-2 bg-neutral-100 dark:bg-neutral-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: `${Math.round((conversionData.gradeC / totalLeads) * 100)}%` }} />
+                    </div>
+                    <span className="text-[9px] font-medium text-amber-600 w-8">{Math.round((conversionData.gradeC / totalLeads) * 100)}%</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 诊断卡片 3: 最佳实践 / 高产出 */}
+        <Card className="border-2 border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/40 to-transparent">
+          <CardContent className="p-4">
+            <div className="flex items-start justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
+                  <Lightbulb className="w-4 h-4 text-emerald-600" />
+                </div>
+                <div>
+                  <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">最佳实践</div>
+                  <div className="text-[10px] text-neutral-400">高产出活动类型</div>
+                </div>
+              </div>
+              <div className="text-2xl font-bold text-emerald-700 dark:text-emerald-400">
+                {diagnosticData.diagnosisC.bestType?.newLogo || 0}
+              </div>
+            </div>
+            <div className="space-y-2">
+              {diagnosticData.diagnosisC.topTypes?.slice(0, 3).map((type: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between py-1.5 px-2 rounded-lg bg-white dark:bg-neutral-900/50 hover:bg-emerald-50/50 dark:hover:bg-emerald-900/20 transition-colors">
+                  <span className="text-[11px] text-neutral-700 dark:text-neutral-300">{type.type}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] text-emerald-600 font-medium">{type.leadsPerActivity || type.leadsPerActivity || 0}/场</span>
+                    <span className="text-[10px] text-neutral-400">{type.newLogo}新客</span>
+                  </div>
+                </div>
+              ))}
+              {(!diagnosticData.diagnosisC.topTypes || diagnosticData.diagnosisC.topTypes.length === 0) && (
+                <div className="text-[11px] text-neutral-400 text-center py-2">暂无数据</div>
+              )}
+            </div>
+            <div className="mt-3 pt-2 border-t border-emerald-100 dark:border-emerald-900/30">
+              <div className="text-[10px] text-emerald-700 dark:text-emerald-400 text-center">
+                建议: {diagnosticData.diagnosisC.bestType?.type || '线下峰会'} 类活动效果最佳
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ==== 第三层：行动计划 ==== */}
+      {actionCards.length > 0 ? (
+        <Card className="border border-neutral-200 dark:border-neutral-800">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center">
+                  <ClipboardList className="w-4 h-4 text-rose-600" />
+                </div>
+                <div>
+                  <div className="text-sm font-semibold text-neutral-900 dark:text-white">行动计划</div>
+                  <div className="text-[10px] text-neutral-400">基于诊断的建议行动</div>
+                </div>
+              </div>
+              <Badge variant="secondary" size="sm">{actionCards.length} 项待办</Badge>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {actionCards.slice(0, 4).map((card: any, idx: number) => {
+                const IconComp = card.icon || AlertTriangle;
+                const cardState = actionCardStates[card.actionId] || 'pending';
+                const isHandled = cardState === 'handled';
+                const isIgnored = cardState === 'ignored';
+                const isActive = isHandled || isIgnored;
+                return (
+                  <div key={idx} className={cn(
+                    "flex items-start gap-3 p-3 rounded-xl transition-all cursor-pointer border",
+                    isActive ? "bg-neutral-100/50 dark:bg-neutral-800/30 border-neutral-100 dark:border-neutral-800 opacity-70" : "bg-neutral-50 dark:bg-neutral-800/50 hover:bg-white dark:hover:bg-neutral-800 border-neutral-100 dark:border-neutral-700/50"
+                  )}>
+                    {/* 左上：图标 + 状态标识 */}
+                    <div className="flex flex-col items-center gap-1">
+                      <div className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0",
+                        card.color === 'orange' ? "bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" :
+                        card.color === 'purple' ? "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" :
+                        card.color === 'blue' ? "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" :
+                        "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400"
+                      )}>
+                        <IconComp className="w-3.5 h-3.5" />
                       </div>
+                      {/* 状态标识 */}
+                      <div className={cn("text-[8px] font-medium px-1 py-0.5 rounded-full", isHandled ? "bg-emerald-100 text-emerald-600" : isIgnored ? "bg-neutral-200 text-neutral-500" : "bg-amber-100 text-amber-600")}>
+                        {isHandled ? '已处理' : isIgnored ? '已忽略' : '待处理'}
+                      </div>
+                    </div>
+
+                    {/* 中间：内容 */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <h4 className={cn("text-xs font-semibold truncate", isActive ? "text-neutral-400 line-through" : "text-neutral-900 dark:text-white")}>{card.title}</h4>
+                        <span className={cn("text-[9px] font-medium px-1.5 py-0.5 rounded-full flex-shrink-0 ml-2",
+                          card.priority === 'high' ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" :
+                          card.priority === 'medium' ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" :
+                          "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                        )}>
+                          {card.priority === 'high' ? '紧急' : card.priority === 'medium' ? '中等' : '一般'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-neutral-500 line-clamp-2 mb-2">{card.content}</p>
+
+                      {/* CTA 按钮区 */}
+                      {!isActive && (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {/* 线索激活类卡片 → 催办 + 收回重分配 */}
+                          {card.type === 'activation' && (
+                            <>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  // 模拟催办操作
+                                  const partnerNames = (card.detailData?.activities || []).map((a: any) => a.partnerName || '未知伙伴').slice(0, 3);
+                                  window.alert(`✅ 催办成功\n\n已向以下伙伴发送跟进提醒：\n${partnerNames.join('\n')}${partnerNames.length >= 3 ? '\n...等' : ''}\n\n共 ${card.detailData?.activities?.length || 0} 场活动涉及 ${(card.metrics?.[0]?.value || '0').replace('¥', '').replace('万', '')}万 潜在商机`);
+                                  setActionCardStates(prev => ({ ...prev, [card.actionId]: 'handled' }));
+                                }}
+                                className="text-[10px] px-2 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center gap-1"
+                              >
+                                <MessageCircle className="w-3 h-3" />一键催办
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  window.alert(`🔄 收回重分配\n\n系统将自动把 ${(card.metrics?.[0]?.value || '0').replace('¥', '').replace('万', '')}万 潜在商机\n重新评估并分配给高绩效伙伴。\n\n该操作将同步更新商机管理模块。`);
+                                  setActionCardStates(prev => ({ ...prev, [card.actionId]: 'handled' }));
+                                }}
+                                className="text-[10px] px-2 py-1 bg-cyan-600 text-white rounded-md hover:bg-cyan-700 transition-colors flex items-center gap-1"
+                              >
+                                <RefreshCw className="w-3 h-3" />收回重分配
+                              </button>
+                            </>
+                          )}
+                          {/* 区域未覆盖类卡片 → 快速规划补充活动 */}
+                          {card.type === 'regional-planning' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const missingRegions = (card.detailData?.regions || []).map((r: any) => r.region).join('、');
+                                window.alert(`🗺 快速规划补充活动\n\n将为以下未覆盖大区创建活动计划：\n${missingRegions}\n\n点击确认后跳转到「新建活动」表单，预填大区标签。`);
+                                setActionCardStates(prev => ({ ...prev, [card.actionId]: 'handled' }));
+                                navigate('/marketing/plan');
+                              }}
+                              className="text-[10px] px-2 py-1 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors flex items-center gap-1"
+                            >
+                              <MapPin className="w-3 h-3" />快速规划补充
+                            </button>
+                          )}
+                          {/* 待推进活动卡片 → 查看清单 */}
+                          {card.type === 'supervision' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.alert(`📋 待推进活动清单\n\n共 ${card.detailData?.activities?.length || 0} 场待推进活动：\n\n${(card.detailData?.activities || []).slice(0, 5).map((a: any, i: number) => `${i + 1}. ${a.name || '未知活动'} (${a.status === 'In Progress' ? '进行中' : '规划中'})`).join('\n')}${card.detailData?.activities?.length > 5 ? '\n...等' : ''}`);
+                              }}
+                              className="text-[10px] px-2 py-1 bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors flex items-center gap-1"
+                            >
+                              <ListChecks className="w-3 h-3" />查看清单
+                            </button>
+                          )}
+                          {/* 核销滞后卡片 → 查看核销 */}
+                          {card.type === 'reconciliation' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.alert(`🧾 核销清单\n\n共 ${card.detailData?.activities?.length || 0} 场已完成但未核销：\n\n${(card.detailData?.activities || []).slice(0, 5).map((a: any, i: number) => `${i + 1}. ${a.name || '未知活动'} - 预算 ¥${((a.budget || 0) / 10000).toFixed(1)}万`).join('\n')}${card.detailData?.activities?.length > 5 ? '\n...等' : ''}`);
+                              }}
+                              className="text-[10px] px-2 py-1 bg-purple-600 text-white rounded-md hover:bg-purple-700 transition-colors flex items-center gap-1"
+                            >
+                              <Receipt className="w-3 h-3" />查看核销
+                            </button>
+                          )}
+                          {/* 最佳实践卡片 → 查看最佳实践 */}
+                          {card.type === 'empowerment' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                const topTypes = card.detailData?.topTypes || [];
+                                window.alert(`💡 "${card.title.replace('复制"', '').replace('"的成功经验', '')}"最佳实践\n\n产出验证：\n${topTypes.map((t: any, i: number) => `${i + 1}. ${t.type}：场均 ${t.leadsPerActivity}线索 · ${t.newLogo}新客 · ROI ${t.roi}%`).join('\n')}\n\n建议：将 SOP 材料推广到更多伙伴和区域。`);
+                              }}
+                              className="text-[10px] px-2 py-1 bg-emerald-600 text-white rounded-md hover:bg-emerald-700 transition-colors flex items-center gap-1"
+                            >
+                              <Lightbulb className="w-3 h-3" />查看最佳实践
+                            </button>
+                          )}
+                          {/* 忽略按钮（所有卡片都有） */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActionCardStates(prev => ({ ...prev, [card.actionId]: 'ignored' }));
+                            }}
+                            className="text-[10px] px-2 py-1 text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-300 transition-colors"
+                          >
+                            忽略
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2426,7 +1731,17 @@ export const MarketingIncentivePage = () => {
             </div>
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        <Card className="border border-emerald-200 dark:border-emerald-800 bg-gradient-to-br from-emerald-50/30 to-transparent">
+          <CardContent className="p-6 text-center">
+            <div className="w-12 h-12 mx-auto rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mb-3">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+            </div>
+            <h3 className="text-sm font-semibold text-emerald-700 dark:text-emerald-400 mb-1">营销生态运转良好</h3>
+            <p className="text-xs text-neutral-400">当前无紧急待处理事项，所有指标均处于健康区间</p>
+          </CardContent>
+        </Card>
+      )}
 
       {/* ========== Activity List (Legacy Zone) ========== */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -2439,8 +1754,12 @@ export const MarketingIncentivePage = () => {
                 共 {activitiesWithROI.length} 个活动
               </span>
             </div>
-            <div className="flex items-center gap-1">
-              {['all', 'over-budget', 'no-leads', 'not-started', 'normal'].map((opt) => (
+            <div className="text-[10px] text-blue-600 dark:text-blue-400 mb-1.5 flex items-center gap-1">
+              <Info className="w-3 h-3" />
+              点击上方 KPI 卡片可快速过滤对应状态的活动
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
+              {['all', 'over-budget', 'no-leads', 'in-progress', 'normal'].map((opt) => (
                 <button
                   key={opt}
                   onClick={() => setStatusFilter(opt)}
@@ -2451,7 +1770,7 @@ export const MarketingIncentivePage = () => {
                       : "bg-neutral-100 dark:bg-neutral-800 text-neutral-500 hover:bg-neutral-200 dark:hover:bg-neutral-700"
                   )}
                 >
-                  {opt === 'all' ? '全部' : opt === 'over-budget' ? '超支' : opt === 'no-leads' ? '无线索' : opt === 'not-started' ? '未启动' : '正常'}
+                  {opt === 'all' ? '全部' : opt === 'over-budget' ? '超支' : opt === 'no-leads' ? '无线索' : opt === 'in-progress' ? '进行中' : '正常'}
                 </button>
               ))}
             </div>

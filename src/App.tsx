@@ -14,6 +14,7 @@ import { dealService } from './services/deal-service';
 import { buildPartnerDetails } from './lib/partnerDataBuilder';
 import { Shield, HelpCircle, Clock } from 'lucide-react';
 import { seedTestData } from './data/seedTestData';
+import { OnboardingGuide, useOnboarding } from './components/onboarding/OnboardingGuide';
 
 const LiveClock = () => {
   const [time, setTime] = useState(new Date());
@@ -72,9 +73,14 @@ const AdminScoringConfig = retryableLazy(() => import('./components/admin/AdminS
 
 function EcosystemRoute() {
   const navigate = useNavigate();
-  const handleNavigate = (view: string) => {
+  const handleNavigate = (view: string, params?: Record<string, string>) => {
     const route = ['partners', 'deals', 'marketing', 'incentives', 'enablement', 'analytics', 'settings'].includes(view) ? `/${view}` : '/ecosystem';
-    navigate(route);
+    if (params && Object.keys(params).length > 0) {
+      const qs = new URLSearchParams(params).toString();
+      navigate(`${route}?${qs}`);
+    } else {
+      navigate(route);
+    }
   };
   return (
     <div className="space-y-6">
@@ -341,6 +347,7 @@ function SettingsRoute() {
 
 function AppLayout() {
   const { t } = useLanguage();
+  const { showOnboarding, dismissOnboarding } = useOnboarding();
 
   useEffect(() => {
     const initializeData = async () => {
@@ -357,12 +364,13 @@ function AppLayout() {
   return (
     <div className="min-h-screen bg-neutral-50 dark:bg-neutral-950 flex">
       <Sidebar />
+      <OnboardingGuide open={showOnboarding} onClose={dismissOnboarding} />
 
-      <div className="flex-1 ml-60 flex flex-col">
+      <div className="flex-1 ml-60 flex flex-col gradient-mesh relative">
         <NetworkStatus />
         <TopNav />
 
-        <main className="flex-1 pt-20 pb-16 px-8 max-w-[1440px] mx-auto w-full">
+        <main className="flex-1 pt-24 pb-20 px-8 max-w-[1440px] mx-auto w-full relative z-10">
           <Routes>
             <Route path="/" element={<Navigate to="/ecosystem" replace />} />
               <Route path="/ecosystem" element={<EcosystemRoute />} />
@@ -405,16 +413,20 @@ function AppLayout() {
             </Routes>
         </main>
 
-        <footer className="mt-auto border-t border-neutral-200 dark:border-neutral-800 py-3 flex justify-center items-center gap-6">
+        <footer className="mt-auto border-t border-neutral-100 dark:border-neutral-800/50 py-4 px-8 flex justify-center items-center gap-6 bg-white/30 dark:bg-neutral-950/30 backdrop-blur-sm">
           <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-medium">
-            <Shield className="w-3.5 h-3.5" />
+            <Shield className="w-3.5 h-3.5 text-brand-500/50" />
             {t('footer.secure')}
           </div>
-          <div className="h-3 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <div className="h-3 w-px bg-neutral-200/60 dark:bg-neutral-700/40" />
+          <div className="text-xs text-neutral-400 font-medium">
+            {t('footer.copyright')}
+          </div>
+          <div className="h-3 w-px bg-neutral-200/60 dark:bg-neutral-700/40" />
           <LiveClock />
-          <div className="h-3 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <div className="h-3 w-px bg-neutral-200/60 dark:bg-neutral-700/40" />
           <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-medium">
-            <HelpCircle className="w-3.5 h-3.5" />
+            <HelpCircle className="w-3.5 h-3.5 text-brand-500/50" />
             {t('footer.assistance')}
           </div>
         </footer>

@@ -1,0 +1,59 @@
+name: Deploy to Tencent Cloud
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_APP_URL: ${{ secrets.VITE_APP_URL }}
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_RESEND_API_KEY: ${{ secrets.VITE_RESEND_API_KEY }}
+          VITE_EMAIL_FROM: ${{ secrets.VITE_EMAIL_FROM }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+
+      - name: Configure COS CLI
+        env:
+          TENCENT_CLOUD_SECRET_ID: ${{ secrets.TENCENT_CLOUD_SECRET_ID }}
+          TENCENT_CLOUD_SECRET_KEY: ${{ secrets.TENCENT_CLOUD_SECRET_KEY }}
+        run: |
+          npm install -g cos-cli
+          cos-cli config --appid ${TENCENT_CLOUD_APP_ID} \
+            --secret-id ${{ secrets.TENCENT_CLOUD_SECRET_ID }} \
+            --secret-key ${{ secrets.TENCENT_CLOUD_SECRET_KEY }} \
+            --bucket ${{ secrets.TENCENT_CLOUD_BUCKET }} \
+            --region ${{ secrets.TENCENT_CLOUD_REGION }}
+
+      - name: Upload to COS
+        run: |
+          cos-cli upload --local-dir ./dist --bucket-dir / \
+            --bucket ${{ secrets.TENCENT_CLOUD_BUCKET }} \
+            --region ${{ secrets.TENCENT_CLOUD_REGION }}
+
+      - name: Purge CDN Cache
+        run: |
+          cos-cli purge --url https://partner.velolabs.top \
+            --bucket ${{ secrets.TENCENT_CLOUD_BUCKET }} \
+            --region ${{ secrets.TENCENT_CLOUD_REGION }}
+        continue-on-error: true

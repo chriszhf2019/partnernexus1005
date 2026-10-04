@@ -2,7 +2,7 @@ import { test, expect, Page } from '@playwright/test';
 
 const CREDENTIALS = {
   email: 'admin@partnernxus.com',
-  password: 'YOUR_PASSWORD',
+  password: 'Demo@123456',
 };
 
 /** 登录并等待跳转到仪表盘 */

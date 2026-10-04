@@ -12,7 +12,7 @@ export const Card = ({ children, className, hover = false, padding = true, onCli
   <div
     className={cn(
       'card shadow-card',
-      hover && 'hover:shadow-card-hover hover:border-neutral-300 dark:hover:border-neutral-600 transition-shadow duration-200',
+      hover && 'hover:shadow-card-hover hover:border-neutral-300/80 dark:hover:border-neutral-600/60 transition-all duration-200 hover:-translate-y-0.5',
       onClick && 'cursor-pointer',
       padding && 'p-6',
       className,
@@ -28,11 +28,11 @@ export const CardHeader = ({ children, className, onClick }: { children: React.R
 );
 
 export const CardTitle = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <h3 className={cn('text-sm font-semibold text-neutral-900 dark:text-white', className)}>{children}</h3>
+  <h3 className={cn('text-sm font-bold text-neutral-900 dark:text-white tracking-tight', className)}>{children}</h3>
 );
 
 export const CardDescription = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <p className={cn('text-xs text-neutral-500 dark:text-neutral-400 mt-1', className)}>{children}</p>
+  <p className={cn('text-xs text-neutral-500 dark:text-neutral-400 mt-1 leading-relaxed', className)}>{children}</p>
 );
 
 export const CardContent = ({ children, className }: { children: React.ReactNode; className?: string }) => (
@@ -40,5 +40,5 @@ export const CardContent = ({ children, className }: { children: React.ReactNode
 );
 
 export const CardFooter = ({ children, className }: { children: React.ReactNode; className?: string }) => (
-  <div className={cn('mt-auto pt-4 border-t border-neutral-200 dark:border-neutral-800', className)}>{children}</div>
+  <div className={cn('mt-auto pt-4 border-t border-neutral-100 dark:border-neutral-800/50', className)}>{children}</div>
 );

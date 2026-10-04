@@ -47,7 +47,7 @@ export const QuarterlyOpsControlTower: React.FC<QuarterlyOpsControlTowerProps> =
           supabase.from('deals').select('*').order('created_at', { ascending: false }).limit(500),
           supabase.from('marketing_plan').select('*').order('created_at', { ascending: false }).limit(200),
           supabase.from('incentive_programs').select('*').order('created_at', { ascending: false }).limit(50),
-          supabase.from('partners').select('id, partner_name, tier, status').limit(500),
+          supabase.from('partners').select('id, name, tier, status').limit(500),
         ]);
         setDeals(enrichDealsWithMetrics((dealsRes.data || []) as Deal[]));
         setCampaigns(campaignsRes.data || []);

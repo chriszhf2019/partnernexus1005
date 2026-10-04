@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { FileText, Plus, Search, ChevronRight, CheckCircle2, Clock,
   XCircle, AlertCircle, Calendar, User, MapPin, MoreHorizontal,
   ArrowRight, Zap, TrendingUp, DollarSign, Target, BarChart3,
@@ -141,6 +141,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const { t } = useLanguage();
   const { config } = useConfig();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<'all' | 'pending' | 'conflicts'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
@@ -233,6 +234,24 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const [showRuleEngine, setShowRuleEngine] = useState(false);
   const [activePreset, setActivePreset] = useState<string | null>(null);
 
+  // ====== 从 URL 参数初始化预设筛选（支持从仪表盘跳转时自动激活筛选） ======
+  useEffect(() => {
+    const presetFromUrl = searchParams.get('preset');
+    const stageFromUrl = searchParams.get('stage');
+    if (presetFromUrl) {
+      setActivePreset(presetFromUrl);
+      if (stageFromUrl) setSelectedStageFilter(stageFromUrl);
+      // 清除 URL 参数（避免刷新后重复激活）
+      const cleared = new URLSearchParams(searchParams);
+      cleared.delete('preset');
+      cleared.delete('stage');
+      if (cleared.toString() !== searchParams.toString()) {
+        setSearchParams(cleared, { replace: true });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // 计算加权管线金额
   const stageProbs = useMemo(() => computeRealStageProbabilities(deals), [deals]);
   
@@ -244,6 +263,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
     return Math.round(deal.value * probability / 100);
   };
 
+  // ====== 应用 activePreset 预设过滤（让预设真正影响列表） ======
   const filteredDeals = useMemo(() => enrichedDeals.filter((deal) => {
     const s = searchQuery.toLowerCase();
     const matchesSearch = !s || deal.title.toLowerCase().includes(s) || deal.customerName.toLowerCase().includes(s) || deal.partnerName.toLowerCase().includes(s);
@@ -254,8 +274,19 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
     const matchesPartnerType = filters.partnerType === 'All' || deal.partnerType === filters.partnerType;
     const matchesSource = filters.source === 'All' || (deal.sourceInfo && deal.sourceInfo.source === filters.source);
     const matchesStageFilter = selectedStageFilter === 'All' || deal.stage === selectedStageFilter;
-    return matchesSearch && matchesTab && matchesRegion && matchesStage && matchesProduct && matchesPartnerType && matchesSource && matchesStageFilter;
-  }), [enrichedDeals, searchQuery, activeTab, filters, selectedStageFilter]);
+
+    // --- activePreset 预设过滤（新增） ---
+    let matchesPreset = true;
+    if (activePreset === 'stagnant') {
+      // 超过30天未更新的停滞商机
+      matchesPreset = deal.isStagnant === true;
+    } else if (activePreset === 'key-projects') {
+      // 重点项目：金额超过10万的活跃商机
+      matchesPreset = deal.value >= 100000 && deal.stage !== 'ClosedWon' && deal.stage !== 'ClosedLost';
+    }
+
+    return matchesSearch && matchesTab && matchesRegion && matchesStage && matchesProduct && matchesPartnerType && matchesSource && matchesStageFilter && matchesPreset;
+  }), [enrichedDeals, searchQuery, activeTab, filters, selectedStageFilter, activePreset]);
 
   // ===== 核心指标计算（基于实时增强数据） =====
   const pipelineValue = useMemo(() => 
@@ -274,9 +305,8 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   const stagnantDeals = useMemo(() => enrichedDeals.filter(d => d.isStagnant), [enrichedDeals]);
   const STATUS_CONFIG = getStatusConfig(t);
 
-  // 年度目标（假设从配置获取，默认1.5亿）
-  const ANNUAL_TARGET = 150000000;
-  const annualAchievementRate = safeCalcPercent(wonValue, ANNUAL_TARGET);
+  const yearlyTarget = config.yearlyTarget || 60000000;
+  const annualAchievementRate = safeCalcPercent(wonValue, yearlyTarget);
 
   // 综合赢率计算（近30天）- 基于真实数据
   const winRate30d = useMemo(() => calcWinRate30d(enrichedDeals), [enrichedDeals]);
@@ -396,7 +426,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
   }, [enrichedDeals]);
 
   // 管线覆盖倍数
-  const pipelineCoverage = Math.round(pipelineValue / Math.max(ANNUAL_TARGET - wonValue, 1) * 10) / 10;
+  const pipelineCoverage = Math.round(pipelineValue / Math.max(yearlyTarget - wonValue, 1) * 10) / 10;
 
   // 平均客单价
   const avgDealValue = enrichedDeals.length > 0 ? enrichedDeals.reduce((s, d) => s + d.value, 0) / enrichedDeals.length : 0;
@@ -685,7 +715,7 @@ export const DealRegistrationPage = ({ stats, deals, onNewDeal, onDealUpdate, on
                 style={{ width: `${Math.min(100, annualAchievementRate)}%` }}
               />
             </div>
-            <div className="text-[11px] text-slate-500 mt-1">{formatCurrency(wonValue)} / {formatCurrency(ANNUAL_TARGET)}</div>
+            <div className="text-[11px] text-slate-500 mt-1">{formatCurrency(wonValue)} / {formatCurrency(yearlyTarget)}</div>
           </div>
 
           {/* 综合赢率 */}

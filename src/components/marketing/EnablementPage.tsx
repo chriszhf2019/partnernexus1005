@@ -85,11 +85,17 @@ export const EnablementPage = () => {
   const totalPoints = useMemo(() => myPathPrograms.reduce((s, p) => s + (p.points || 0), 0), [myPathPrograms]);
   const isActive = (status: string) => status === 'completed' || status === 'assessed';
   const earnedPoints = useMemo(() => {
-    return myEnrollments.reduce((s, e) => {
+    const enrolledProgramPoints = myEnrollments.reduce((s, e) => {
+      const prog = programs.find(p => p.name === e.program_name);
+      return s + (prog?.points || 0);
+    }, 0);
+    const maxPossiblePoints = Math.max(totalPoints, enrolledProgramPoints);
+    const rawPoints = myEnrollments.reduce((s, e) => {
       const prog = programs.find(p => p.name === e.program_name);
       return s + (isActive(e.status) ? (prog?.points || 0) : Math.round((prog?.points || 0) * (e.progress || 0) / 100));
     }, 0);
-  }, [myEnrollments, programs]);
+    return Math.min(rawPoints, maxPossiblePoints);
+  }, [myEnrollments, programs, totalPoints]);
   const completedCount = myEnrollments.filter(e => isActive(e.status)).length;
 
   // Admin stats

@@ -170,7 +170,7 @@ export const AnalyticsPage = () => {
                   <LineChart data={quarterlyTrend}>
                     <SafeGrid />
                     <XAxis dataKey="q" tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} />
-                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `${v}万`} />
+                    <YAxis tickLine={false} axisLine={false} tick={{ fontSize: 11, fill: '#a1a1aa' }} tickFormatter={(v) => `${Math.round(v)}万`} />
                     {/* Tooltip removed */}
                     <Line type="monotone" dataKey="revenue" stroke="#18181b" strokeWidth={2} dot={{ r: 4, fill: '#18181b' }} />
                   </LineChart>

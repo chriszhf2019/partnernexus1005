@@ -21,7 +21,7 @@ const DEFAULT_GLOBAL_CONFIG: GlobalConfig = {
   partnerStatuses: ['Cooperating', 'Inactive', 'Prospective', 'Rejected'],
   partnerVendors: [],
   cooperationLevels: [],
-  salesStages: [],
+  salesStages: ['已报备', '审批中', '方案跟进', '商务洽谈', '赢单'],
   industries: [],
   regions: [],
   currency: 'CNY',

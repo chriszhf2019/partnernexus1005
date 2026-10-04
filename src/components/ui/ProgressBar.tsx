@@ -8,6 +8,7 @@ interface ProgressBarProps {
   showPercentage?: boolean;
   size?: 'sm' | 'md' | 'lg';
   variant?: 'default' | 'success' | 'warning' | 'danger' | 'brand';
+  color?: string;
   className?: string;
   animated?: boolean;
 }
@@ -21,8 +22,9 @@ const variantClasses = {
   brand: 'bg-brand',
 };
 
-export const ProgressBar = ({ value, max = 100, label, showPercentage = false, size = 'md', variant = 'default', className, animated = true }: ProgressBarProps) => {
+export const ProgressBar = ({ value, max = 100, label, showPercentage = false, size = 'md', variant = 'default', color, className, animated = true }: ProgressBarProps) => {
   const percentage = Math.min(100, Math.max(0, (value / max) * 100));
+  const barColor = color || variantClasses[variant];
 
   return (
     <div className={cn('space-y-1.5', className)}>
@@ -35,9 +37,9 @@ export const ProgressBar = ({ value, max = 100, label, showPercentage = false, s
       <div className={cn('w-full bg-neutral-200 dark:bg-neutral-800 rounded-full overflow-hidden', sizeClasses[size])}>
         {animated ? (
           <motion.div initial={{ width: 0 }} animate={{ width: `${percentage}%` }} transition={{ duration: 0.8, ease: 'easeOut' }}
-            className={cn('h-full rounded-full', variantClasses[variant])} />
+            className={cn('h-full rounded-full', barColor)} />
         ) : (
-          <div className={cn('h-full rounded-full transition-all duration-300', variantClasses[variant])} style={{ width: `${percentage}%` }} />
+          <div className={cn('h-full rounded-full transition-all duration-300', barColor)} style={{ width: `${percentage}%` }} />
         )}
       </div>
     </div>

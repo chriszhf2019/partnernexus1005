@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>生成2026年演示数据</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; background: #1a1a1a; color: #fff; }
+    h1 { color: #22c55e; }
+    .log { background: #0a0a0a; padding: 15px; border-radius: 8px; margin: 20px 0; font-family: monospace; font-size: 13px; max-height: 400px; overflow-y: auto; }
+    .success { color: #22c55e; }
+    .error { color: #ef4444; }
+    .info { color: #3b82f6; }
+    button { background: #22c55e; color: #fff; border: none; padding: 12px 24px; border-radius: 8px; font-size: 16px; cursor: pointer; }
+    button:disabled { background: #666; cursor: not-allowed; }
+  </style>
+</head>
+<body>
+  <h1>🌱 2026年演示数据生成器</h1>
+  <p>为 EcosystemDashboard 生成逻辑正确的演示数据</p>
+  <button id="runBtn" onclick="runSeed()">开始生成数据</button>
+  <div id="log" class="log"></div>
+
+  <script>
+    const SUPABASE_URL = 'https://ndcpzswdyhcjfdiobbgm.supabase.co';
+    const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5kY3B6c3dkeWhjamZkaW9iYmdtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzgwMTkyMTUsImV4cCI6MjA1MzU5NTIxNX0.XJmlQdwKcMRy7Id9lh4tK5JlIMflRqhRIML1qW0K8dM';
+
+    function log(msg, type='info') {
+      const div = document.getElementById('log');
+      const span = document.createElement('div');
+      span.className = type;
+      span.textContent = new Date().toLocaleTimeString() + ' ' + msg;
+      div.appendChild(span);
+      div.scrollTop = div.scrollHeight;
+    }
+
+    async function supabaseQuery(table, options = {}) {
+      const { method = 'GET', body = null } = options;
+      const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      };
+      
+      const url = `${SUPABASE_URL}/rest/v1/${table}${options.params || ''}`;
+      log(`API: ${method} ${url}`);
+      
+      const resp = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : null });
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`HTTP ${resp.status}: ${text}`);
+      }
+      return resp.json();
+    }
+
+    async function getPartners() {
+      const data = await supabaseQuery('partners', { 
+        params: '?select=id,name,region,tier' 
+      });
+      log(`获取到 ${data.length} 个伙伴`, 'success');
+      return data;
+    }
+
+    async function clearDeals() {
+      try {
+        await supabaseQuery('deals', { method: 'DELETE', params: '?id=neq.0' });
+        log('已清空 deals 表', 'success');
+      } catch (e) { log('清空 deals: ' + e.message, 'error'); }
+    }
+
+    async function insertDeals(deals) {
+      for (const deal of deals) {
+        try {
+          await supabaseQuery('deals', { 
+            method: 'POST', 
+            body: deal 
+          });
+        } catch (e) {
+          log(`插入失败: ${deal.title?.substring(0,20)} - ${e.message}`, 'error');
+        }
+      }
+      log(`插入 ${deals.length} 条商机完成`, 'success');
+    }
+
+    async function runSeed() {
+      document.getElementById('runBtn').disabled = true;
+      log('开始生成2026年演示数据...\n');
+
+      try {
+        // 1. 清空现有商机
+        log('步骤1: 清空现有商机数据...');
+        await clearDeals();
+
+        // 2. 获取伙伴列表
+        log('\n步骤2: 获取伙伴列表...');
+        const partners = await getPartners();
+        const partnerMap = {};
+        partners.forEach(p => partnerMap[p.name] = p.id);
+
+        // 3. Q1-Q2 成交商机 (ClosedWon)
+        log('\n步骤3: 插入成交商机...');
+        const closedWonDeals = [
+          { title: '2026年北京市政务云扩容项目', customer: '北京市经济和信息化局', value: 2800000, partner_id: partnerMap['神州数码集团股份有限公司'], partner_name: '神州数码集团股份有限公司', partner_type: 'VAD', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '高波', sales_team: '政务事业部', product_type: '信创云平台', created_date: '2026-01-05', end_date: '2026-03-15', is_priority: true, has_conflict: false },
+          { title: '某国有银行核心系统云化项目', customer: '中国工商银行数据中心', value: 3500000, partner_id: partnerMap['中科软科技股份有限公司'], partner_name: '中科软科技股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '刘洋', sales_team: '金融事业部', product_type: '金融云平台', created_date: '2026-01-15', end_date: '2026-03-20', is_priority: true, has_conflict: false },
+          { title: '某省政务大数据平台一期', customer: '某省大数据发展中心', value: 2200000, partner_id: partnerMap['太极计算机股份有限公司'], partner_name: '太极计算机股份有限公司', partner_type: 'SI', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '张伟', sales_team: '政务事业部', product_type: '大数据平台', created_date: '2026-02-01', end_date: '2026-03-25', is_priority: true, has_conflict: false },
+          { title: '上海市医疗云平台建设项目', customer: '上海市卫生健康委员会', value: 4200000, partner_id: partnerMap['华东医卫云科技术有限公司'], partner_name: '华东医卫云科技术有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华东', sales_name: '陈伟', sales_team: '医疗事业部', product_type: '医疗云平台', created_date: '2026-01-10', end_date: '2026-03-30', is_priority: true, has_conflict: false },
+          { title: '某头部券商数据中台项目', customer: '中信证券股份有限公司', value: 1800000, partner_id: partnerMap['软通动力信息技术股份有限公司'], partner_name: '软通动力信息技术股份有限公司', partner_type: 'SI', status: 'ClosedWon', stage: 'ClosedWon', region: '华东', sales_name: '赵华', sales_team: '金融事业部', product_type: '数据中台', created_date: '2026-02-15', end_date: '2026-03-28', is_priority: true, has_conflict: false },
+          { title: '深圳市智慧城市数据治理项目', customer: '深圳市政务服务数据管理局', value: 3100000, partner_id: partnerMap['华为技术有限公司'], partner_name: '华为技术有限公司', partner_type: 'OEM', status: 'ClosedWon', stage: 'ClosedWon', region: '华南', sales_name: '李娜', sales_team: '智慧城市事业部', product_type: '数据治理平台', created_date: '2026-01-20', end_date: '2026-03-18', is_priority: true, has_conflict: false },
+          { title: '广东省人民医院智慧医院项目', customer: '广东省人民医院', value: 2600000, partner_id: partnerMap['广州广电运通金融电子股份有限公司'], partner_name: '广州广电运通金融电子股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华南', sales_name: '林杰', sales_team: '医疗事业部', product_type: '智慧医院整体解决方案', created_date: '2026-02-20', end_date: '2026-03-25', is_priority: true, has_conflict: false },
+          { title: '四川省政务云信创改造项目', customer: '四川省大数据发展管理局', value: 1950000, partner_id: partnerMap['成都四方伟业软件股份有限公司'], partner_name: '成都四方伟业软件股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '西部', sales_name: '杨帆', sales_team: '政务事业部', product_type: '信创云平台', created_date: '2026-01-25', end_date: '2026-03-20', is_priority: true, has_conflict: false },
+          { title: '某省政务云二期扩容项目', customer: '某省大数据局', value: 3200000, partner_id: partnerMap['神州数码集团股份有限公司'], partner_name: '神州数码集团股份有限公司', partner_type: 'VAD', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '高波', sales_team: '政务事业部', product_type: '信创云平台', created_date: '2026-04-05', end_date: '2026-06-10', is_priority: true, has_conflict: false },
+          { title: '某头部保险核心系统云化', customer: '中国人寿保险股份有限公司', value: 2900000, partner_id: partnerMap['中科软科技股份有限公司'], partner_name: '中科软科技股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '刘洋', sales_team: '金融事业部', product_type: '金融云平台', created_date: '2026-04-12', end_date: '2026-06-15', is_priority: true, has_conflict: false },
+          { title: '某三甲医院DRG分组系统项目', customer: '北京某三甲医院', value: 1500000, partner_id: partnerMap['东软集团股份有限公司'], partner_name: '东软集团股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华北', sales_name: '陈明', sales_team: '医疗事业部', product_type: '医疗信息化', created_date: '2026-05-10', end_date: '2026-06-20', is_priority: true, has_conflict: false },
+          { title: '浙江省智慧城市数据中台', customer: '浙江省大数据发展管理局', value: 3800000, partner_id: partnerMap['浙江浙大网新科技股份有限公司'], partner_name: '浙江浙大网新科技股份有限公司', partner_type: 'SI', status: 'ClosedWon', stage: 'ClosedWon', region: '华东', sales_name: '赵阳', sales_team: '智慧城市事业部', product_type: '数据中台', created_date: '2026-04-08', end_date: '2026-06-18', is_priority: true, has_conflict: false },
+          { title: '上海市某区智慧养老项目', customer: '上海市某区民政局', value: 1650000, partner_id: partnerMap['上海智医信息科技有限公司'], partner_name: '上海智医信息科技有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华东', sales_name: '王浩', sales_team: '医疗事业部', product_type: '智慧养老平台', created_date: '2026-05-15', end_date: '2026-06-25', is_priority: true, has_conflict: false },
+          { title: '某钢铁集团数据安全项目', customer: '宝武钢铁集团有限公司', value: 2100000, partner_id: partnerMap['上海宝信软件股份有限公司'], partner_name: '上海宝信软件股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华东', sales_name: '陈强', sales_team: '制造事业部', product_type: '数据安全', created_date: '2026-04-20', end_date: '2026-06-22', is_priority: true, has_conflict: false },
+          { title: '深圳市某区智慧应急指挥系统', customer: '深圳市应急管理局', value: 2350000, partner_id: partnerMap['深圳云天励飞技术股份有限公司'], partner_name: '深圳云天励飞技术股份有限公司', partner_type: 'ISV', status: 'ClosedWon', stage: 'ClosedWon', region: '华南', sales_name: '陈可', sales_team: '智慧城市事业部', product_type: 'AI视觉平台', created_date: '2026-04-10', end_date: '2026-06-12', is_priority: true, has_conflict: false },
+          { title: '某省农村信用社金融云项目', customer: '某省农村信用社联合社', value: 2450000, partner_id: partnerMap['中软国际有限公司'], partner_name: '中软国际有限公司', partner_type: 'Service', status: 'ClosedWon', stage: 'ClosedWon', region: '华南', sales_name: '吴明', sales_team: '金融事业部', product_type: '金融云平台', created_date: '2026-05-08', end_date: '2026-06-20', is_priority: true, has_conflict: false },
+        ];
+        await insertDeals(closedWonDeals);
+
+        // 4. 进行中商机 (Pipeline)
+        log('\n步骤4: 插入进行中商机...');
+        const openDeals = [
+          { title: '某市政务云三期建设（信创型）', customer: '某市大数据发展管理局', value: 4500000, partner_id: partnerMap['太极计算机股份有限公司'], partner_name: '太极计算机股份有限公司', partner_type: 'SI', status: 'Negotiation', stage: 'Negotiation', region: '华北', sales_name: '张伟', sales_team: '政务事业部', product_type: '信创云平台', created_date: '2026-05-01', end_date: '2026-09-30', is_priority: true, has_conflict: false },
+          { title: '某省医保信息平台升级项目', customer: '某省医疗保障局', value: 2800000, partner_id: partnerMap['东软集团股份有限公司'], partner_name: '东软集团股份有限公司', partner_type: 'ISV', status: 'Commercial', stage: 'Commercial', region: '华北', sales_name: '陈明', sales_team: '医疗事业部', product_type: '医疗信息化', created_date: '2026-05-20', end_date: '2026-10-31', is_priority: true, has_conflict: false },
+          { title: '某头部车企数据中台项目', customer: '某知名汽车制造商', value: 5500000, partner_id: partnerMap['用友网络科技股份有限公司'], partner_name: '用友网络科技股份有限公司', partner_type: 'ISV', status: 'Solution', stage: 'Solution', region: '华东', sales_name: '林芳', sales_team: '制造事业部', product_type: '数据中台', created_date: '2026-04-15', end_date: '2026-11-30', is_priority: true, has_conflict: false },
+          { title: '某省教育云平台扩容项目', customer: '某省教育厅', value: 3200000, partner_id: partnerMap['浙江浙大网新科技股份有限公司'], partner_name: '浙江浙大网新科技股份有限公司', partner_type: 'SI', status: 'Proposal', stage: 'Proposal', region: '华东', sales_name: '赵阳', sales_team: '教育事业部', product_type: '教育云平台', created_date: '2026-05-10', end_date: '2026-10-15', is_priority: true, has_conflict: false },
+          { title: '某省智慧监狱安防系统', customer: '某省监狱管理局', value: 3800000, partner_id: partnerMap['深圳云天励飞技术股份有限公司'], partner_name: '深圳云天励飞技术股份有限公司', partner_type: 'ISV', status: 'Qualification', stage: 'Qualification', region: '华南', sales_name: '陈可', sales_team: '智慧城市事业部', product_type: 'AI视觉平台', created_date: '2026-05-25', end_date: '2026-11-30', is_priority: true, has_conflict: false },
+          { title: '某股份银行AI风控系统', customer: '某股份制商业银行', value: 4200000, partner_id: partnerMap['华为技术有限公司'], partner_name: '华为技术有限公司', partner_type: 'OEM', status: 'Proposal', stage: 'Proposal', region: '华南', sales_name: '李娜', sales_team: '金融事业部', product_type: 'AI风控平台', created_date: '2026-04-20', end_date: '2026-09-30', is_priority: true, has_conflict: false },
+          { title: '某省能源集团工业互联网平台', customer: '某省能源投资集团', value: 4800000, partner_id: partnerMap['西部矿业信息技术有限公司'], partner_name: '西部矿业信息技术有限公司', partner_type: 'ISV', status: 'Solution', stage: 'Solution', region: '西部', sales_name: '马强', sales_team: '能源事业部', product_type: '工业互联网平台', created_date: '2026-05-05', end_date: '2026-12-31', is_priority: true, has_conflict: false },
+          { title: '某市智慧交通项目（潜在）', customer: '某市交通运输局', value: 3500000, partner_id: partnerMap['杭州数梦工场科技有限公司'], partner_name: '杭州数梦工场科技有限公司', partner_type: 'ISV', status: 'Lead', stage: 'Lead', region: '华东', sales_name: '王磊', sales_team: '智慧城市事业部', product_type: '智慧交通平台', created_date: '2026-06-01', end_date: '2026-12-31', is_priority: false, has_conflict: false },
+          { title: '某省医疗保障局数据平台', customer: '某省医疗保障局', value: 2200000, partner_id: partnerMap['华东医卫云科技术有限公司'], partner_name: '华东医卫云科技术有限公司', partner_type: 'ISV', status: 'Prospect', stage: 'Prospect', region: '华东', sales_name: '陈伟', sales_team: '医疗事业部', product_type: '医疗数据平台', created_date: '2026-06-10', end_date: '2026-12-31', is_priority: false, has_conflict: false },
+        ];
+        await insertDeals(openDeals);
+
+        // 5. 流失商机
+        log('\n步骤5: 插入流失商机...');
+        const lostDeal = [
+          { title: '某中小企业云化项目（流失）', customer: '某制造企业', value: 800000, partner_id: partnerMap['北京华宇信息技术有限公司'], partner_name: '北京华宇信息技术有限公司', partner_type: 'Reseller', status: 'ClosedLost', stage: 'ClosedLost', region: '华北', sales_name: '李明', sales_team: 'SMB事业部', product_type: '企业云', created_date: '2026-03-01', end_date: '2026-05-31', is_priority: false, has_conflict: false },
+        ];
+        await insertDeals(lostDeal);
+
+        // 6. 统计
+        log('\n步骤6: 验证数据...');
+        const allDeals = await supabaseQuery('deals', { params: '?select=value,stage' });
+        const stats = {};
+        allDeals.forEach(d => {
+          if (!stats[d.stage]) stats[d.stage] = { count: 0, value: 0 };
+          stats[d.stage].count++;
+          stats[d.stage].value += d.value;
+        });
+        
+        log('\n📊 数据统计:', 'success');
+        Object.keys(stats).forEach(stage => {
+          log(`  ${stage}: ${stats[stage].count}笔, ¥${(stats[stage].value/10000).toFixed(0)}万`, 'info');
+        });
+        
+        const wonValue = stats['ClosedWon']?.value || 0;
+        const openValue = Object.keys(stats).filter(k => k !== 'ClosedWon' && k !== 'ClosedLost').reduce((s, k) => s + stats[k].value, 0);
+        
+        log(`\n💵 Q1-Q2 成交总额: ¥${(wonValue/10000).toFixed(0)}万`, 'success');
+        log(`📊 Pipeline储备: ¥${(openValue/10000).toFixed(0)}万`, 'success');
+        
+        log('\n✅ 数据生成完成！请刷新 EcosystemDashboard 页面查看。', 'success');
+
+      } catch (e) {
+        log(`\n❌ 错误: ${e.message}`, 'error');
+      }
+
+      document.getElementById('runBtn').disabled = false;
+    }
+  </script>
+</body>
+</html>

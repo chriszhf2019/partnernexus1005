@@ -442,7 +442,7 @@ export const WinLossPanel: React.FC<WinLossPanelProps> = ({ open, onClose, deals
                     <BarChart data={lossAmountData}>
                       <GridLines />
                       <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${(v / 10000).toFixed(0)}万`} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={(v: number) => `${Math.round(v / 10000)}万`} />
                       {/* Tooltip removed */}
                       <Bar dataKey="value" radius={[4, 4, 0, 0]}>
                         {lossAmountData.map((_, index) => (

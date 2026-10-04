@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { User, Building2, Shield, Globe, Save, Plus, Trash2, Pencil, Check, X, Lock, Key, Clock, Smartphone, AlertTriangle, Mail, ToggleLeft, ShieldCheck, ShieldAlert, BarChart3, TrendingUp, MessageSquare, Users, UserCheck, Search } from 'lucide-react';
+import { User, Building2, Shield, Globe, Save, Plus, Trash2, Pencil, Check, X, Lock, Key, Clock, Smartphone, AlertTriangle, Mail, ToggleLeft, ShieldCheck, ShieldAlert, BarChart3, TrendingUp, MessageSquare, Users, UserCheck, Search, BookOpen } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -16,6 +16,7 @@ import { Badge } from '../ui/Badge';
 import { Tabs } from '../ui/Tabs';
 import { EmptyState } from '../ui/EmptyState';
 import { ConfirmDialog } from '../ui/ConfirmDialog';
+import { OnboardingGuide } from '../onboarding/OnboardingGuide';
 import type { GlobalConfig } from '../../types';
 
 interface SystemUser { id: string; name: string; email: string; role: UserRole; department: string; phone: string; status: 'active' | 'inactive'; lastLogin: string; source: 'admin' | 'partner'; partnerId?: string; partnerName?: string; }
@@ -284,7 +285,7 @@ export const SettingsPage = () => {
     <div className="max-w-5xl mx-auto space-y-6">
       {isLoading && (
         <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg text-sm text-amber-600">
-          正在从服务器加载配置...
+          {t('settings.loadingConfig')}
         </div>
       )}
       <div className="flex items-center justify-between">
@@ -293,7 +294,7 @@ export const SettingsPage = () => {
       </div>
 
       <Tabs tabs={[
-        { id: 'company', label: '公司信息' }, { id: 'users', label: '用户管理' }, { id: 'roles', label: '角色权限' }, { id: 'security', label: '安全设置' }, { id: 'global', label: '全局设置' }, { id: 'classification', label: '分类引擎' }, { id: 'ai', label: 'AI 配置' },
+        { id: 'company', label: t('settings.company') }, { id: 'users', label: t('settings.users') }, { id: 'roles', label: t('settings.roles') }, { id: 'security', label: t('settings.security') }, { id: 'global', label: t('settings.global') }, { id: 'classification', label: t('settings.classification') }, { id: 'ai', label: t('settings.ai') }, { id: 'targets', label: t('settings.targets') }, { id: 'help', label: t('settings.help') },
       ]} activeTab={activeTab} onChange={setActiveTab} />
 
       {activeTab === 'company' && (
@@ -301,8 +302,8 @@ export const SettingsPage = () => {
           {/* Company Info */}
           <Card>
             <CardHeader>
-              <CardTitle>公司基本信息</CardTitle>
-              <CardDescription>设置您公司的基本信息，这些信息将展示在系统的多个位置</CardDescription>
+              <CardTitle>{t('settings.companyBasic')}</CardTitle>
+              <CardDescription>{t('settings.companyDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -338,16 +339,16 @@ export const SettingsPage = () => {
           {/* Global Config */}
           <Card>
             <CardHeader>
-              <CardTitle>全局配置</CardTitle>
-              <CardDescription>配置系统核心数据字典，影响合作伙伴管理、商机报备等多个模块。界面语言请在左下角侧边栏切换</CardDescription>
+              <CardTitle>{t('settings.globalConfig')}</CardTitle>
+              <CardDescription>{t('settings.globalConfigDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               {/* 结算币种 — 影响全系统所有金额显示 */}
               <div className="mb-6 p-4 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-xl">
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
-                    <label className="block text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-1">结算币种</label>
-                    <p className="text-xs text-neutral-500">影响商机金额、Pipeline、MDF、激励计划、Dashboard 等所有金额显示</p>
+                    <label className="block text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-1">{t('settings.currency')}</label>
+                    <p className="text-xs text-neutral-500">{t('settings.currencyDesc')}</p>
                   </div>
                   <Select options={currencyOptions} value={editingConfig.currency} onChange={(e) => setEditingConfig({ ...editingConfig, currency: e.target.value as GlobalConfig['currency'] })} />
                 </div>
@@ -355,7 +356,7 @@ export const SettingsPage = () => {
 
               {/* 合作伙伴数据字典 — 与合作伙伴模块紧密关联 */}
               <div className="space-y-4 mb-6">
-                <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">合作伙伴数据字典</h4>
+                <h4 className="text-sm font-semibold text-neutral-800 dark:text-neutral-200 mb-2">{t('settings.partnerDictionaries')}</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">伙伴等级 <span className="text-neutral-400">(PartnerList筛选/批复)</span></label>
@@ -1331,6 +1332,226 @@ export const SettingsPage = () => {
         </Card>
       )}
 
+      {activeTab === 'targets' && (
+        <div className="space-y-6">
+          {/* 年度总目标 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>年度业绩目标</CardTitle>
+              <CardDescription>设置本年度的业绩总目标，系统将根据此目标分配季度和月度任务</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <div className="flex-1">
+                  <label className="block text-sm font-medium text-neutral-700 dark:text-neutral-300 mb-1.5">年度总目标 (元)</label>
+                  <Input 
+                    type="number" 
+                    value={editingConfig.yearlyTarget || 60000000} 
+                    onChange={(e) => setEditingConfig({ ...editingConfig, yearlyTarget: Number(e.target.value) })} 
+                    placeholder="60000000"
+                  />
+                </div>
+                <div className="text-sm text-neutral-500 mt-6">
+                  ≈ ¥{(Number(editingConfig.yearlyTarget) / 10000 || 6000).toLocaleString()}万
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 季度目标与月度占比 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>季度目标与月度分配</CardTitle>
+              <CardDescription>设置每个季度的业绩目标，以及该季度内各月的完成比例（三个月份占比之和应为100%）</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* 表头 */}
+              <div className="grid grid-cols-5 gap-4 text-sm font-medium text-neutral-500 border-b pb-2">
+                <div>季度</div>
+                <div>季度目标 (元)</div>
+                <div>第1月占比 (%)</div>
+                <div>第2月占比 (%)</div>
+                <div>第3月占比 (%)</div>
+              </div>
+              
+              {/* Q1 */}
+              <div className="grid grid-cols-5 gap-4 items-center">
+                <div className="font-medium text-neutral-900 dark:text-white">Q1 (1-3月)</div>
+                <Input 
+                  type="number" 
+                  value={editingConfig.q1Target || 12000000} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q1Target: Number(e.target.value) })} 
+                  placeholder="12000000"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q1M1 || 20} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q1M1: Number(e.target.value) })} 
+                  placeholder="20"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q1M2 || 30} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q1M2: Number(e.target.value) })} 
+                  placeholder="30"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q1M3 || 50} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q1M3: Number(e.target.value) })} 
+                  placeholder="50"
+                />
+              </div>
+
+              {/* Q2 */}
+              <div className="grid grid-cols-5 gap-4 items-center">
+                <div className="font-medium text-neutral-900 dark:text-white">Q2 (4-6月)</div>
+                <Input 
+                  type="number" 
+                  value={editingConfig.q2Target || 15000000} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q2Target: Number(e.target.value) })} 
+                  placeholder="15000000"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q2M1 || 25} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q2M1: Number(e.target.value) })} 
+                  placeholder="25"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q2M2 || 35} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q2M2: Number(e.target.value) })} 
+                  placeholder="35"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q2M3 || 40} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q2M3: Number(e.target.value) })} 
+                  placeholder="40"
+                />
+              </div>
+
+              {/* Q3 */}
+              <div className="grid grid-cols-5 gap-4 items-center">
+                <div className="font-medium text-neutral-900 dark:text-white">Q3 (7-9月)</div>
+                <Input 
+                  type="number" 
+                  value={editingConfig.q3Target || 18000000} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q3Target: Number(e.target.value) })} 
+                  placeholder="18000000"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q3M1 || 20} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q3M1: Number(e.target.value) })} 
+                  placeholder="20"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q3M2 || 35} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q3M2: Number(e.target.value) })} 
+                  placeholder="35"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q3M3 || 45} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q3M3: Number(e.target.value) })} 
+                  placeholder="45"
+                />
+              </div>
+
+              {/* Q4 */}
+              <div className="grid grid-cols-5 gap-4 items-center">
+                <div className="font-medium text-neutral-900 dark:text-white">Q4 (10-12月)</div>
+                <Input 
+                  type="number" 
+                  value={editingConfig.q4Target || 15000000} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q4Target: Number(e.target.value) })} 
+                  placeholder="15000000"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q4M1 || 30} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q4M1: Number(e.target.value) })} 
+                  placeholder="30"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q4M2 || 35} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q4M2: Number(e.target.value) })} 
+                  placeholder="35"
+                />
+                <Input 
+                  type="number" 
+                  value={editingConfig.q4M3 || 35} 
+                  onChange={(e) => setEditingConfig({ ...editingConfig, q4M3: Number(e.target.value) })} 
+                  placeholder="35"
+                />
+              </div>
+
+              {/* 占比校验提示 */}
+              <div className="mt-4 p-3 bg-neutral-50 dark:bg-neutral-800/50 rounded-lg">
+                <div className="text-xs text-neutral-500 space-y-1">
+                  <p>💡 占比说明：每个季度内三个月的完成比例可以不同，例如 Q1 可以设置为 20%/30%/50%，表示1月完成20%，2月完成30%，3月完成50%。</p>
+                  <p>⚠️ 建议：将较多任务分配到季度末月份，有助于冲刺全年目标。</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* 预览 */}
+          <Card>
+            <CardHeader>
+              <CardTitle>目标预览</CardTitle>
+              <CardDescription>根据当前配置计算出的月度目标预览</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { month: '1月', target: Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M1 || 20) / 100) },
+                  { month: '2月', target: Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M2 || 30) / 100) },
+                  { month: '3月', target: Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M3 || 50) / 100) },
+                  { month: '4月', target: Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M1 || 25) / 100) },
+                  { month: '5月', target: Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M2 || 35) / 100) },
+                  { month: '6月', target: Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M3 || 40) / 100) },
+                  { month: '7月', target: Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M1 || 20) / 100) },
+                  { month: '8月', target: Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M2 || 35) / 100) },
+                  { month: '9月', target: Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M3 || 45) / 100) },
+                  { month: '10月', target: Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M1 || 30) / 100) },
+                  { month: '11月', target: Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M2 || 35) / 100) },
+                  { month: '12月', target: Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M3 || 35) / 100) },
+                ].map(({ month, target }) => (
+                  <div key={month} className="p-3 bg-white dark:bg-neutral-800 rounded-lg border border-neutral-200 dark:border-neutral-700">
+                    <div className="text-xs text-neutral-500">{month}</div>
+                    <div className="text-sm font-semibold text-neutral-900 dark:text-white">¥{(target / 10000).toFixed(1)}万</div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-200 dark:border-neutral-700 flex justify-between text-sm">
+                <span className="text-neutral-500">年度合计</span>
+                <span className="font-semibold text-neutral-900 dark:text-white">
+                  ¥{(
+                    Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M1 || 20) / 100) +
+                    Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M2 || 30) / 100) +
+                    Math.round((editingConfig.q1Target || 12000000) * (editingConfig.q1M3 || 50) / 100) +
+                    Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M1 || 25) / 100) +
+                    Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M2 || 35) / 100) +
+                    Math.round((editingConfig.q2Target || 15000000) * (editingConfig.q2M3 || 40) / 100) +
+                    Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M1 || 20) / 100) +
+                    Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M2 || 35) / 100) +
+                    Math.round((editingConfig.q3Target || 18000000) * (editingConfig.q3M3 || 45) / 100) +
+                    Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M1 || 30) / 100) +
+                    Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M2 || 35) / 100) +
+                    Math.round((editingConfig.q4Target || 15000000) * (editingConfig.q4M3 || 35) / 100)
+                  ).toLocaleString()}元
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {activeTab === 'global' && (
         <Card>
           <CardHeader><CardTitle>模块开关</CardTitle></CardHeader>
@@ -1352,6 +1573,10 @@ export const SettingsPage = () => {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {activeTab === 'help' && (
+        <OnboardingGuide mode="page" />
       )}
 
       {/* ── User Form Modal ─── */}

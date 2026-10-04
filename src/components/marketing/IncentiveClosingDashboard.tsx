@@ -76,7 +76,7 @@ export const IncentiveClosingDashboard = () => {
       try {
         const [programRes, partnersRes, appsRes] = await Promise.all([
           supabase.from('incentive_programs').select('*').eq('id', id).single(),
-          supabase.from('partners').select('id, partner_name, tier, region').limit(50),
+          supabase.from('partners').select('id, name, tier, region').limit(50),
           supabase.from('incentive_applications').select('*').eq('program_id', id).limit(200),
         ]);
         if (programRes.data) {
@@ -102,8 +102,8 @@ export const IncentiveClosingDashboard = () => {
     ];
     const byPartner: Record<string, { incentive: number; deals: number; name: string; tier: string; region: string }> = {};
     partners.forEach((p: any) => {
-      byPartner[p.id || p.partner_name] = {
-        name: p.partner_name || p.name || '未命名',
+      byPartner[p.id || p.name] = {
+        name: p.name || '未命名',
         tier: p.tier || '银牌',
         region: p.region || '华北',
         incentive: 0,
@@ -144,10 +144,10 @@ export const IncentiveClosingDashboard = () => {
       { name: '暂无伙伴数据', reason: '等待更多伙伴参与', region: '-' },
     ];
     const activeIds = new Set(applications.map((a: any) => a.partner_id).filter(Boolean));
-    const dormant = partners.filter((p: any) => !activeIds.has(p.id) && !activeIds.has(p.partner_name))
+    const dormant = partners.filter((p: any) => !activeIds.has(p.id) && !activeIds.has(p.name))
       .slice(0, 6)
       .map((p: any) => ({
-        name: p.partner_name || p.name || '未命名伙伴',
+        name: p.name || '未命名伙伴',
         region: p.region || '华北',
         reason: Math.random() > 0.5 ? '规则门槛过高，报备流程复杂' : '库存不足，无法承接新项目',
       }));

@@ -2,7 +2,7 @@
 
 ## ✅ 已完成
 
-- [x] Web 前端部署 → https://partner-management-1-main.vercel.app
+- [x] Web 前端部署 → https://partner.velolabs.top
 - [x] 代码提交 (133 files, v2.0)
 - [x] Supabase 数据库 Schema (12 张表, RLS 策略)
 - [x] 微信小程序代码 (37 个文件, 6 个页面)
@@ -61,7 +61,7 @@ open https://developers.weixin.qq.com/miniprogram/dev/devtools/download.html
 # 2. 导入项目 → 选择 miniprogram/ 目录
 # 3. 测试阶段选择「测试号」(免费)
 # 4. 在后台配置服务器域名:
-#    request 合法域名: https://partner-management-1-main.vercel.app
+#    request 合法域名: https://partner.velolabs.top
 ```
 
 ## 🚀 上线清单

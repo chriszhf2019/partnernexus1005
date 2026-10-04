@@ -1,7 +1,7 @@
 import { chromium } from 'playwright';
 
 const BASE_URL = 'https://partner.velolabs.top';
-const CREDENTIALS = { email: 'admin@partnernxus.com', password: 'YOUR_PASSWORD' };
+const CREDENTIALS = { email: 'admin@partnernxus.com', password: 'Demo@123456' };
 
 const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });

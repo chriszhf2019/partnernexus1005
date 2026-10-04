@@ -1,5 +1,5 @@
 #!/bin/bash
-# 一键配置 partner.velolabes.top DNS记录
+# 一键配置 partner.velolabs.top DNS记录
 # 使用方法：运行脚本并按提示输入信息
 
 set -e
@@ -40,7 +40,7 @@ case $provider in
       
       # 添加DNS记录
       aliyun alidns AddDomainRecord \
-        --DomainName velolabes.top \
+        --DomainName velolabs.top \
         --RR partner \
         --Type A \
         --Value $SERVER_IP \
@@ -60,7 +60,7 @@ case $provider in
       
       # 添加DNS记录
       tccli dnspod AddDomainRecord \
-        --Domain velolabes.top \
+        --Domain velolabs.top \
         --SubDomain partner \
         --RecordType A \
         --RecordLine 默认 \
@@ -73,7 +73,7 @@ case $provider in
       read -p "请输入 Cloudflare API Key: " cf_api_key
       
       # 获取Zone ID
-      ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=velolabes.top" \
+      ZONE_ID=$(curl -s -X GET "https://api.cloudflare.com/client/v4/zones?name=velolabs.top" \
         -H "X-Auth-Email: $cf_email" \
         -H "X-Auth-Key: $cf_api_key" \
         -H "Content-Type: application/json" | jq -r '.result[0].id')

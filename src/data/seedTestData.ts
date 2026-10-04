@@ -340,7 +340,29 @@ export async function seedTestData(): Promise<void> {
         .eq('unified_social_credit_code', partner.unifiedSocialCreditCode);
       
       if (!existing || existing.length === 0) {
-        const { error } = await supabase.from('partners').insert([partner]);
+        const dbFields: Record<string, any> = {
+          id: crypto.randomUUID(),
+          name: partner.name,
+          logo: partner.logo || '',
+          tier: partner.tier || 'Registered',
+          status: partner.status || 'Prospective',
+          type: partner.type || 'Reseller',
+          manager: partner.manager || '',
+          location: partner.location || '',
+          region: partner.region || '华北',
+          province: partner.province || '',
+          city: partner.city || '',
+          start_date: partner.startDate || null,
+          years: partner.years || 0,
+          prev_tier: partner.prevTier || 'Registered',
+          tags: partner.tags || [],
+          win_rate: partner.winRate || 0,
+          unified_social_credit_code: partner.unifiedSocialCreditCode || '',
+          industry: partner.industry || '',
+          cooperation_scope: partner.cooperationScope || '',
+          is_core_partner: partner.isCorePartner ?? false,
+        };
+        const { error } = await supabase.from('partners').insert([dbFields]);
         if (error) console.error('Error inserting partner:', error);
       }
     }
@@ -362,12 +384,27 @@ export async function seedTestData(): Promise<void> {
           .eq('title', deal.title);
         
         if (!existing || existing.length === 0) {
-          const { error } = await supabase.from('deals').insert([{
-            ...deal,
-            partnerId: partner.id,
-            partnerName: partner.name,
-            partnerType: partner.type
-          }]);
+          const dbDeal = {
+            id: crypto.randomUUID(),
+            title: deal.title,
+            customer_name: deal.customerName || '',
+            customer_industry: deal.customerIndustry || '',
+            value: deal.value || 0,
+            partner_id: partner.id,
+            partner_name: partner.name,
+            partner_type: partner.type,
+            stage: deal.stage || 'Registered',
+            status: deal.status || 'Pending',
+            region: deal.region || '',
+            sales_name: deal.salesName || '',
+            sales_team: deal.salesTeam || '',
+            product_type: deal.productType || '',
+            created_date: deal.createdDate || new Date().toISOString().split('T')[0],
+            last_activity_date: deal.lastActivityDate || deal.createdDate || new Date().toISOString().split('T')[0],
+            expected_close_date: deal.expectedCloseDate || '',
+            description: deal.description || '',
+          };
+          const { error } = await supabase.from('deals').insert([dbDeal]);
           if (error) console.error('Error inserting deal:', error);
         }
       }

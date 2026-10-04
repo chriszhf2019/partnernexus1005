@@ -154,7 +154,7 @@ export const StrategyCommandCenter: React.FC = () => {
       try {
         const [activitiesRes, budgetRes, dealsRes, planRes] = await Promise.all([
           supabase.from('marketing_activities').select('*').order('created_at', { ascending: false }),
-          supabase.from('marketing_budgets').select('*').single(),
+          supabase.from('annual_marketing_budgets').select('*').single(),
           supabase.from('deals').select('value, stage, status, created_at').order('created_at', { ascending: false }).limit(200),
           supabase.from('marketing_plan').select('id, name, budget, estimated_value, leads_count, plan_status, type, activity_type, created_at').order('created_at', { ascending: false }).limit(100)
         ]);
@@ -253,7 +253,7 @@ export const StrategyCommandCenter: React.FC = () => {
 
     const fetchAttendees = async () => {
       try {
-        const res = await supabase.from('activity_attendees')
+        const res = await supabase.from('campaign_attendees')
           .select('*')
           .eq('activity_id', selectedActivity.id);
         

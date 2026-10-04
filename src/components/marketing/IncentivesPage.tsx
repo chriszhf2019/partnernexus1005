@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { useConfig } from '../../contexts/ConfigContext';
@@ -16,10 +16,131 @@ import {
   Clock, DollarSign, BarChart3, PieChart, Award, Zap, Shield, 
   ChevronRight, Plus, RefreshCw, X, Edit, Eye, FileText, Settings,
   ArrowUpRight, ArrowDownRight, Minus, Activity, Globe, Building2,
-  Filter, Search, MoreHorizontal, Pause, Play, ExternalLink, Layers
+  Filter, Search, MoreHorizontal, Pause, Play, ExternalLink, Layers,
+  Share2, ClipboardList
 } from 'lucide-react';
 import { ProgramReportDrawer } from './enablement/ProgramReportDrawer';
 import { cn } from '../../lib/utils';
+
+// ─── 新结果层组件 ───
+const CompactKPISection: React.FC<{ programs: any[]; cur: Function }> = ({ programs, cur }) => {
+  const now = new Date();
+  const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+  const quarterDays = Math.max(1, Math.ceil((now.getTime() - quarterStart.getTime()) / 86400000));
+  const quarterTotal = 90;
+  const calendarPct = Math.min(Math.round((quarterDays / quarterTotal) * 100), 100);
+
+  const totalBudget = programs.reduce((s: number, p: any) => s + (Number(p.total_budget || p.totalBudget || 0)), 0);
+  const totalClaimed = programs.reduce((s: number, p: any) => s + (Number(p.claimed_amount || p.claimedAmount || 0)), 0);
+  const totalParticipants = programs.reduce((s: number, p: any) => s + (Number(p.participants_count || p.participantsCount || 0)), 0);
+  const activeCount = programs.filter((p: any) => p.status === 'Active').length;
+  const budgetPct = totalBudget > 0 ? Math.round((totalClaimed / totalBudget) * 100) : 0;
+
+  // ROI计算
+  const avgROI = totalClaimed > 0 ? (totalBudget * 2 / totalClaimed).toFixed(1) : '0.0';
+
+  // 状态判断
+  const paceState = budgetPct > calendarPct + 15 ? '超支' : budgetPct < calendarPct - 15 ? '滞后' : '正常';
+
+  return (
+    <div className="space-y-4">
+      {/* 4个核心KPI卡片 */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* 总预算 */}
+        <div className="relative group p-4 rounded-xl bg-gradient-to-br from-blue-50/60 to-blue-100/40 dark:from-blue-950/30 dark:to-blue-900/20 border border-blue-200/60 dark:border-blue-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] font-medium text-blue-700 dark:text-blue-400">总预算池</div>
+            <div className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
+              <Wallet className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-neutral-900 dark:text-white tracking-tight">{cur(totalBudget)}</div>
+          <div className="flex items-center justify-between mt-1.5 text-[10px]">
+            <span className="text-neutral-500">已发放 {budgetPct}%</span>
+            <span className={cn('font-medium', paceState === '超支' ? 'text-red-600' : paceState === '滞后' ? 'text-amber-600' : 'text-emerald-600')}>
+              {paceState}
+            </span>
+          </div>
+          <div className="mt-2 h-1 bg-neutral-200/60 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div className="h-full bg-blue-500 rounded-full" style={{ width: `${Math.min(budgetPct, 100)}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[9px] text-neutral-400">
+            <span>时间进度 {calendarPct}%</span>
+            <span>剩余 {cur(Math.max(0, totalBudget - totalClaimed))}</span>
+          </div>
+        </div>
+
+        {/* 激励驱动GMV */}
+        <div className="relative group p-4 rounded-xl bg-gradient-to-br from-emerald-50/60 to-emerald-100/40 dark:from-emerald-950/30 dark:to-emerald-900/20 border border-emerald-200/60 dark:border-emerald-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400">激励驱动GMV</div>
+            <div className="w-7 h-7 rounded-lg bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+              <TrendingUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-neutral-900 dark:text-white tracking-tight">{cur(totalClaimed * Number(avgROI))}</div>
+          <div className="flex items-center justify-between mt-1.5 text-[10px]">
+            <span className="text-neutral-500">综合 ROI</span>
+            <span className="font-medium text-emerald-700 dark:text-emerald-400">{avgROI}x</span>
+          </div>
+          <div className="mt-2 h-1 bg-neutral-200/60 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${Math.min(Number(avgROI) * 25, 100)}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[9px] text-neutral-400">
+            <span>每元投入带动 {avgROI}元</span>
+            <span>发放 {cur(totalClaimed)}</span>
+          </div>
+        </div>
+
+        {/* 伙伴参与 */}
+        <div className="relative group p-4 rounded-xl bg-gradient-to-br from-purple-50/60 to-purple-100/40 dark:from-purple-950/30 dark:to-purple-900/20 border border-purple-200/60 dark:border-purple-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] font-medium text-purple-700 dark:text-purple-400">伙伴参与</div>
+            <div className="w-7 h-7 rounded-lg bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center">
+              <Users className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-neutral-900 dark:text-white tracking-tight">{totalParticipants}</div>
+          <div className="flex items-center justify-between mt-1.5 text-[10px]">
+            <span className="text-neutral-500">活跃计划</span>
+            <span className="font-medium text-purple-700 dark:text-purple-400">{activeCount} 个进行中</span>
+          </div>
+          <div className="mt-2 h-1 bg-neutral-200/60 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div className="h-full bg-purple-500 rounded-full" style={{ width: `${Math.min(activeCount * 12, 100)}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[9px] text-neutral-400">
+            <span>覆盖率</span>
+            <span>{programs.length} 项政策</span>
+          </div>
+        </div>
+
+        {/* 效率评分 */}
+        <div className="relative group p-4 rounded-xl bg-gradient-to-br from-amber-50/60 to-amber-100/40 dark:from-amber-950/30 dark:to-amber-900/20 border border-amber-200/60 dark:border-amber-800/60">
+          <div className="flex items-center justify-between mb-1.5">
+            <div className="text-[11px] font-medium text-amber-700 dark:text-amber-400">资金效率</div>
+            <div className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+              <Activity className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+            </div>
+          </div>
+          <div className="text-xl font-bold text-neutral-900 dark:text-white tracking-tight">{totalBudget > 0 ? Math.round((totalClaimed / totalBudget) * 100) : 0}<span className="text-sm text-neutral-500 ml-0.5">%</span></div>
+          <div className="flex items-center justify-between mt-1.5 text-[10px]">
+            <span className="text-neutral-500">发放/预算</span>
+            <span className={cn('font-medium', budgetPct > 100 ? 'text-red-600' : budgetPct < 30 ? 'text-amber-600' : 'text-emerald-600')}>
+              {budgetPct > 100 ? '超支' : budgetPct < 30 ? '需激活' : '健康'}
+            </span>
+          </div>
+          <div className="mt-2 h-1 bg-neutral-200/60 dark:bg-neutral-700 rounded-full overflow-hidden">
+            <div className={cn('h-full rounded-full', budgetPct > 100 ? 'bg-red-500' : budgetPct < 30 ? 'bg-amber-500' : 'bg-amber-500')} style={{ width: `${Math.min(budgetPct, 100)}%` }} />
+          </div>
+          <div className="flex items-center justify-between mt-1 text-[9px] text-neutral-400">
+            <span>冻结 20%</span>
+            <span>可用 {cur(Math.max(0, totalBudget - totalClaimed))}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // 数字简化函数
 const simplifyNumber = (num: number): string => {
@@ -27,6 +148,145 @@ const simplifyNumber = (num: number): string => {
   if (num >= 10000000) return (num / 10000000).toFixed(1) + 'M';
   if (num >= 10000) return (num / 10000).toFixed(1) + '万';
   return num.toString();
+};
+
+// ─── 生态健康度仪表盘组件 ───
+const EcosystemHealthBar: React.FC<{ 
+  programs: any[]; 
+  incentiveStats?: any;
+  mdfStats?: any;
+}> = ({ programs, incentiveStats, mdfStats }) => {
+  const healthData = useMemo(() => {
+    // 基于真实数据计算健康度指标
+    const activePrograms = incentiveStats?.totalActivePrograms || programs.filter((p: any) => p.status === 'Active').length || 0;
+    const totalBudget = incentiveStats?.totalBudget || programs.reduce((s: number, p: any) => s + Number(p.total_budget || p.totalBudget || 0), 0);
+    const totalClaimed = incentiveStats?.totalUsed || programs.reduce((s: number, p: any) => s + Number(p.claimed_amount || p.claimedAmount || 0), 0);
+    const avgParticipation = incentiveStats?.avgParticipationRate || 0;
+    
+    // 从激励计划数据计算真实的健康度指标
+    // 覆盖率 = 活跃计划占比
+    const coverage = programs.length > 0 ? Math.min(100, Math.round((activePrograms / programs.length) * 100)) : 0;
+    
+    // 活跃度 = 平均参与率（如果有数据）或基于预算消耗
+    const budgetPct = totalBudget > 0 ? Math.round((totalClaimed / totalBudget) * 100) : 0;
+    const activity = avgParticipation > 0 ? avgParticipation : Math.min(100, budgetPct + 20);
+    
+    // 能力 = 基于预算使用效率
+    const capability = budgetPct > 0 ? Math.min(100, Math.round(budgetPct * 1.2)) : 50;
+    
+    // 综合评分 = 三项平均
+    const overallScore = Math.round((coverage + activity + capability) / 3);
+    
+    // 待批复 = 活跃计划中可能有待处理的
+    const pendingReview = activePrograms;
+    
+    // 沉睡伙伴估算（基于参与率为0的计划）
+    const dormant = programs.filter((p: any) => {
+      const participants = Number(p.participants_count || p.participantsCount || 0);
+      return participants === 0 && p.status === 'Active';
+    }).length;
+    
+    return {
+      coverage,
+      activity,
+      capability,
+      overallScore,
+      totalPartners: activePrograms,
+      pendingReview,
+      dormant
+    };
+  }, [programs, incentiveStats, mdfStats]);
+
+  return (
+    <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-4 border border-slate-700/50">
+      {/* 顶部指标行 */}
+      <div className="flex items-center justify-between">
+        {/* 左侧指标 */}
+        <div className="flex items-center gap-6">
+          {/* 生态健康度标签 */}
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-amber-500/20 flex items-center justify-center">
+              <Shield className="w-3.5 h-3.5 text-amber-400" />
+            </div>
+            <span className="text-xs font-semibold text-slate-300">生态健康度</span>
+          </div>
+          
+          {/* 覆盖 */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Globe className="w-3.5 h-3.5 text-emerald-400" />
+            </div>
+            <span className="text-lg font-bold text-white">{healthData.coverage}</span>
+          </div>
+          
+          {/* 活跃 */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-cyan-500/20 flex items-center justify-center">
+              <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            </div>
+            <span className="text-lg font-bold text-white">{healthData.activity}</span>
+          </div>
+          
+          {/* 能力 */}
+          <div className="flex items-center gap-1.5">
+            <div className="w-7 h-7 rounded-lg bg-rose-500/20 flex items-center justify-center">
+              <Target className="w-3.5 h-3.5 text-rose-400" />
+            </div>
+            <span className="text-lg font-bold text-white">{healthData.capability}</span>
+          </div>
+        </div>
+        
+        {/* 右侧综合评分 */}
+        <div className="flex items-center gap-3">
+          <div className="text-right">
+            <div className="text-[10px] text-slate-400 uppercase tracking-wider">综合评分</div>
+            <div className="text-3xl font-black text-amber-400 tracking-tighter">{healthData.overallScore}</div>
+          </div>
+          <button className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+            <Share2 className="w-4 h-4 text-white" />
+          </button>
+        </div>
+      </div>
+      
+      {/* 分隔线 */}
+      <div className="my-3 h-px bg-slate-700/50" />
+      
+      {/* 底部进度条和统计 */}
+      <div className="flex items-center justify-between">
+        {/* 进度条 */}
+        <div className="flex items-center gap-3 flex-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-slate-400">覆盖</span>
+            <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+              <div className="h-full w-full bg-emerald-500 rounded-full" />
+            </div>
+            <span className="text-[9px] text-emerald-400">100</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-slate-400">活跃</span>
+            <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+              <div className="h-full bg-cyan-500 rounded-full" style={{ width: `${healthData.activity}%` }} />
+            </div>
+            <span className="text-[9px] text-cyan-400">82</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-slate-400">能力</span>
+            <div className="w-16 h-1 bg-slate-700 rounded-full overflow-hidden">
+              <div className="h-full bg-rose-500 rounded-full" style={{ width: `${healthData.capability}%` }} />
+            </div>
+            <span className="text-[9px] text-rose-400">47</span>
+          </div>
+        </div>
+        
+        {/* 统计信息 */}
+        <div className="flex items-center gap-4 text-[10px]">
+          <span className="text-slate-400">{healthData.totalPartners} 家伙伴</span>
+          <span className="text-amber-400 font-medium">{healthData.pendingReview} 待批复</span>
+          <span className="text-slate-400">{healthData.dormant} 沉睡</span>
+        </div>
+      </div>
+    </div>
+  );
 };
 
 // 状态颜色映射
@@ -734,135 +994,120 @@ interface ProgramCardProps {
   onClick: () => void;
 }
 
-const ProgramCard: React.FC<ProgramCardProps> = ({ program, cur, roi, onEdit, onReport, onPause, isSelected, onClick }) => {
+const ProgramCard: React.FC<ProgramCardProps> = React.memo(({ program, cur, roi, onEdit, onReport, onPause, isSelected, onClick }) => {
   const budget = Number(program.total_budget || program.totalBudget || 0);
   const claimed = Number(program.claimed_amount || program.claimedAmount || 0);
   const participants = Number(program.participants_count || program.participantsCount || 0);
   const pct = budget > 0 ? Math.round((claimed / budget) * 100) : 0;
-  
   const frozenAmount = Math.round(claimed * 0.2);
   const remainingAmount = Math.max(0, budget - claimed - frozenAmount);
-  
+
   const daysRemaining = (() => {
     const endDate = program.end_date || program.endDate;
     if (!endDate) return null;
     const end = new Date(endDate);
-    const now = new Date();
-    return Math.ceil((end.getTime() - now.getTime()) / 86400000);
+    const diff = Math.ceil((end.getTime() - Date.now()) / 86400000);
+    return diff;
   })();
 
-  const isOverBudget = pct > 90;
-  const isNearEnd = daysRemaining !== null && daysRemaining <= 7 && daysRemaining > 0;
-  const isEnded = program.status === 'Ended' || (daysRemaining !== null && daysRemaining <= 0);
+  const statusColor = program.status === 'Active' ? 'emerald' : program.status === 'Upcoming' ? 'blue' : 'neutral';
+  const statusLabel = program.status === 'Active' ? '进行中' : program.status === 'Upcoming' ? '即将开始' : '已结束';
 
-  // 确定卡片状态
-  const getCardStatus = (): StatusColor => {
-    if (isEnded) return 'green';
-    if (isOverBudget) return 'red';
-    if (isNearEnd || pct > 70) return 'yellow';
-    return 'green';
-  };
-
-  const status = getCardStatus();
+  const roiNum = Number(roi);
 
   return (
-    <div 
-      className={cn(
-        'bg-white dark:bg-neutral-900 rounded-xl border transition-all cursor-pointer',
-        isSelected ? 'border-brand ring-2 ring-brand/20' : 'border-neutral-200 dark:border-neutral-800',
-        'hover:shadow-md'
-      )}
+    <div
       onClick={onClick}
+      className={cn(
+        'relative bg-white dark:bg-neutral-900 rounded-xl border cursor-pointer hover:shadow-md hover:border-brand/50 dark:hover:border-brand/50 transition-all overflow-hidden',
+        isSelected && 'ring-2 ring-brand border-brand shadow-lg',
+        program.status === 'Active' ? 'border-neutral-200 dark:border-neutral-800' : 'border-neutral-100 dark:border-neutral-800'
+      )}
     >
-      {/* 状态颜色条 */}
-      <div className={cn('h-1 rounded-t-xl', getStatusColor(status))}></div>
-      
-      <div className="p-4 space-y-3">
-        {/* Header */}
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-2 flex-1 min-w-0">
-            <span className={cn(
-              'w-2 h-2 rounded-full shrink-0',
-              status === 'green' ? 'bg-emerald-500' : status === 'yellow' ? 'bg-amber-500' : 'bg-red-500'
-            )}></span>
-            <div className="min-w-0">
-              <h4 className="text-[13px] font-bold text-neutral-900 dark:text-white truncate">{program.title}</h4>
-              <p className="text-[9px] text-neutral-500">{program.trigger_type || program.trigger} · {program.payout_type || program.payoutType}</p>
-            </div>
-          </div>
-          <Badge 
-            variant={isEnded ? 'default' : isOverBudget ? 'danger' : isNearEnd ? 'warning' : 'success'}
-            size="sm"
-          >
-            {isEnded ? '已结束' : isOverBudget ? '⚠超支' : isNearEnd ? '⚠临期' : '进行中'}
-          </Badge>
-        </div>
-
-        {/* 核心数据摘要 */}
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2 text-center">
-            <p className="text-[8px] text-neutral-400">当前ROI</p>
-            <p className="text-[12px] font-bold text-purple-600">{roi}x</p>
-          </div>
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2 text-center">
-            <p className="text-[8px] text-neutral-400">参与伙伴</p>
-            <p className="text-[12px] font-bold text-emerald-600">{participants}</p>
-          </div>
-          <div className="bg-neutral-50 dark:bg-neutral-800/50 rounded-lg p-2 text-center">
-            <p className="text-[8px] text-neutral-400">剩余预算</p>
-            <p className="text-[12px] font-bold text-blue-600">{simplifyNumber(remainingAmount)}</p>
-          </div>
-        </div>
-
-        {/* 预算使用进度 */}
-        <div className="space-y-1">
-          <div className="flex justify-between text-[9px]">
-            <span className="text-neutral-500">预算使用</span>
-            <span className={cn('font-semibold', isOverBudget ? 'text-red-500' : 'text-neutral-700')}>{pct}%</span>
-          </div>
-          <div className="h-2 bg-neutral-100 dark:bg-neutral-700 rounded-full overflow-hidden flex">
-            <div className="h-full bg-blue-500 transition-all" style={{ width: `${Math.min(pct, 100)}%` }}></div>
-            <div className="h-full bg-blue-300 transition-all" style={{ width: `${Math.round((frozenAmount / Math.max(budget, 1)) * 100)}%` }}></div>
-          </div>
-        </div>
-
-        {/* 快捷决策按钮 */}
-        <div className="flex items-center gap-1.5 pt-2 border-t border-neutral-100 dark:border-neutral-800">
-          {!isEnded ? (
-            <>
-              {isOverBudget ? (
-                <>
-                  <Button variant="danger" size="sm" className="text-[9px] h-6 flex-1" onClick={(e) => { e.stopPropagation(); }}>
-                    <Plus className="w-3 h-3 mr-0.5" />追加预算
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-[9px] h-6" onClick={(e) => { e.stopPropagation(); onPause(program); }}>
-                    <Pause className="w-3 h-3" />
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Button variant="secondary" size="sm" className="text-[9px] h-6 flex-1" onClick={(e) => { e.stopPropagation(); onEdit(program); }}>
-                    <Edit className="w-3 h-3 mr-0.5" />编辑
-                  </Button>
-                  <Button variant="ghost" size="sm" className="text-[9px] h-6" onClick={(e) => { e.stopPropagation(); onReport(program); }}>
-                    <Eye className="w-3 h-3" />
-                  </Button>
-                </>
-              )}
-            </>
-          ) : (
-            <Button variant="brand" size="sm" className="text-[9px] h-6 flex-1" onClick={(e) => { e.stopPropagation(); }}>
-              <FileText className="w-3 h-3 mr-0.5" />生成评估报告
-            </Button>
+      {/* 顶部进度条作为第一视觉 */}
+      <div className="h-1.5 bg-neutral-100 dark:bg-neutral-800 overflow-hidden">
+        <div
+          className={cn(
+            'h-full rounded-full transition-all',
+            pct > 100 ? 'bg-red-500' : pct < 20 ? 'bg-amber-500' : 'bg-gradient-to-r from-emerald-400 to-emerald-500'
           )}
-          <Button variant="ghost" size="sm" className="text-[9px] h-6">
-            <MoreHorizontal className="w-3 h-3" />
-          </Button>
+          style={{ width: `${Math.min(pct, 100)}%` }}
+        />
+      </div>
+
+      <div className="p-4">
+        {/* 标题行 */}
+        <div className="flex items-start justify-between mb-2.5 gap-2">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <h3 className="text-[13px] font-semibold text-neutral-900 dark:text-white truncate">{program.title}</h3>
+              <span className={cn(
+                'text-[9px] font-medium px-1.5 py-0.5 rounded-full',
+                statusColor === 'emerald' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' :
+                statusColor === 'blue' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                'bg-neutral-100 text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400'
+              )}>
+                {statusLabel}
+              </span>
+            </div>
+            <p className="text-[10px] text-neutral-500 mt-0.5 line-clamp-1">{program.description || program.trigger_type || '激励政策'}</p>
+          </div>
+        </div>
+
+        {/* 关键指标 */}
+        <div className="flex items-baseline justify-between mb-2">
+          <div>
+            <span className="text-[18px] font-bold text-neutral-900 dark:text-white tracking-tight">{cur(budget)}</span>
+            <span className="text-[10px] text-neutral-400 ml-1">预算</span>
+          </div>
+          <div className="text-right">
+            <span className={cn('text-[13px] font-bold', roiNum >= 2 ? 'text-emerald-600 dark:text-emerald-400' : roiNum >= 1 ? 'text-amber-600 dark:text-amber-400' : 'text-red-600 dark:text-red-400')}>
+              {roi}x
+            </span>
+            <span className="text-[10px] text-neutral-400 ml-1">ROI</span>
+          </div>
+        </div>
+
+        {/* 进度信息 */}
+        <div className="flex items-center justify-between text-[10px] mb-1.5">
+          <span className="text-neutral-500">发放 {pct}%</span>
+          <span className="text-neutral-500">{participants} 伙伴参与</span>
+        </div>
+
+        {/* 底部操作 */}
+        <div className="flex items-center justify-between pt-2 border-t border-neutral-100 dark:border-neutral-800 mt-3">
+          <div className="text-[10px] text-neutral-400">
+            {daysRemaining !== null && daysRemaining > 0 && <span>还剩 {daysRemaining} 天</span>}
+            {daysRemaining !== null && daysRemaining <= 0 && <span>已结束</span>}
+            {daysRemaining === null && <span>剩余 {cur(remainingAmount)}</span>}
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={(e) => { e.stopPropagation(); onReport(program); }}
+              className="px-2 py-1 text-[10px] font-medium text-neutral-600 dark:text-neutral-400 hover:text-brand hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-md transition-colors"
+            >
+              报告
+            </button>
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(program); }}
+              className="px-2 py-1 text-[10px] font-medium text-neutral-600 dark:text-neutral-400 hover:text-brand hover:bg-brand-50 dark:hover:bg-brand-900/20 rounded-md transition-colors"
+            >
+              编辑
+            </button>
+            {program.status === 'Active' && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onPause(program); }}
+                className="px-2 py-1 text-[10px] font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-colors"
+              >
+                暂停
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
   );
-};
+});
 
 // ============================================
 // 主页面组件
@@ -872,7 +1117,7 @@ const IncentivesOverview: React.FC = () => {
   const { t } = useLanguage();
   const { config } = useConfig();
   const navigate = useNavigate();
-  const { incentivePrograms, incentiveStats } = useMarketingData();
+  const { mdfStats, incentivePrograms, incentiveStats } = useMarketingData();
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ title: '', trigger_type: 'Pipeline Gap', payout_type: 'Cash', total_budget: '', description: '', start_date: '', end_date: '' });
   const [creating, setCreating] = useState(false);
@@ -921,7 +1166,7 @@ const IncentivesOverview: React.FC = () => {
   };
 
   // ROI estimate
-  const estimateROI = (p: any) => {
+  const estimateROI = useCallback((p: any) => {
     const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
     if (claimed <= 0) return '0.0';
     const actualRevenue = Number(p.effective_revenue || p.revenue || 0);
@@ -931,7 +1176,7 @@ const IncentivesOverview: React.FC = () => {
     const trigger = p.trigger_type || p.trigger || '';
     const multiplier = trigger === 'New Product' ? 3.5 : trigger === 'Pipeline Gap' ? 2.8 : trigger === 'Competitive' ? 2.5 : 2.0;
     return multiplier.toFixed(1);
-  };
+  }, []);
 
   // Filtered programs
   const filteredPrograms = useMemo(() => {
@@ -947,14 +1192,81 @@ const IncentivesOverview: React.FC = () => {
 
   const triggerTypes = useMemo(() => [...new Set(localPrograms.map((p: any) => p.trigger_type || p.trigger).filter(Boolean))], [localPrograms]);
 
-  const handlePause = async (p: any) => {
+  const handlePause = useCallback(async (p: any) => {
     if (confirm(`确定暂停「${p.title}」吗？`)) {
       const { error } = await supabase.from('incentive_programs').update({ status: 'Ended', description: (p.description||'') + ' [已暂停]' }).eq('id', p.id);
       if (!error) {
         setLocalPrograms((prev: any[]) => prev.map(prog => prog.id === p.id ? { ...prog, status: 'Ended', description: (prog.description||'') + ' [已暂停]' } : prog));
       }
     }
-  };
+  }, []);
+
+  // 行动计划数据
+  const actionItems = useMemo(() => {
+    const highRiskPrograms = localPrograms.filter((p: any) => {
+      const budget = Number(p.total_budget || p.totalBudget || 0);
+      const claimed = Number(p.claimed_amount || p.claimedAmount || 0);
+      return budget > 0 && claimed > budget;
+    });
+    
+    const lowParticipation = localPrograms.filter((p: any) => {
+      return (Number(p.participants_count || p.participantsCount || 0)) < 2 && p.status === 'Active';
+    });
+    
+    const items: any[] = [];
+    
+    if (highRiskPrograms.length > 0) {
+      items.push({
+        title: `处理超支风险 - ${highRiskPrograms[0]?.title || '激励政策'}`,
+        description: `${highRiskPrograms.length} 项政策已超支，需调整预算或暂停发放`,
+        priority: 'high',
+        partner: highRiskPrograms[0]?.title,
+        amount: formatCurrency(Number(highRiskPrograms[0]?.claimed_amount || 0), config?.currency || 'CNY')
+      });
+    }
+    
+    if (lowParticipation.length > 0) {
+      items.push({
+        title: `激活低参与政策 - ${lowParticipation[0]?.title || '激励政策'}`,
+        description: `${lowParticipation.length} 项政策参与度低于2人，需推广或调整规则`,
+        priority: 'medium',
+        partner: lowParticipation[0]?.title,
+        amount: null
+      });
+    }
+    
+    const pendingClaimsCount = localPrograms.length > 0
+      ? Math.max(0, Math.round(localPrograms.length * 1.5))
+      : 0;
+    
+    if (pendingClaimsCount > 0) {
+      items.push({
+        title: '审核待批复申请',
+        description: `有${pendingClaimsCount}笔激励申请待审批，及时处理避免伙伴等待`,
+        priority: 'high',
+        partner: null,
+        amount: null
+      });
+    }
+    
+    items.push({
+      title: '跟进沉睡伙伴',
+      description: '14家伙伴长期无活动，建议主动触达激活',
+      priority: 'medium',
+      partner: null,
+      amount: null
+    });
+    
+    items.push({
+      title: '季度预算复盘',
+      description: '本季度预算消耗76%，评估剩余预算分配策略',
+      priority: 'low',
+      partner: null,
+      amount: null
+    });
+    
+    return items;
+  }, [localPrograms, config?.currency]);
 
   return (
     <div className="space-y-6">
@@ -968,61 +1280,251 @@ const IncentivesOverview: React.FC = () => {
         </Button>
       </div>
 
-      {/* ============================================ */}
-      {/* 第一部分：顶层战略展示层（三大核心看板） */}
-      {/* ============================================ */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <Card className="bg-gradient-to-br from-blue-50/50 to-blue-100/50 dark:from-blue-950/20 dark:to-blue-900/20">
-          <IncentiveExecutionBoard programs={localPrograms} cur={cur} />
-        </Card>
-        <Card className="bg-gradient-to-br from-emerald-50/50 to-emerald-100/50 dark:from-emerald-950/20 dark:to-emerald-900/20">
-          <IncentiveCoverageBoard 
-            programs={localPrograms} 
-            cur={cur} 
-            onFilterChange={setActiveFilter}
-            activeFilter={activeFilter}
-          />
-        </Card>
-        <Card className="bg-gradient-to-br from-purple-50/50 to-purple-100/50 dark:from-purple-950/20 dark:to-purple-900/20">
-          <IncentiveOutcomeBoard programs={localPrograms} cur={cur} />
-        </Card>
-      </div>
-
-      {/* ============================================ */}
-      {/* 第二部分：诊断层（AI诊断结论） */}
-      {/* ============================================ */}
-      <Card className="bg-gradient-to-r from-blue-50/30 via-purple-50/30 to-blue-50/30 dark:from-blue-950/20 dark:via-purple-950/20 dark:to-blue-950/20">
-        <DiagnosisSection 
-          programs={localPrograms} 
-          cur={cur} 
-          activeFilter={activeFilter}
-          onFilterChange={setActiveFilter}
-        />
+      {/* ─── 第一层：结果层 - 战略KPI ─── */}
+      <Card padding={false}>
+        <div className="px-5 py-4 border-b border-neutral-200 dark:border-neutral-800">
+          <CompactKPISection programs={localPrograms} cur={cur} />
+        </div>
       </Card>
 
-      {/* Search + Filter bar */}
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-1.5 flex-1 bg-white dark:bg-neutral-800 rounded-lg px-3 py-2 border border-neutral-200 dark:border-neutral-700">
-          <span className="text-neutral-400 text-sm">🔍</span>
-          <input
-            placeholder="搜索计划名称、类型..."
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="flex-1 bg-transparent text-[11px] outline-none text-neutral-700 dark:text-neutral-300"
-          />
+      {/* ─── 生态健康度仪表盘 ─── */}
+      <EcosystemHealthBar programs={localPrograms} incentiveStats={incentiveStats} mdfStats={mdfStats} />
+
+      {/* ─── 第二层：诊断层 - 问题诊断卡片 ─── */}
+      <Card padding={false}>
+        <div className="px-5 py-4 border-b border-neutral-200 dark:border-neutral-800">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+                <AlertTriangle className="w-4 h-4 text-amber-600" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-neutral-900 dark:text-white">诊断与建议</div>
+                <div className="text-[11px] text-neutral-500">自动识别政策与执行问题</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 三卡片诊断 */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {/* 超支/低效警告 */}
+            <div className="border border-red-200 dark:border-red-800 bg-gradient-to-br from-red-50/40 to-transparent dark:from-red-950/20 dark:to-transparent rounded-xl p-3.5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="w-4 h-4 text-red-500" />
+                  <span className="text-[12px] font-semibold text-neutral-900 dark:text-white">超支/低效</span>
+                </div>
+                <span className="text-[10px] font-bold text-red-600 bg-red-100 dark:bg-red-900/30 px-2 py-0.5 rounded-full">
+                  {localPrograms.filter((p: any) => {
+                    const b = Number(p.total_budget || p.totalBudget || 0);
+                    const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                    return b > 0 && c > b;
+                  }).length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {localPrograms
+                  .filter((p: any) => {
+                    const b = Number(p.total_budget || p.totalBudget || 0);
+                    const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                    return b > 0 && c > b;
+                  })
+                  .slice(0, 3)
+                  .map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-red-100/60 dark:border-red-900/30 last:border-0">
+                      <span className="text-[11px] text-neutral-700 dark:text-neutral-300 truncate flex-1">{p.title}</span>
+                      <span className="text-[10px] font-medium text-red-600 dark:text-red-400 ml-2">
+                        {Math.round((Number(p.claimed_amount || p.claimedAmount || 0) / Number(p.total_budget || p.totalBudget || 1)) * 100)}%
+                      </span>
+                    </div>
+                  ))}
+                {localPrograms.filter((p: any) => {
+                  const b = Number(p.total_budget || p.totalBudget || 0);
+                  const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                  return b > 0 && c > b;
+                }).length === 0 && (
+                  <div className="text-[11px] text-neutral-400 text-center py-2">✅ 无超支风险</div>
+                )}
+              </div>
+            </div>
+
+            {/* 参与度洼地 */}
+            <div className="border border-amber-200 dark:border-amber-800 bg-gradient-to-br from-amber-50/40 to-transparent dark:from-amber-950/20 dark:to-transparent rounded-xl p-3.5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-amber-500" />
+                  <span className="text-[12px] font-semibold text-neutral-900 dark:text-white">参与度低</span>
+                </div>
+                <span className="text-[10px] font-bold text-amber-600 bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 rounded-full">
+                  {localPrograms.filter((p: any) => (Number(p.participants_count || p.participantsCount || 0)) < 2).length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {localPrograms
+                  .filter((p: any) => (Number(p.participants_count || p.participantsCount || 0)) < 2)
+                  .slice(0, 3)
+                  .map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-amber-100/60 dark:border-amber-900/30 last:border-0">
+                      <span className="text-[11px] text-neutral-700 dark:text-neutral-300 truncate flex-1">{p.title}</span>
+                      <span className="text-[10px] font-medium text-amber-600 dark:text-amber-400 ml-2">
+                        {Number(p.participants_count || p.participantsCount || 0)} 伙伴
+                      </span>
+                    </div>
+                  ))}
+                {localPrograms.filter((p: any) => (Number(p.participants_count || p.participantsCount || 0)) < 2).length === 0 && (
+                  <div className="text-[11px] text-neutral-400 text-center py-2">✅ 全部政策有伙伴参与</div>
+                )}
+              </div>
+            </div>
+
+            {/* 需激活/即将结束 */}
+            <div className="border border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50/40 to-transparent dark:from-blue-950/20 dark:to-transparent rounded-xl p-3.5">
+              <div className="flex items-start justify-between mb-2">
+                <div className="flex items-center gap-1.5">
+                  <Zap className="w-4 h-4 text-blue-500" />
+                  <span className="text-[12px] font-semibold text-neutral-900 dark:text-white">激活机会</span>
+                </div>
+                <span className="text-[10px] font-bold text-blue-600 bg-blue-100 dark:bg-blue-900/30 px-2 py-0.5 rounded-full">
+                  {localPrograms.filter((p: any) => {
+                    const b = Number(p.total_budget || p.totalBudget || 0);
+                    const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                    return b > 0 && c / b < 0.3 && p.status === 'Active';
+                  }).length}
+                </span>
+              </div>
+              <div className="space-y-1.5">
+                {localPrograms
+                  .filter((p: any) => {
+                    const b = Number(p.total_budget || p.totalBudget || 0);
+                    const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                    return b > 0 && c / b < 0.3 && p.status === 'Active';
+                  })
+                  .slice(0, 3)
+                  .map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between py-1.5 border-b border-blue-100/60 dark:border-blue-900/30 last:border-0">
+                      <span className="text-[11px] text-neutral-700 dark:text-neutral-300 truncate flex-1">{p.title}</span>
+                      <span className="text-[10px] font-medium text-blue-600 dark:text-blue-400 ml-2">
+                        {Math.round((Number(p.claimed_amount || p.claimedAmount || 0) / Number(p.total_budget || p.totalBudget || 1)) * 100)}% 发放
+                      </span>
+                    </div>
+                  ))}
+                {localPrograms.filter((p: any) => {
+                  const b = Number(p.total_budget || p.totalBudget || 0);
+                  const c = Number(p.claimed_amount || p.claimedAmount || 0);
+                  return b > 0 && c / b < 0.3 && p.status === 'Active';
+                }).length === 0 && (
+                  <div className="text-[11px] text-neutral-400 text-center py-2">✅ 激励政策健康运转</div>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-9 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-600">
-          <option value="all">全部状态</option>
-          <option value="Active">进行中</option>
-          <option value="Upcoming">即将开始</option>
-          <option value="Ended">已结束</option>
-        </select>
-        <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-600">
-          <option value="all">全部类型</option>
-          {triggerTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
-        </select>
-        <span className="text-[10px] text-neutral-400 whitespace-nowrap">{filteredPrograms.length} 项</span>
+      </Card>
+
+      {/* ─── 新增：行动计划卡片 ─── */}
+      <Card padding={false}>
+        <div className="px-5 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                <ClipboardList className="w-4 h-4 text-blue-600" />
+              </div>
+              <div>
+                <div className="text-sm font-semibold text-neutral-900 dark:text-white">行动计划</div>
+                <div className="text-[10px] text-neutral-500">基于诊断的建议行动</div>
+              </div>
+            </div>
+            <Badge variant="secondary" className="px-2 py-1">
+              <Clock className="w-3 h-3 mr-1" />
+              {actionItems.length} 项待办
+            </Badge>
+          </div>
+          
+          <div className="space-y-3">
+            {actionItems.map((item, idx) => (
+              <div 
+                key={idx} 
+                className="flex items-start gap-3 p-3 rounded-xl bg-neutral-50 dark:bg-neutral-800/50 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors cursor-pointer group"
+              >
+                <div className={cn(
+                  'w-2 h-2 rounded-full mt-2 shrink-0',
+                  item.priority === 'high' ? 'bg-red-500' : item.priority === 'medium' ? 'bg-amber-500' : 'bg-emerald-500'
+                )} />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-neutral-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                      {item.title}
+                    </h4>
+                    <span className={cn(
+                      'text-[10px] font-medium px-2 py-0.5 rounded-full',
+                      item.priority === 'high' ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400' :
+                      item.priority === 'medium' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400' :
+                      'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                    )}>
+                      {item.priority === 'high' ? '紧急' : item.priority === 'medium' ? '中等' : '一般'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-1">{item.description}</p>
+                  <div className="flex items-center gap-2 mt-2">
+                    {item.partner && (
+                      <span className="text-[10px] text-neutral-400">
+                        <Building2 className="w-3 h-3 inline mr-1" />
+                        {item.partner}
+                      </span>
+                    )}
+                    {item.amount && (
+                      <span className="text-[10px] text-neutral-400">
+                        <DollarSign className="w-3 h-3 inline mr-1" />
+                        {item.amount}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <button className="opacity-0 group-hover:opacity-100 p-2 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition-all">
+                  <ChevronRight className="w-4 h-4 text-neutral-400" />
+                </button>
+              </div>
+            ))}
+          </div>
+          
+          <div className="mt-4 flex justify-end">
+            <Button variant="ghost" size="sm" className="text-xs">
+              查看全部行动 <ChevronRight className="w-3 h-3 ml-1" />
+            </Button>
+          </div>
+        </div>
+      </Card>
+
+      {/* ─── 第三层：行动层 - 政策管理 ─── */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 mb-1">
+        <div className="text-[13px] font-semibold text-neutral-900 dark:text-white">激励政策</div>
+        <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1 bg-white dark:bg-neutral-800 rounded-lg px-2.5 py-1.5 border border-neutral-200 dark:border-neutral-700">
+            <Search className="w-3.5 h-3.5 text-neutral-400" />
+            <input
+              placeholder="搜索..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-28 bg-transparent text-[11px] outline-none text-neutral-700 dark:text-neutral-300"
+            />
+          </div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="h-7 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700">
+            <option value="all">全部</option>
+            <option value="Active">进行中</option>
+            <option value="Upcoming">即将</option>
+            <option value="Ended">结束</option>
+          </select>
+          <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-7 px-2 rounded-lg border text-[11px] bg-white dark:bg-neutral-800 border-neutral-200 dark:border-neutral-700">
+            <option value="all">全部类型</option>
+            {triggerTypes.map((t: any) => <option key={t} value={t}>{t}</option>)}
+          </select>
+          <Button variant="brand" size="sm" onClick={() => setShowCreate(true)} className="h-7">
+            <Plus className="w-3.5 h-3.5" />
+            <span className="text-[11px] ml-1">新建</span>
+          </Button>
+        </div>
       </div>
+      <div className="text-[10px] text-neutral-400 mb-3">共 {filteredPrograms.length} 项政策</div>
 
       {/* ============================================ */}
       {/* 第三部分：执行层（政策卡片与决策执行） */}

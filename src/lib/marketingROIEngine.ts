@@ -5,6 +5,11 @@
 
 import { supabase } from './supabase';
 
+// ── 常量定义 ──────────────────────────────────────────
+const ROI_MAX_RATIO = 100; // ROI 最大倍数（100x = 10000%）
+const ROI_DISPLAY_CAP_PERCENT = 1000; // ROI 百分比显示上限（超过显示 "1000%+"）
+const ROI_DISPLAY_CAP_RATIO = 100; // ROI 倍数显示上限（超过显示 "100x+"）
+
 // ── 类型定义 ──────────────────────────────────────────
 
 export interface CampaignROI {
@@ -125,10 +130,29 @@ export function sanitizeMetric(value: number, fallback: number = 0): number {
   return Math.round(value * 10) / 10;
 }
 
+// ── 3.1 ROI 格式化与限制 ────────────────────────────
+export function clampROI(roi: number): number {
+  const sanitized = sanitizeMetric(roi, 0);
+  return Math.min(Math.max(0, sanitized), ROI_MAX_RATIO);
+}
+
+export function formatROIPercent(roi: number): string {
+  const clamped = clampROI(roi);
+  const percent = Math.round(clamped * 100);
+  if (percent >= ROI_DISPLAY_CAP_PERCENT) return `${ROI_DISPLAY_CAP_PERCENT}%+`;
+  return `${percent}%`;
+}
+
+export function formatROIRatio(roi: number, decimals: number = 1): string {
+  const clamped = clampROI(roi);
+  if (clamped >= ROI_DISPLAY_CAP_RATIO) return `${ROI_DISPLAY_CAP_RATIO}x+`;
+  return `${clamped.toFixed(decimals)}x`;
+}
+
 export function sanitizeROIData(data: CampaignROI): CampaignROI {
   return {
     ...data,
-    roi: sanitizeMetric(data.roi),
+    roi: clampROI(data.roi),
     cpl: sanitizeMetric(data.cpl),
     conversionRate: sanitizeMetric(data.conversionRate),
     mdfInvestment: sanitizeMetric(data.mdfInvestment),
@@ -191,7 +215,7 @@ export async function fetchMarketingROI(): Promise<MarketingROISummary> {
 
   const totalMDF = campaigns.reduce((s, c) => s + c.mdfInvestment, 0);
   const totalDealsValue = campaigns.reduce((s, c) => s + c.dealValue, 0);
-  const overallROI = totalMDF > 0 ? sanitizeMetric(totalDealsValue / totalMDF) : 0;
+  const overallROI = totalMDF > 0 ? clampROI(totalDealsValue / totalMDF) : 0;
   const avgCPL = campaigns.length > 0
     ? sanitizeMetric(campaigns.reduce((s, c) => s + c.cpl, 0) / campaigns.length)
     : 0;

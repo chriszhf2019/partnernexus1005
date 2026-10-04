@@ -5,6 +5,7 @@ import {
   ArrowLeft, Plus, Trash2, Save, Send, CheckCircle2, XCircle, X,
   TrendingUp, RefreshCw, History, DollarSign, PieChart, BarChart3,
   AlertCircle, AlertTriangle, CheckCircle, Users, ChevronLeft, ChevronRight, Loader2,
+  ClipboardCheck, CalendarDays,
 } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { Button } from '../ui/Button';
@@ -238,36 +239,66 @@ const BudgetAdjustmentModal = memo(({
 BudgetAdjustmentModal.displayName = 'BudgetAdjustmentModal';
 
 // ── Budget Change Log ──────────────────────────────────
-const BudgetChangeLog = memo(({ changeLog, fmt }: { changeLog: ChangeLogEntry[]; fmt: (v: number) => string }) => (
-  <Card className="lg:col-span-1">
-    <CardHeader>
-      <CardTitle><History className="w-4 h-4 inline mr-1" />预算修改记录</CardTitle>
-    </CardHeader>
-    <CardContent>
-      {changeLog.length === 0 ? (
-        <p className="text-xs text-neutral-400 py-4 text-center">暂无记录</p>
-      ) : (
-        <div className="space-y-3 max-h-[300px] overflow-y-auto">
-          {changeLog.map((log, i) => (
-            <div key={log.id || i} className="flex gap-2 p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
-              <div
-                className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  log.action === '批复通过' ? 'bg-emerald-500' : log.action?.includes('重新批复') ? 'bg-amber-500' : 'bg-blue-500'
-                }`}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium">{log.action}</p>
-                <p className="text-[10px] text-neutral-400 truncate">
-                  Q1:{fmt(log.q1_budget || 0)} Q2:{fmt(log.q2_budget || 0)} Q3:{fmt(log.q3_budget || 0)} Q4:{fmt(log.q4_budget || 0)}
-                </p>
-                <p className="text-[10px] text-neutral-400">{new Date(log.created_at).toLocaleString('zh-CN')}</p>
-              </div>
-            </div>
-          ))}
+const BudgetChangeLog = memo(({ changeLog, config, fmt }: { changeLog: ChangeLogEntry[]; config: BudgetConfig; fmt: (v: number) => string }) => (
+  <div className="lg:col-span-1 space-y-3">
+    <Card>
+      <CardHeader>
+        <CardTitle><History className="w-4 h-4 inline mr-1" />预算审批流</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <div className="flex items-center justify-between text-[10px]">
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-amber-500 flex items-center justify-center text-white font-bold">1</div>
+            <div className="mt-1 text-center">渠道经理<br/><span className="text-neutral-400">提交预算</span></div>
+          </div>
+          <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+          <div className="flex flex-col items-center">
+            <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">2</div>
+            <div className="mt-1 text-center">市场总监<br/><span className="text-neutral-400">战略对齐</span></div>
+          </div>
+          <div className="h-px flex-1 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+          <div className="flex flex-col items-center">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold ${config.status === 'approved' ? 'bg-emerald-500' : 'bg-neutral-300 dark:bg-neutral-700'}`}>3</div>
+            <div className="mt-1 text-center">CFO<br/><span className="text-neutral-400">终审生效</span></div>
+          </div>
         </div>
-      )}
-    </CardContent>
-  </Card>
+        <div className="mt-3 pt-3 border-t border-neutral-100 dark:border-neutral-800 text-center">
+          <span className={`text-[11px] font-medium ${STATUS_COLOR[config.status] || STATUS_COLOR.draft}`}>
+            当前阶段：{STATUS_LABEL[config.status] || STATUS_LABEL.draft}
+          </span>
+        </div>
+      </CardContent>
+    </Card>
+    <Card>
+      <CardHeader>
+        <CardTitle><History className="w-4 h-4 inline mr-1" />预算修改记录</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {changeLog.length === 0 ? (
+          <p className="text-xs text-neutral-400 py-4 text-center">暂无记录</p>
+        ) : (
+          <div className="space-y-3 max-h-[300px] overflow-y-auto">
+            {changeLog.map((log, i) => (
+              <div key={log.id || i} className="flex gap-2 p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50">
+                <div
+                  className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
+                    log.action === '批复通过' ? 'bg-emerald-500' : log.action?.includes('重新批复') ? 'bg-amber-500' : 'bg-blue-500'
+                  }`}
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium">{log.action}</p>
+                  <p className="text-[10px] text-neutral-400 truncate">
+                    Q1:{fmt(log.q1_budget || 0)} Q2:{fmt(log.q2_budget || 0)} Q3:{fmt(log.q3_budget || 0)} Q4:{fmt(log.q4_budget || 0)}
+                  </p>
+                  <p className="text-[10px] text-neutral-400">{new Date(log.created_at).toLocaleString('zh-CN')}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  </div>
 ));
 BudgetChangeLog.displayName = 'BudgetChangeLog';
 
@@ -293,12 +324,17 @@ interface QuarterlyPlanCardProps {
   onReload: () => void;
   fmt: (v: number) => string;
   saving: boolean;
+  isPast?: boolean;
+  isFuture?: boolean;
+  isCurrent?: boolean;
+  quarterlyActualSpend?: number;
+  onAutoRollover?: (fromQ: string, amount: number) => void;
 }
 
 const QuarterlyPlanCard = memo(({
   quarter, qIndex, qBudget, qOriginalBudget, qAdjust, justSavedIds, items, partners, partnerMDF, currentYear,
   onUpdateRow, onAddRow, onRemoveRow, onSaveRows, onApproveAll, onSubmitForApproval, onOpenDetail, onReload, fmt,
-  saving,
+  saving, isPast, isFuture, isCurrent, quarterlyActualSpend, onAutoRollover,
 }: QuarterlyPlanCardProps) => {
   const lineTotal = useMemo(() => items.reduce((s, p) => s + Number(p.total_budget || 0), 0), [items]);
   const approvedTotal = useMemo(() => items.reduce((s, p) => s + Number(p.approved_amount || 0), 0), [items]);
@@ -351,9 +387,12 @@ const QuarterlyPlanCard = memo(({
             </span>
             {/* 滚动预算建议: 当有剩余且下一季度有待批复活动时提示 */}
             {remaining > 0 && quarter !== 'Q4' && (
-              <span className="text-[10px] text-blue-600 mt-1 block bg-blue-50 dark:bg-blue-900/10 px-2 py-1 rounded">
-                💡 {quarter}剩余{fmt(remaining)}未使用，建议结转到下一季度"拉新"专项
-              </span>
+              <div className="flex items-center justify-between mt-1 bg-blue-50 dark:bg-blue-900/10 px-2 py-1.5 rounded">
+                <span className="text-[10px] text-blue-600">💡 {quarter}剩余{fmt(remaining)}未使用，建议结转到下一季度</span>
+                {onAutoRollover && (
+                  <button onClick={() => onAutoRollover(quarter, remaining)} className="text-[10px] px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700">一键结转</button>
+                )}
+              </div>
             )}
             {qOriginalBudget && qOriginalBudget !== qBudget && (
               <span className="text-[10px] text-amber-600 mt-0.5 block">
@@ -364,8 +403,8 @@ const QuarterlyPlanCard = memo(({
             {qBudget > 0 && (
               <div className="mt-2 space-y-1">
                 <div className="flex items-center justify-between text-[10px] text-neutral-500">
-                  <span>预算执行: {Math.round((approvedTotal / qBudget) * 100)}%</span>
-                  <span>目标达成率: {items.filter((p:any) => p.execution_status === 'executed').length > 0 ? Math.round(items.filter((p:any) => p.execution_status === 'executed').length / Math.max(items.length, 1) * 100) : 0}%</span>
+                  <span>预算执行: {Math.round((approvedTotal / qBudget) * 100)}% · 预算已用: {fmt(quarterlyActualSpend || 0)} / {fmt(qBudget)} ({qBudget > 0 ? Math.round(((quarterlyActualSpend || 0) / qBudget) * 100) : 0}%)</span>
+                  <span>目标达成率: {isFuture ? '--' : (items.filter((p:any) => p.execution_status === 'executed').length > 0 ? Math.round(items.filter((p:any) => p.execution_status === 'executed').length / Math.max(items.length, 1) * 100) : 0)}%</span>
                 </div>
                 <div className="h-1.5 bg-neutral-200 dark:bg-neutral-700 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-blue-500 to-emerald-500 rounded-full transition-all" style={{ width: `${Math.min(Math.round((approvedTotal / qBudget) * 100), 100)}%` }} />
@@ -404,7 +443,8 @@ const QuarterlyPlanCard = memo(({
                   <th className="text-right py-2 px-2">批复</th>
                   <th className="text-right py-2 px-2">实际支出</th>
                   <th className="text-right py-2 px-2">参加人数</th>
-                  <th className="text-left py-2 px-2">产出(计划/实际)</th>
+                  <th className="text-left py-2 px-2">计划产出</th>
+                  <th className="text-left py-2 px-2">实际线索/商机</th>
                   <th className="text-left py-2 px-2">负责人</th>
                   <th className="text-center py-2 px-2">状态</th>
                   <th className="text-center py-2 px-2 w-16">保存</th>
@@ -417,13 +457,13 @@ const QuarterlyPlanCard = memo(({
                   const execStatus = normalizeExecStatus(p.execution_status);
                   return (
                     <tr key={p.id} className="border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50 dark:hover:bg-neutral-800/50 cursor-pointer" onClick={() => onOpenDetail(p)}>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <select value={p.activity_type || 'Marketing'} onChange={e => onUpdateRow(p.id, 'activity_type', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">
                           <option value="Marketing">Marketing</option>
                           <option value="PMDF">PMDF</option>
                         </select>
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         {isPMDF ? (
                           execStatus === 'executed' ? (
                             <div>
@@ -452,36 +492,48 @@ const QuarterlyPlanCard = memo(({
                           )
                         ) : <span className="text-neutral-400 text-[11px]">自办</span>}
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <select value={p.category || '线下峰会'} onChange={e => onUpdateRow(p.id, 'category', e.target.value)} className="w-16 bg-transparent text-[11px] focus:outline-none">
                           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                         </select>
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <select value={(p as any).business_objective || '品牌曝光'} onChange={e => onUpdateRow(p.id, 'business_objective', e.target.value)} className="w-20 bg-transparent text-[11px] focus:outline-none">
                           {['拉新','存量增购','品牌曝光','新产品抢位','客户关系'].map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-20 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.city || ''} onChange={e => onUpdateRow(p.id, 'city', e.target.value)} placeholder="城市" />
                       </td>
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         {execStatus === 'executed' ? (
-                          <button title="查看现场证物（照片/签到表）" className="text-blue-500 hover:text-blue-700 text-xs">📷</button>
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              title="查看现场证物（照片/签到表/活动物料）"
+                              className="text-blue-500 hover:text-blue-700 text-xs hover:scale-110 transition-transform"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                window.alert('证物查看 Modal:\n\n• 活动照片: 3张 (2026-01-15)\n• 签到表: 1份 (PDF)\n• 物料清单: 1份\n\n(实际可对接 OSS/S3 存储)');
+                              }}
+                            >📷</button>
+                            {(p as any).has_evidence === false && !(p as any).actual_spend ? (
+                              <span title="已完成但未上传证物，建议补传" className="text-[12px] text-red-500 animate-pulse">❗</span>
+                            ) : null}
+                          </div>
                         ) : (
                           <span className="text-neutral-300 text-xs">—</span>
                         )}
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-28 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="date" value={p.expected_date || ''} onChange={e => onUpdateRow(p.id, 'expected_date', e.target.value)} />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.total_budget || ''} onChange={e => onUpdateRow(p.id, 'total_budget', e.target.value)} />
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-20 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.approved_amount || ''} onChange={e => onUpdateRow(p.id, 'approved_amount', e.target.value)} />
                       </td>
-                      <td className="py-2 px-2 text-right">
+                      <td className="py-2.5 px-2 text-right">
                         {execStatus === 'executed' && (p as any).actual_spend > 0 ? (
                           <span className={`text-[11px] font-medium ${(p as any).actual_spend > p.total_budget ? 'text-red-500' : 'text-emerald-600'}`}>
                             {fmt((p as any).actual_spend)}
@@ -493,27 +545,31 @@ const QuarterlyPlanCard = memo(({
                           <span className="text-[11px] text-neutral-400">{execStatus === 'executed' ? '—' : '待执行'}</span>
                         )}
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-12 text-right bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" type="number" value={p.expected_attendees || ''} onChange={e => onUpdateRow(p.id, 'expected_attendees', e.target.value)} />
                       </td>
-                      <td className="py-2 px-2">
-                        <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.expected_output || ''} onChange={e => onUpdateRow(p.id, 'expected_output', e.target.value)} placeholder="线索/商机" />
-                        {execStatus === 'executed' && (p as any).actual_leads > 0 && (
-                          <span className="text-[9px] block text-blue-500 text-left">
-                            实: {(p as any).actual_leads}条 · {(p as any).actual_opps||0}商机
+                      <td className="py-2.5 px-2">
+                        <span className="text-[11px] text-neutral-700 dark:text-neutral-300">{p.expected_output || <span className="text-neutral-400">—</span>}</span>
+                      </td>
+                      <td className="py-2.5 px-2">
+                        {execStatus === 'executed' && ((p as any).actual_leads || (p as any).actual_opps) ? (
+                          <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400">
+                            {(p as any).actual_leads || 0} 条线索 · {(p as any).actual_opps || 0} 商机
                           </span>
+                        ) : (
+                          <span className="text-[11px] text-neutral-400">—</span>
                         )}
                       </td>
-                      <td className="py-2 px-2">
+                      <td className="py-2.5 px-2">
                         <input className="w-16 bg-neutral-50 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded px-1 py-0.5 text-[11px] focus:outline-none focus:ring-1 focus:ring-blue-500/30" value={p.responsible_person || ''} onChange={e => onUpdateRow(p.id, 'responsible_person', e.target.value)} placeholder="姓名" />
                       </td>
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         <select value={execStatus} onChange={e => onUpdateRow(p.id, 'execution_status', e.target.value)}
                           className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium focus:outline-none border-0 cursor-pointer ${execStatus === 'executed' ? 'bg-emerald-100 text-emerald-700' : execStatus === 'approved' ? 'bg-blue-100 text-blue-700' : 'bg-neutral-100 text-neutral-600'}`}>
                           {EXEC_STATUSES.map(s => <option key={s} value={s}>{EXEC_LABELS[s]}</option>)}
                         </select>
                       </td>
-                      <td className="py-2 px-2 text-center">
+                      <td className="py-2.5 px-2 text-center">
                         {justSavedIds.has(p.id) ? (
                           <span className="text-[10px] text-emerald-600 font-medium animate-pulse">✅ 已保存</span>
                         ) : p._new ? (
@@ -522,7 +578,7 @@ const QuarterlyPlanCard = memo(({
                           <span className="text-[10px] text-neutral-300">—</span>
                         )}
                       </td>
-                      <td className="py-2 px-2 text-right">
+                      <td className="py-2.5 px-2 text-right">
                         <button onClick={() => onRemoveRow(p.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-400 hover:text-red-500 transition-colors" title="删除此行">
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -537,7 +593,7 @@ const QuarterlyPlanCard = memo(({
                     <td className="py-1 px-2 text-right">{fmt(agg.budget)}</td>
                     <td className="py-1 px-2 text-right">{fmt(agg.approved)}</td>
                     <td className="py-1 px-2 text-right">{agg.attendees}</td>
-                    <td colSpan={4} />
+                    <td colSpan={5} />
                   </tr>
                 ))}
                 {/* Totals row */}
@@ -546,7 +602,7 @@ const QuarterlyPlanCard = memo(({
                   <td className="py-2 px-2 text-right">{fmt(lineTotal)}</td>
                   <td className="py-2 px-2 text-right">{fmt(approvedTotal)}</td>
                   <td className="py-2 px-2 text-right">{totalAttendees}</td>
-                  <td colSpan={4} />
+                  <td colSpan={5} />
                 </tr>
               </tbody>
             </table>
@@ -589,6 +645,10 @@ export const MarketingPlanPage = () => {
   const [approveQuarter, setApproveQuarter] = useState('');
   const [detailActivity, setDetailActivity] = useState<PlanActivity | null>(null);
   const [drilldownActivity, setDrilldownActivity] = useState<PlanActivity | null>(null);
+
+  // 季度 Tab 导航
+  const currentQIndex = Math.floor(now.getMonth() / 3);
+  const [activeTab, setActiveTab] = useState<string>('all'); // 'all' | 'Q1' | 'Q2' | 'Q3' | 'Q4'
 
   // Available years cache
   const availableYears = useMemo(
@@ -668,23 +728,29 @@ export const MarketingPlanPage = () => {
 
   const actualSpendQ = useMemo(() => {
     const spend = [0, 0, 0, 0];
-    activities.forEach((a: any) => {
-      const d = a.event_date || a.date || '';
-      if (!d) return;
-      const m = parseInt(d.split('-')[1] || '0');
-      const val = Number(a.actual_spend || a.actualSpend || 0);
-      if (m >= 1 && m <= 3) spend[0] += val;
-      else if (m >= 4 && m <= 6) spend[1] += val;
-      else if (m >= 7 && m <= 9) spend[2] += val;
-      else if (m >= 10 && m <= 12) spend[3] += val;
+    plan.forEach((p: any) => {
+      const q = normalizeQuarter(p.quarter || 'Q1');
+      const idx = q === 'Q1' ? 0 : q === 'Q2' ? 1 : q === 'Q3' ? 2 : 3;
+      spend[idx] += Number(p.actual_spend || 0);
     });
     return spend;
-  }, [activities]);
+  }, [plan]);
 
   const qBudgets = useMemo(
     () => QUARTERS.map((_, i) => Number(config[`q${i + 1}_budget` as keyof BudgetConfig] || 0) + Number(config[`q${i + 1}_adjust` as keyof BudgetConfig] || 0)),
     [config],
   );
+
+  const perQStats = useMemo(() => QUARTERS.map((q, i) => {
+    const items = plan.filter(p => normalizeQuarter(p.quarter) === q);
+    const qActual = items.reduce((s, p) => s + Number((p as any).actual_spend || 0), 0);
+    const qBudget = qBudgets[i];
+    const qApproved = items.reduce((s, p) => s + Number(p.approved_amount || 0), 0);
+    const utilization = qBudget > 0 ? (qActual / qBudget) * 100 : 0;
+    const isOverspend = utilization > 100;
+    const isSevereOverspend = utilization > 120;
+    return { q, budget: qBudget, approved: qApproved, actual: qActual, utilization, isOverspend, isSevereOverspend, itemCount: items.length };
+  }), [plan, qBudgets]);
 
   const annualBudget = useMemo(() => qBudgets.reduce((s, v) => s + v, 0), [qBudgets]);
   const originalQBudgets = useMemo(
@@ -829,6 +895,39 @@ export const MarketingPlanPage = () => {
     setConfig(prev => ({ ...prev, ...update }));
   }, []);
 
+  const handleAutoRollover = useCallback((fromQ: string, amount: number) => {
+    const fromIdx = fromQ === 'Q1' ? 0 : fromQ === 'Q2' ? 1 : fromQ === 'Q3' ? 2 : 3;
+    const toIdx = fromIdx + 1;
+    if (toIdx > 3) return;
+    if (amount <= 0) {
+      toast('error', '结转金额必须大于 0');
+      return;
+    }
+    if (config.status !== 'draft') {
+      setConfig(prev => {
+        const cur = { ...prev };
+        const fromKey = `q${fromIdx + 1}_budget` as keyof BudgetConfig;
+        const fromAdjust = `q${fromIdx + 1}_adjust` as keyof BudgetConfig;
+        const toKey = `q${toIdx + 1}_budget` as keyof BudgetConfig;
+        const toAdjust = `q${toIdx + 1}_adjust` as keyof BudgetConfig;
+        (cur as any)[fromKey] = Number((cur as any)[fromKey] || 0) - amount;
+        (cur as any)[toKey] = Number((cur as any)[toKey] || 0) + amount;
+        return cur;
+      });
+      toast('success', `已从 ${fromQ} 结转 ${fmtW(amount)} 到 Q${toIdx + 1}，请点击"保存"以固化`);
+    } else {
+      setConfig(prev => {
+        const cur = { ...prev };
+        const fromKey = `q${fromIdx + 1}_budget` as keyof BudgetConfig;
+        const toKey = `q${toIdx + 1}_budget` as keyof BudgetConfig;
+        (cur as any)[fromKey] = Number((cur as any)[fromKey] || 0) - amount;
+        (cur as any)[toKey] = Number((cur as any)[toKey] || 0) + amount;
+        return cur;
+      });
+      toast('success', `✅ ${fromQ} → Q${toIdx + 1} 结转 ${fmtW(amount)} 已完成`);
+    }
+  }, [config, fmtW, toast]);
+
   // Plan row actions
   const updateRow = useCallback((id: string, field: string, value: any) => {
     setPlan(prev => prev.map(p => p.id === id ? { ...p, [field]: value } : p));
@@ -852,6 +951,17 @@ export const MarketingPlanPage = () => {
   }, []);
 
   const savePlanRows = useCallback(async (quarter: string, targetPlanStatus: 'draft' | 'submitted') => {
+    const qIdx = quarter === 'Q1' ? 0 : quarter === 'Q2' ? 1 : quarter === 'Q3' ? 2 : 3;
+    const quarterActual = plan.filter(p => normalizeQuarter(p.quarter) === quarter).reduce((s, p) => s + Number((p as any).actual_spend || 0), 0);
+    const qBudget = qBudgets[qIdx];
+    const utilization = qBudget > 0 ? (quarterActual / qBudget) * 100 : 0;
+    if (utilization > 120) {
+      toast('error', `${quarter} 超支 ${Math.round(utilization)}%，超过 120% 刚性拦截上限，请先走"调整预算"流程增加配额`);
+      return;
+    }
+    if (utilization > 100) {
+      console.log(`${quarter} 预算使用 ${Math.round(utilization)}%，已超预算，允许保存但请注意审批`);
+    }
     setSavingRows(true);
     const items = plan.filter(p => normalizeQuarter(p.quarter) === quarter);
     try {
@@ -907,9 +1017,17 @@ export const MarketingPlanPage = () => {
     } finally {
       setSavingRows(false);
     }
-  }, [plan, currentYear, toast]);
+  }, [plan, currentYear, toast, qBudgets]);
 
   const approveAll = useCallback(async (quarter: string) => {
+    const qIdx = quarter === 'Q1' ? 0 : quarter === 'Q2' ? 1 : quarter === 'Q3' ? 2 : 3;
+    const quarterActual = plan.filter(p => normalizeQuarter(p.quarter) === quarter).reduce((s, p) => s + Number((p as any).actual_spend || 0), 0);
+    const qBudget = qBudgets[qIdx];
+    const utilization = qBudget > 0 ? (quarterActual / qBudget) * 100 : 0;
+    if (utilization > 120) {
+      toast('error', `${quarter} 超支 ${Math.round(utilization)}%，超过 120% 刚性拦截上限，请先走"调整预算"流程增加配额`);
+      return;
+    }
     const items = plan.filter(p => normalizeQuarter(p.quarter) === quarter);
     if (items.length === 0) return;
     try {
@@ -938,7 +1056,7 @@ export const MarketingPlanPage = () => {
     } catch (err: any) {
       toast('error', '批复失败: ' + (err.message || '未知错误'));
     }
-  }, [plan, toast]);
+  }, [plan, toast, qBudgets, currentYear]);
 
   const saveAllPlans = useCallback(async (targetPlanStatus: 'draft' | 'submitted') => {
     setSavingRows(true);
@@ -1011,7 +1129,8 @@ export const MarketingPlanPage = () => {
 
   // ── Render ───────────────────────────────────────────
   return (
-    <div className="space-y-6">
+    <div className="relative min-h-screen pb-24">
+      <div className="space-y-6 px-4 sm:px-6 lg:px-8 py-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -1123,6 +1242,44 @@ export const MarketingPlanPage = () => {
       {/* Stats Cards */}
       <StatsGrid items={statsItems} />
 
+      {/* 季度 Tab 导航 */}
+      <div className="flex items-center gap-1 overflow-x-auto pb-2">
+        <button
+          onClick={() => setActiveTab('all')}
+          className={`px-3 py-1.5 text-sm rounded-lg font-medium whitespace-nowrap transition-colors ${
+            activeTab === 'all'
+              ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+              : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+          }`}
+        >
+          全部
+        </button>
+        {QUARTERS.map((q, i) => {
+          const isCurrent = i === currentQIndex;
+          const stats = perQStats[i];
+          const tabAlert = stats?.isSevereOverspend ? 'bg-red-500' : stats?.isOverspend ? 'text-amber-600' : '';
+          return (
+            <button
+              key={q}
+              onClick={() => setActiveTab(q)}
+              className={`px-3 py-1.5 text-sm rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-1.5 ${
+                activeTab === q
+                  ? 'bg-neutral-900 text-white dark:bg-white dark:text-neutral-900'
+                  : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-600 hover:bg-neutral-200 dark:hover:bg-neutral-700'
+              } ${tabAlert}`}
+            >
+              {q}
+              {isCurrent && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="当前季度" />}
+              {stats?.isSevereOverspend && <span className="text-[9px] text-red-500">⚠超</span>}
+              <span className="text-[10px] opacity-70">{stats?.itemCount || 0}项</span>
+            </button>
+          );
+        })}
+        <div className="ml-auto text-xs text-neutral-400">
+          默认显示当前季度（Q{currentQIndex + 1}）
+        </div>
+      </div>
+
       {/* Budget Adjustment Modal */}
       {showAdjust && (
         <BudgetAdjustmentModal
@@ -1207,7 +1364,7 @@ export const MarketingPlanPage = () => {
 
       {/* Budget Display + Change Log */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <BudgetChangeLog changeLog={changeLog} fmt={fmtW} />
+        <BudgetChangeLog changeLog={changeLog} config={config} fmt={fmtW} />
         <Card className="lg:col-span-2">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
@@ -1339,41 +1496,46 @@ export const MarketingPlanPage = () => {
       </Card>
 
       {/* Quarterly Activity Plans */}
-      {QUARTERS.map((q, i) => (
-        <QuarterlyPlanCard
-          key={q}
-          quarter={q}
-          qIndex={i}
-          qBudget={qBudgets[i]}
-          qOriginalBudget={originalQBudgets[i]}
-          qAdjust={(qBudgets[i]||0) - (originalQBudgets[i]||0)}
-          justSavedIds={justSavedIds}
-          items={quarterlyItems[i]}
-          partners={partners}
-          partnerMDF={partnerMDF}
-          currentYear={currentYear}
-          onUpdateRow={updateRow}
-          onAddRow={() => addRow(q)}
-          onRemoveRow={removeRow}
-          onSaveRows={(status) => savePlanRows(q, status)}
-          onApproveAll={() => { setApproveQuarter(q); setShowApproveModal(true); }}
-          onSubmitForApproval={() => { setSubmitQuarter(q); setShowSubmitModal(true); }}
-          onOpenDetail={(p) => setDetailActivity(p)}
-          onReload={() => loadData(currentYear)}
-          fmt={fmtW}
-          saving={savingRows}
-        />
-      ))}
-
-      {/* Footer navigation */}
-      <div className="flex justify-between items-center">
-        <p className="text-xs text-neutral-400">
-          {savingRows && (
-            <span className="flex items-center gap-1"><Loader2 className="w-3 h-3 animate-spin" />保存中...</span>
-          )}
-        </p>
-        <Button variant="secondary" onClick={() => navigate('/marketing')}>返回营销首页</Button>
-      </div>
+      {QUARTERS.map((q, i) => {
+        const items = quarterlyItems[i];
+        const matches = activeTab === 'all' || activeTab === q;
+        if (!matches) return null;
+        const isPast = i < currentQIndex;
+        const isFuture = i > currentQIndex;
+        const isCurrent = i === currentQIndex;
+        // 始终展开所有卡片；当前季度添加绿色 ring 高亮
+        return (
+          <div key={q} className={isCurrent ? 'ring-2 ring-emerald-300 dark:ring-emerald-700 rounded-2xl' : 'transition-all'}>
+            <QuarterlyPlanCard
+              quarter={q}
+              qIndex={i}
+              qBudget={qBudgets[i]}
+              qOriginalBudget={originalQBudgets[i]}
+              qAdjust={(qBudgets[i]||0) - (originalQBudgets[i]||0)}
+              justSavedIds={justSavedIds}
+              items={items}
+              partners={partners}
+              partnerMDF={partnerMDF}
+              currentYear={currentYear}
+              onUpdateRow={updateRow}
+              onAddRow={() => addRow(q)}
+              onRemoveRow={removeRow}
+              onSaveRows={(status) => savePlanRows(q, status)}
+              onApproveAll={() => { setApproveQuarter(q); setShowApproveModal(true); }}
+              onSubmitForApproval={() => { setSubmitQuarter(q); setShowSubmitModal(true); }}
+              onOpenDetail={(p) => setDetailActivity(p)}
+              onReload={() => loadData(currentYear)}
+              fmt={fmtW}
+              saving={savingRows}
+              isPast={isPast}
+              isFuture={isFuture}
+              isCurrent={isCurrent}
+              quarterlyActualSpend={perQStats[i].actual}
+              onAutoRollover={handleAutoRollover}
+            />
+          </div>
+        );
+      })}
 
       {/* Lead Drilldown Drawer */}
       {drilldownActivity && (
@@ -1500,6 +1662,32 @@ export const MarketingPlanPage = () => {
           </motion.div>
         )}
       </AnimatePresence>
+      </div>
+
+      {/* Sticky Footer 操作栏 */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-neutral-900 border-t border-neutral-200 dark:border-neutral-800 shadow-[0_-4px_20px_-4px_rgba(0,0,0,0.05)]">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 max-w-[1400px] mx-auto">
+          <div className="flex items-center gap-2 text-xs text-neutral-500">
+            <ClipboardCheck className="w-3.5 h-3.5" />
+            <span>全年共 {plan.length} 项活动 · 总预算 {fmtW(annualBudget)} · 实际执行 {fmtW(actualSpendQ.reduce((s, v) => s + v, 0))}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button variant="secondary" size="sm" onClick={() => navigate('/marketing')}>
+              返回营销首页
+            </Button>
+            {dataLoaded && plan.length > 0 && (
+              <>
+                <Button variant="secondary" size="sm" onClick={() => saveAllPlans('draft')} disabled={savingRows} loading={savingRows}>
+                  <Save className="w-4 h-4" />保存全部
+                </Button>
+                <Button variant="brand" size="sm" onClick={() => saveAllPlans('submitted')} disabled={savingRows} loading={savingRows}>
+                  <Send className="w-4 h-4" />全部提交审批
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 };

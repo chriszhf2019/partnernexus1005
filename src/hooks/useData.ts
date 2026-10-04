@@ -6,6 +6,7 @@ import type { CockpitData, Partner, Deal, MDFMonthlyActivity, IncentiveProgram, 
 import type { MatrixData } from '../types';
 import { isDealWon } from '../types';
 import { debug } from '../lib/debug';
+import { useConfig } from '../contexts/ConfigContext';
 
 export interface ActivityItem {
   id: string;
@@ -337,10 +338,12 @@ function fallbackCockpitData(): CockpitData {
 export function useCockpitData(): { data: CockpitData; loading: boolean } {
   const [data, setData] = useState<CockpitData>(fallbackCockpitData());
   const [loading, setLoading] = useState(true);
+  const { config } = useConfig();
+  
   useEffect(() => {
     // Only use real Supabase data — no seed fallback
     import('../lib/realCockpitData').then((mod) => {
-      mod.getRealCockpitData().then((realData) => {
+      mod.getRealCockpitData(config).then((realData) => {
         setData(realData);
         setLoading(false);
       }).catch(() => {
@@ -353,6 +356,6 @@ export function useCockpitData(): { data: CockpitData; loading: boolean } {
       setData(fallbackCockpitData());
       setLoading(false);
     });
-  }, []);
+  }, [config]);
   return { data, loading };
 }

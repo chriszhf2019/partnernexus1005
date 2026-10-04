@@ -257,30 +257,18 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const dayMs = 86400000;
   const overduePending = useMemo(() => partners.filter(p => p.status === 'Prospective' && Math.ceil((now - new Date(p.applicationDate || p.startDate).getTime()) / dayMs) > 3).length, [partners]);
 
-  // ── Selection ────────────────────────────────────
-  const toggleSelect = (id: string) => {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-  const toggleAll = () => {
-    setSelected((prev) =>
-      prev.size === pagedPartners.length ? new Set() : new Set(pagedPartners.map((p) => p.id))
-    );
-  };
+  // ── Selection (declared after filteredPartners) ──
+  // (see below)
 
   // ── Sort handler ─────────────────────────────────
-  const handleSort = (field: SortField) => {
+  const handleSort = useCallback((field: SortField) => {
     if (sortField === field) {
       setSortDir((d) => (d === 'asc' ? 'desc' : d === 'desc' ? null : 'asc'));
     } else {
       setSortField(field);
       setSortDir('asc');
     }
-  };
+  }, [sortField]);
 
   // ── Filter + Sort + Paginate ─────────────────────
   const filteredPartners = useMemo(() => {
@@ -339,6 +327,22 @@ export const PartnerList = ({ partners, onSelectPartner, onImport }: PartnerList
   const partnerTypes = useMemo(() => [...new Set(partners.map((p) => p.type))], [partners]);
   const startRecord = filteredPartners.length === 0 ? 0 : (page - 1) * ITEMS_PER_PAGE + 1;
   const endRecord = Math.min(page * ITEMS_PER_PAGE, filteredPartners.length);
+
+  // ── Selection (now that filteredPartners is defined) ──
+  const toggleSelect = useCallback((id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    setSelected((prev) =>
+      prev.size === filteredPartners.length ? new Set() : new Set(filteredPartners.map((p) => p.id))
+    );
+  }, [filteredPartners]);
 
   // ── Export CSV ───────────────────────────────────
   const exportCSV = () => {
